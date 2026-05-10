@@ -1,0 +1,97 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: backend
+
+  # ==================== MySQL 数据库配置 ====================
+  datasource:
+    url: jdbc:mysql://localhost:3306/dev_database?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+    username: root
+    password: dev_password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  mapper-locations: classpath:mapper/**/*.xml
+  type-aliases-package: com.example.backend.entity
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+  # ==================== Redis 配置 ====================
+  redis:
+    host: localhost
+    port: 6379
+    password: dev_redis_password
+    database: 0
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1ms
+
+  # ==================== RabbitMQ 配置 ====================
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 10
+
+  # ==================== Neo4j 图数据库配置 ====================
+  neo4j:
+    uri: bolt://localhost:7687
+    authentication:
+      username: neo4j
+      password: dev_neo4j_password
+
+# ==================== MinIO 对象存储配置 ====================
+minio:
+  endpoint: http://localhost:9000
+  access-key: dev_access_key
+  secret-key: dev_secret_key
+  bucket-name: dev-bucket
+  secure: false
+
+# ==================== 阿里云OSS 配置 ====================
+aliyun:
+  oss:
+    endpoint: oss-cn-hangzhou.aliyuncs.com
+    access-key-id: dev_access_key_id
+    access-key-secret: dev_access_key_secret
+    bucket-name: dev-bucket
+    region: cn-hangzhou
+
+# ==================== 百度OCR 配置 ====================
+baidu:
+  ocr:
+    app-id: dev_app_id
+    api-key: dev_api_key
+    secret-key: dev_secret_key
+
+# ==================== DeepSeek 大模型配置 ====================
+deepseek:
+  api-url: https://api.deepseek.com/v1
+  api-key: dev_deepseek_api_key
+  model: deepseek-chat
+
+# ==================== 日志配置 ====================
+logging:
+  level:
+    root: INFO
+    com.example.backend: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate: INFO
