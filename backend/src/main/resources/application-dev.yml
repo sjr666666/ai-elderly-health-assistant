@@ -7,9 +7,9 @@ spring:
 
   # ==================== MySQL 数据库配置 ====================
   datasource:
-    url: jdbc:mysql://localhost:3306/dev_database?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+    url: jdbc:mysql://localhost:3306/elderly_medication?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
     username: root
-    password: dev_password
+    password: 060504
     driver-class-name: com.mysql.cj.jdbc.Driver
 
 # MyBatis-Plus 配置
