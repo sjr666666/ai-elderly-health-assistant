@@ -14,11 +14,11 @@ public class BaseEntity implements Serializable {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createTime;
+    @TableField(value = "created_at", fill = FieldFill.INSERT)
+    private LocalDateTime createdAt;
 
-    @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updateTime;
+    @TableField(value = "updated_at", fill = FieldFill.INSERT_UPDATE, updateStrategy = FieldStrategy.IGNORED)
+    private LocalDateTime updatedAt;
 
     @TableLogic
     private Integer deleted;

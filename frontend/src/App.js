@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import './App.css';
 import Login from './components/Login';
+import Register from './components/Register';
 import ProfileModal from './components/ProfileModal';
 import ProfileEdit from './components/ProfileEdit';
 import EmergencyContacts from './components/EmergencyContacts';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showRegister, setShowRegister] = useState(true);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
@@ -42,6 +44,13 @@ function App() {
   ]);
   const [showAddContact, setShowAddContact] = useState(false);
   const fileInputRef = useRef(null);
+
+  const handleRegister = (registerData) => {
+    if (registerData) {
+      alert(`✅ 注册成功！用户ID: ${registerData.userId}`);
+    }
+    setShowRegister(false);
+  };
 
   const handleLogin = (loginData) => {
     setUser({
@@ -904,7 +913,9 @@ function App() {
   return (
     <>
       <div className="watermark-bg"></div>
-      {!isLoggedIn ? (
+      {showRegister ? (
+        <Register onRegister={handleRegister} />
+      ) : !isLoggedIn ? (
         <Login onLogin={handleLogin} />
       ) : (
         <div className="app-container">

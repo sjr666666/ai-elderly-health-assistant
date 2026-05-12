@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
   `role` varchar(20) NOT NULL DEFAULT 'elder' COMMENT '角色：elder（老人）/ family（家属）',
   `bind_elder_id` bigint NULL COMMENT '家属绑定的老人ID（自关联）',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除标记',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';

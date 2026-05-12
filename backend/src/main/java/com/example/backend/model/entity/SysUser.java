@@ -77,12 +77,7 @@ public class SysUser extends BaseEntity {
     @TableField("bind_elder_id")
     private Long bindElderId;
 
-    /**
-     * 创建时间
-     * 记录创建时自动生成
-     */
-    @TableField(value = "created_at", fill = FieldFill.INSERT)
-    private LocalDateTime createdAt;
+    
 
     /**
      * 用户角色枚举

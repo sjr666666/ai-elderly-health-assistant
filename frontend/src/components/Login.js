@@ -4,22 +4,46 @@ function Login({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!username || !password) {
       alert('请输入用户名和密码');
       return;
     }
 
     setIsLoading(true);
-    setTimeout(() => {
-      onLogin({
-        username,
-        password,
-        needProfile: true
+    setError('');
+
+    try {
+      const response = await fetch('/api/v1/user/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json;charset=UTF-8',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          username: username.trim(),
+          password: password,
+        }),
       });
+
+      const data = await response.json();
+
+      if (response.ok && data.code === 200) {
+        const userData = {
+          ...data.data,
+          needProfile: false
+        };
+        onLogin(userData);
+      } else {
+        setError(data.message || '用户名或密码错误');
+      }
+    } catch (err) {
+      setError('网络连接失败，请稍后重试');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -50,6 +74,20 @@ function Login({ onLogin }) {
           <h1 style={{ fontSize: '36px', fontWeight: '800', color: '#4A90E2', marginBottom: '8px' }}>AI 药管家</h1>
           <p style={{ fontSize: '18px', color: '#6B6B6B', marginTop: '8px' }}>您身边贴心的用药安全小助手</p>
         </div>
+
+        {error && (
+          <div style={{
+            background: '#FFEBEE',
+            color: '#E74C3C',
+            padding: '16px 20px',
+            borderRadius: '12px',
+            marginBottom: '24px',
+            fontSize: '16px',
+            fontWeight: '600'
+          }}>
+            ⚠️ {error}
+          </div>
+        )}
 
         <div style={{ marginBottom: '28px' }}>
           <label style={{
@@ -169,17 +207,6 @@ function Login({ onLogin }) {
             '登 录'
           )}
         </button>
-
-        <div style={{
-          marginTop: '32px',
-          padding: '20px',
-          background: 'linear-gradient(135deg, #E8F5F0 0%, #FFE4D1 100%)',
-          borderRadius: '16px',
-          textAlign: 'center'
-        }}>
-          <p style={{ fontSize: '16px', color: '#6B6B6B', marginBottom: '8px' }}>测试账号</p>
-          <p style={{ fontSize: '18px', color: '#4A90E2', fontWeight: '600' }}>admin / 123456</p>
-        </div>
       </div>
 
       <style>{`
