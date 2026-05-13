@@ -5,10 +5,11 @@ import Register from './components/Register';
 import ProfileModal from './components/ProfileModal';
 import ProfileEdit from './components/ProfileEdit';
 import EmergencyContacts from './components/EmergencyContacts';
+import AddDrugModal from './components/AddDrugModal';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [showRegister, setShowRegister] = useState(true);
+  const [showRegister, setShowRegister] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
@@ -43,6 +44,7 @@ function App() {
     { id: 2, name: '张小红', phone: '13900139000', relationship: '女儿', isPrimary: false }
   ]);
   const [showAddContact, setShowAddContact] = useState(false);
+  const [showAddDrugModal, setShowAddDrugModal] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleRegister = (registerData) => {
@@ -88,6 +90,25 @@ function App() {
   const handleDeleteContact = (id) => {
     setEmergencyContacts(emergencyContacts.filter(c => c.id !== id));
     alert('✅ 联系人已删除！');
+  };
+
+  const handleAddDrug = (drugData) => {
+    // 构造新药数据
+    const newDrug = {
+      id: drugList.length + 1,
+      name: drugData.drugName || drugData.genericName,
+      spec: drugData.spec || drugData.specification,
+      manufacturer: drugData.manufacturer,
+      dosage: drugData.dosage,
+      frequency: drugData.frequency,
+      expiryDate: drugData.expiryDate,
+      note: drugData.note,
+      remaining: 30 // 默认初始数量
+    };
+    
+    setDrugList([...drugList, newDrug]);
+    setShowAddDrugModal(false);
+    alert('✅ 药品添加成功！');
   };
 
   const handleLogout = () => {
@@ -727,7 +748,7 @@ function App() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <button className="btn btn-primary btn-large" onClick={() => setActiveTab('upload')}>
+        <button className="btn btn-primary btn-large" onClick={() => setShowAddDrugModal(true)}>
           ➕ 添加新药
         </button>
       </div>
@@ -916,7 +937,7 @@ function App() {
       {showRegister ? (
         <Register onRegister={handleRegister} />
       ) : !isLoggedIn ? (
-        <Login onLogin={handleLogin} />
+        <Login onLogin={handleLogin} onShowRegister={() => setShowRegister(true)} />
       ) : (
         <div className="app-container">
           {renderHeader()}
@@ -965,6 +986,7 @@ function App() {
         <ProfileModal
           onComplete={handleProfileComplete}
           onClose={() => setShowProfileModal(false)}
+          userId={user?.userId}
         />
       )}
 
@@ -982,6 +1004,14 @@ function App() {
           onAdd={handleAddContact}
           onDelete={handleDeleteContact}
           onClose={() => setShowAddContact(false)}
+        />
+      )}
+
+      {showAddDrugModal && (
+        <AddDrugModal
+          onClose={() => setShowAddDrugModal(false)}
+          onAdd={handleAddDrug}
+          userId={user?.userId}
         />
       )}
 

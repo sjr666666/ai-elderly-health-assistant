@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UserRegisterResponse {
 
-    private Long userId;
+    private String userId;  // 改为 String 避免 JavaScript 精度丢失
     private String username;
     private String password;
 }

@@ -1,19 +1,26 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.common.util.SnowflakeIdGenerator;
 import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.dto.UserLoginRequest;
 import com.example.backend.model.dto.UserLoginResponse;
+import com.example.backend.model.dto.UserProfileResponse;
+import com.example.backend.model.dto.UserProfileUpdateRequest;
 import com.example.backend.model.dto.UserRegisterRequest;
 import com.example.backend.model.dto.UserRegisterResponse;
 import com.example.backend.model.entity.SysUser;
 import com.example.backend.service.UserService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
 public class UserServiceImpl implements UserService {
+
+    private static final Logger logger = LoggerFactory.getLogger(UserServiceImpl.class);
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
@@ -34,6 +41,8 @@ public class UserServiceImpl implements UserService {
         }
 
         SysUser user = new SysUser();
+        // 生成雪花算法ID作为userId
+        user.setUserId(SnowflakeIdGenerator.getInstance().nextId());
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRealName(request.getRealName());
@@ -45,7 +54,7 @@ public class UserServiceImpl implements UserService {
         userMapper.insert(user);
 
         return UserRegisterResponse.builder()
-                .userId(user.getId())
+                .userId(String.valueOf(user.getUserId()))  // 转换为 String
                 .username(user.getUsername())
                 .password(request.getPassword())
                 .build();
@@ -66,7 +75,7 @@ public class UserServiceImpl implements UserService {
         }
 
         return UserLoginResponse.builder()
-                .userId(user.getId())
+                .userId(String.valueOf(user.getUserId()))  // 转换为 String
                 .username(user.getUsername())
                 .realName(user.getRealName())
                 .age(user.getAge())
@@ -74,5 +83,49 @@ public class UserServiceImpl implements UserService {
                 .chronicDiseases(user.getChronicDiseases())
                 .role(user.getRole())
                 .build();
+    }
+
+    @Override
+    public UserProfileResponse getUserProfile(Long userId) {
+        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(SysUser::getUserId, userId);
+        SysUser user = userMapper.selectOne(queryWrapper);
+        if (user == null) {
+            throw new RuntimeException("用户不存在");
+        }
+
+        return UserProfileResponse.builder()
+                .userId(String.valueOf(user.getUserId()))  // 转换为 String
+                .realName(user.getRealName())
+                .age(user.getAge())
+                .allergyHistory(user.getAllergyHistory())
+                .chronicDiseases(user.getChronicDiseases())
+                .role(user.getRole())
+                .build();
+    }
+
+    @Override
+    public void updateUserProfile(Long userId, UserProfileUpdateRequest request) {
+        logger.info("更新用户档案信息 - userId: {}, allergyHistory: {}, chronicDiseases: {}", 
+                userId, request.getAllergyHistory(), request.getChronicDiseases());
+        
+        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(SysUser::getUserId, userId);
+        SysUser user = userMapper.selectOne(queryWrapper);
+        if (user == null) {
+            logger.error("用户不存在 - userId: {}", userId);
+            throw new RuntimeException("用户不存在");
+        }
+
+        // 只更新过敏史和慢性病史
+        if (request.getAllergyHistory() != null) {
+            user.setAllergyHistory(request.getAllergyHistory());
+        }
+        if (request.getChronicDiseases() != null) {
+            user.setChronicDiseases(request.getChronicDiseases());
+        }
+
+        int result = userMapper.updateById(user);
+        logger.info("用户档案更新结果 - userId: {}, 影响行数: {}", userId, result);
     }
 }

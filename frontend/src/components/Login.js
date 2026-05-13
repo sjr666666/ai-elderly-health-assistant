@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function Login({ onLogin }) {
+function Login({ onLogin, onShowRegister }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -31,11 +31,8 @@ function Login({ onLogin }) {
       const data = await response.json();
 
       if (response.ok && data.code === 200) {
-        const userData = {
-          ...data.data,
-          needProfile: false
-        };
-        onLogin(userData);
+        // 直接传递后端返回的用户数据
+        onLogin(data.data);
       } else {
         setError(data.message || '用户名或密码错误');
       }
@@ -207,6 +204,31 @@ function Login({ onLogin }) {
             '登 录'
           )}
         </button>
+
+        <div style={{
+          marginTop: '32px',
+          padding: '20px',
+          background: 'linear-gradient(135deg, #E8F5F0 0%, #FFE4D1 100%)',
+          borderRadius: '16px',
+          textAlign: 'center'
+        }}>
+          <p style={{ fontSize: '16px', color: '#6B6B6B', marginBottom: '8px' }}>还没有账号？</p>
+          <button
+            type="button"
+            onClick={() => onShowRegister && onShowRegister()}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#4A90E2',
+              fontSize: '18px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              textDecoration: 'underline'
+            }}
+          >
+            立即注册
+          </button>
+        </div>
       </div>
 
       <style>{`

@@ -3,10 +3,11 @@ module.exports = function(app) {
   app.use(function proxyMiddleware(req, res, next) {
     if (req.path.startsWith('/api')) {
       const http = require('http');
+      // 使用 originalUrl 或 url 来保留查询参数
       const options = {
         hostname: 'localhost',
         port: 8080,
-        path: req.path,
+        path: req.originalUrl || req.url,
         method: req.method,
         headers: {
           ...req.headers,

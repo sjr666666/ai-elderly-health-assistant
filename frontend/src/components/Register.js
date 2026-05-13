@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 function Register({ onRegister }) {
   const [username, setUsername] = useState('');
@@ -10,33 +10,65 @@ function Register({ onRegister }) {
   const [error, setError] = useState('');
   const [successData, setSuccessData] = useState(null);
 
+  // 创建输入框引用
+  const usernameRef = useRef(null);
+  const passwordRef = useRef(null);
+  const confirmPasswordRef = useRef(null);
+  const realNameRef = useRef(null);
+  const ageRef = useRef(null);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
+    // 验证用户名
     if (!username.trim() || username.trim().length < 4) {
-      setError('用户名不能少于4个字符');
+      usernameRef.current.setCustomValidity('用户名不能少于4个字符');
+      usernameRef.current.reportValidity();
+      usernameRef.current.focus();
       return;
+    } else {
+      usernameRef.current.setCustomValidity('');
     }
 
+    // 验证密码
     if (!password || password.length < 6) {
-      setError('密码不能少于6个字符');
+      passwordRef.current.setCustomValidity('密码不能少于6个字符');
+      passwordRef.current.reportValidity();
+      passwordRef.current.focus();
       return;
+    } else {
+      passwordRef.current.setCustomValidity('');
     }
 
+    // 验证确认密码
     if (password !== confirmPassword) {
-      setError('两次输入的密码不一致');
+      confirmPasswordRef.current.setCustomValidity('两次输入的密码不一致');
+      confirmPasswordRef.current.reportValidity();
+      confirmPasswordRef.current.focus();
       return;
+    } else {
+      confirmPasswordRef.current.setCustomValidity('');
     }
 
+    // 验证真实姓名
     if (!realName.trim()) {
-      setError('请输入真实姓名');
+      realNameRef.current.setCustomValidity('请输入真实姓名');
+      realNameRef.current.reportValidity();
+      realNameRef.current.focus();
       return;
+    } else {
+      realNameRef.current.setCustomValidity('');
     }
 
+    // 验证年龄
     if (!age || parseInt(age) <= 0 || parseInt(age) > 150) {
-      setError('请输入有效的年龄（1-150）');
+      ageRef.current.setCustomValidity('请输入有效的年龄（1-150）');
+      ageRef.current.reportValidity();
+      ageRef.current.focus();
       return;
+    } else {
+      ageRef.current.setCustomValidity('');
     }
 
     setIsLoading(true);
@@ -218,10 +250,19 @@ function Register({ onRegister }) {
               用户名（用于登录）
             </label>
             <input
+              ref={usernameRef}
               type="text"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                // 清除错误状态
+                if (e.target.value.trim().length >= 4) {
+                  usernameRef.current.setCustomValidity('');
+                }
+              }}
               placeholder="请输入用户名（至少4个字符）"
+              required
+              minLength={4}
               style={{
                 width: '100%',
                 padding: '18px 24px',
@@ -258,10 +299,19 @@ function Register({ onRegister }) {
               密码
             </label>
             <input
+              ref={passwordRef}
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                // 清除错误状态
+                if (e.target.value.length >= 6) {
+                  passwordRef.current.setCustomValidity('');
+                }
+              }}
               placeholder="请输入密码（至少6个字符）"
+              required
+              minLength={6}
               style={{
                 width: '100%',
                 padding: '18px 24px',
@@ -298,10 +348,18 @@ function Register({ onRegister }) {
               确认密码
             </label>
             <input
+              ref={confirmPasswordRef}
               type="password"
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                // 清除错误状态
+                if (e.target.value === password && e.target.value.length > 0) {
+                  confirmPasswordRef.current.setCustomValidity('');
+                }
+              }}
               placeholder="请再次输入密码"
+              required
               style={{
                 width: '100%',
                 padding: '18px 24px',
@@ -338,10 +396,18 @@ function Register({ onRegister }) {
               真实姓名
             </label>
             <input
+              ref={realNameRef}
               type="text"
               value={realName}
-              onChange={(e) => setRealName(e.target.value)}
+              onChange={(e) => {
+                setRealName(e.target.value);
+                // 清除错误状态
+                if (e.target.value.trim().length > 0) {
+                  realNameRef.current.setCustomValidity('');
+                }
+              }}
               placeholder="请输入老人姓名"
+              required
               style={{
                 width: '100%',
                 padding: '18px 24px',
@@ -378,10 +444,19 @@ function Register({ onRegister }) {
               年龄
             </label>
             <input
+              ref={ageRef}
               type="number"
               value={age}
-              onChange={(e) => setAge(e.target.value)}
+              onChange={(e) => {
+                setAge(e.target.value);
+                // 清除错误状态
+                const val = parseInt(e.target.value);
+                if (val > 0 && val <= 150) {
+                  ageRef.current.setCustomValidity('');
+                }
+              }}
               placeholder="请输入年龄"
+              required
               min="1"
               max="150"
               style={{

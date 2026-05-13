@@ -7,22 +7,48 @@ function ProfileEdit({ user, onSave, onClose }) {
   const [chronicDiseases, setChronicDiseases] = useState(user?.chronicDiseases || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!realName) {
       alert('请输入您的称呼');
       return;
     }
 
+    if (!user || !user.userId) {
+      alert('用户信息缺失，请重新登录');
+      return;
+    }
+
     setIsSubmitting(true);
-    setTimeout(() => {
-      onSave({
-        realName,
-        age: age ? parseInt(age) : null,
-        allergyHistory: allergyHistory || null,
-        chronicDiseases: chronicDiseases || null
+    try {
+      // 调用更新接口 - 使用 Query 参数
+      const response = await fetch(`/api/v1/user/profile?userId=${user.userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          allergyHistory: allergyHistory || null,
+          chronicDiseases: chronicDiseases || null
+        }),
       });
+
+      const data = await response.json();
+
+      if (response.ok && data.code === 200) {
+        onSave({
+          realName,
+          age: age ? parseInt(age) : null,
+          allergyHistory: allergyHistory || null,
+          chronicDiseases: chronicDiseases || null
+        });
+      } else {
+        alert(data.message || '更新失败，请重试');
+      }
+    } catch (err) {
+      alert('网络连接失败，请稍后重试');
+    } finally {
       setIsSubmitting(false);
-    }, 800);
+    }
   };
 
   return (

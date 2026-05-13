@@ -1,19 +1,71 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-function ProfileModal({ onComplete, onClose }) {
+function ProfileModal({ onComplete, onClose, userId }) {
   const [allergyHistory, setAllergyHistory] = useState('');
   const [chronicDiseases, setChronicDiseases] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleSubmit = () => {
+  // 获取用户当前信息
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!userId) {
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const response = await fetch(`/api/v1/user/profile?userId=${userId}`);
+        const data = await response.json();
+        if (response.ok && data.code === 200) {
+          setAllergyHistory(data.data.allergyHistory || '');
+          setChronicDiseases(data.data.chronicDiseases || '');
+        } else {
+          console.error('获取用户信息失败:', data.message);
+        }
+      } catch (err) {
+        console.error('请求失败:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchUserProfile();
+  }, [userId]);
+
+  const handleSubmit = async () => {
+    if (!userId) {
+      alert('用户信息缺失，请重新登录');
+      return;
+    }
+
     setIsSubmitting(true);
-    setTimeout(() => {
-      onComplete({
-        allergyHistory: allergyHistory || null,
-        chronicDiseases: chronicDiseases || null
+    try {
+      const response = await fetch(`/api/v1/user/profile?userId=${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          allergyHistory: allergyHistory || null,
+          chronicDiseases: chronicDiseases || null
+        }),
       });
+
+      const data = await response.json();
+
+      if (response.ok && data.code === 200) {
+        onComplete({
+          allergyHistory: allergyHistory || null,
+          chronicDiseases: chronicDiseases || null
+        });
+      } else {
+        alert(data.message || '更新失败，请重试');
+      }
+    } catch (err) {
+      alert('网络连接失败，请稍后重试');
+    } finally {
       setIsSubmitting(false);
-    }, 800);
+    }
   };
 
   const handleSkip = () => {
@@ -22,6 +74,33 @@ function ProfileModal({ onComplete, onClose }) {
       chronicDiseases: null
     });
   };
+
+  if (isLoading) {
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+      }}>
+        <div style={{
+          background: 'white',
+          padding: '48px',
+          borderRadius: '36px',
+          boxShadow: '0 20px 80px rgba(0, 0, 0, 0.25)',
+          textAlign: 'center'
+        }}>
+          <p style={{ fontSize: '20px', color: '#6B6B6B' }}>加载中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{

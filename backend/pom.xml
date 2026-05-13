@@ -19,12 +19,15 @@
     <description>Backend project for innovative ideas challenge</description>
 
     <properties>
+        <!-- Deleted:<java.version>21</java.version> -->
         <java.version>17</java.version>
+        <lombok.version>1.18.30</lombok.version>
         <mybatis-plus.version>3.5.5</mybatis-plus.version>
         <minio.version>8.5.7</minio.version>
         <aliyun-oss.version>3.17.1</aliyun-oss.version>
         <hutool.version>5.8.22</hutool.version>
     </properties>
+
 
     <dependencies>
         <dependency>

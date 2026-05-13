@@ -1,20 +1,36 @@
 -- ----------------------------
+-- 删除表语句（按依赖关系倒序删除）
+-- ----------------------------
+DROP TABLE IF EXISTS `ai_conversation_log`;
+DROP TABLE IF EXISTS `emergency_contact`;
+DROP TABLE IF EXISTS `reminder_log`;
+DROP TABLE IF EXISTS `medication_log`;
+DROP TABLE IF EXISTS `medication_plan`;
+DROP TABLE IF EXISTS `ocr_record`;
+DROP TABLE IF EXISTS `user_medicine_box`;
+DROP TABLE IF EXISTS `drug_conflict_rules`;
+DROP TABLE IF EXISTS `drug_base`;
+DROP TABLE IF EXISTS `sys_user`;
+
+-- ----------------------------
 -- 用户表
 -- ----------------------------
 CREATE TABLE IF NOT EXISTS `sys_user` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '用户ID',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '自增主键ID',
+  `user_id` bigint NOT NULL UNIQUE COMMENT '用户ID（雪花算法生成）',
   `username` varchar(50) NOT NULL UNIQUE COMMENT '登录名',
   `password` varchar(255) NOT NULL COMMENT '加密密码',
   `real_name` varchar(50) NOT NULL COMMENT '真实姓名/称呼',
   `age` tinyint NULL COMMENT '年龄',
-  `allergy_history` text NULL COMMENT '过敏史描述（如“青霉素过敏”）',
-  `chronic_diseases` text NULL COMMENT '慢性病史描述（如“高血压、糖尿病”）',
+  `allergy_history` text NULL COMMENT '过敏史描述（如"青霉素过敏"）',
+  `chronic_diseases` text NULL COMMENT '慢性病史描述（如"高血压、糖尿病"）',
   `role` varchar(20) NOT NULL DEFAULT 'elder' COMMENT '角色：elder（老人）/ family（家属）',
   `bind_elder_id` bigint NULL COMMENT '家属绑定的老人ID（自关联）',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除标记',
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_id` (`user_id`),
   UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
 
@@ -25,9 +41,9 @@ CREATE TABLE IF NOT EXISTS `drug_base` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '药品ID',
   `approval_number` varchar(100) UNIQUE COMMENT '国药准字',
   `generic_name` varchar(200) NOT NULL COMMENT '通用名（化学名）',
-  `trade_name` varchar(200) NULL COMMENT '商品名（如“开博通”）',
-  `common_name` varchar(200) NULL COMMENT '俗名/别名（如“降压0号”）',
-  `specification` varchar(100) NULL COMMENT '规格（如“5mg*30片”）',
+  `trade_name` varchar(200) NULL COMMENT '商品名（如"开博通"）',
+  `common_name` varchar(200) NULL COMMENT '俗名/别名（如"降压0号"）',
+  `specification` varchar(100) NULL COMMENT '规格（如"5mg*30片"）',
   `manufacturer` varchar(200) NULL COMMENT '生产厂家',
   `category` varchar(100) NULL COMMENT '药品分类（处方药/非处方药/保健品）',
   `description` text NULL COMMENT '药品说明原文',
@@ -64,8 +80,8 @@ CREATE TABLE IF NOT EXISTS `user_medicine_box` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
   `user_id` bigint NOT NULL COMMENT '所属老人',
   `drug_id` bigint NOT NULL COMMENT '药品',
-  `dosage` varchar(50) NOT NULL COMMENT '每次用量（如“一片”“半片”）',
-  `frequency` varchar(50) NOT NULL COMMENT '频率（如“每日两次”）',
+  `dosage` varchar(50) NOT NULL COMMENT '每次用量（如"一片""半片"）',
+  `frequency` varchar(50) NOT NULL COMMENT '频率（如"每日两次"）',
   `start_date` date NULL COMMENT '开始服用日期',
   `end_date` date NULL COMMENT '预计结束日期',
   `expiry_date` date NULL COMMENT '药品有效期',
@@ -107,7 +123,7 @@ CREATE TABLE IF NOT EXISTS `medication_plan` (
   `box_item_id` bigint NULL COMMENT '关联药箱条目',
   `plan_date` date NOT NULL COMMENT '计划日期',
   `time_slot` varchar(20) NOT NULL COMMENT '时段：morning/noon/evening/before_bed',
-  `dosage_at_time` varchar(50) NOT NULL COMMENT '该时段用量（如“1片”）',
+  `dosage_at_time` varchar(50) NOT NULL COMMENT '该时段用量（如"1片"）',
   `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT '状态：pending/taken/missed/skipped',
   `remind_before` int NULL COMMENT '提前提醒分钟数（如15）',
   PRIMARY KEY (`id`),

@@ -21,6 +21,13 @@ public class SysUser extends BaseEntity {
     private static final long serialVersionUID = 1L;
 
     /**
+     * 用户ID（雪花算法生成）
+     * 用于对外暴露的用户标识
+     */
+    @TableField("user_id")
+    private Long userId;
+
+    /**
      * 登录名
      * 唯一约束，用于用户登录认证
      */
