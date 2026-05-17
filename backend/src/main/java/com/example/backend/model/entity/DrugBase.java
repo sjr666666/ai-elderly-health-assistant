@@ -2,7 +2,6 @@ package com.example.backend.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 
 import java.time.LocalDateTime;
 
@@ -14,11 +13,16 @@ import java.time.LocalDateTime;
  * @since 1.0.0
  */
 @Data
-@EqualsAndHashCode(callSuper = true)
 @TableName("drug_base")
-public class DrugBase extends BaseEntity {
+public class DrugBase {
 
     private static final long serialVersionUID = 1L;
+
+    /**
+     * 主键ID
+     */
+    @TableId(type = IdType.AUTO)
+    private Long id;
 
     /**
      * 国药准字
@@ -89,23 +93,4 @@ public class DrugBase extends BaseEntity {
      */
     @TableField(value = "created_at", fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
-
-    /**
-     * 药品分类枚举
-     */
-    public enum Category {
-        PRESCRIPTION("处方药"),
-        OVER_THE_COUNTER("非处方药"),
-        HEALTH_SUPPLEMENT("保健品");
-
-        private final String description;
-
-        Category(String description) {
-            this.description = description;
-        }
-
-        public String getDescription() {
-            return description;
-        }
-    }
 }

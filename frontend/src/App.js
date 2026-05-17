@@ -6,6 +6,8 @@ import ProfileModal from './components/ProfileModal';
 import ProfileEdit from './components/ProfileEdit';
 import EmergencyContacts from './components/EmergencyContacts';
 import AddDrugModal from './components/AddDrugModal';
+import EditDrugModal from './components/EditDrugModal';
+import ConfirmDeleteModal from './components/ConfirmDeleteModal';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -13,10 +15,7 @@ function App() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
-  const [drugList, setDrugList] = useState([
-    { id: 1, name: '硝苯地平缓释片', spec: '5mg', manufacturer: '德州德药制药厂', expiryDate: '2026-12-31', dosage: '每日两次，每次半片', remaining: 25 },
-    { id: 2, name: '二甲双胍片', spec: '0.5g', manufacturer: '上海现代制药厂', expiryDate: '2026-06-30', dosage: '每日三次，每次一片', remaining: 60 }
-  ]);
+  const [drugList, setDrugList] = useState([]); // 从数据库动态加载
   const [imagePreview, setImagePreview] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -24,6 +23,8 @@ function App() {
   const [manualDrugName, setManualDrugName] = useState('');
   const [manualSpec, setManualSpec] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filteredDrugList, setFilteredDrugList] = useState([]); // 搜索后的药品列表
+  const [isSearching, setIsSearching] = useState(false); // 搜索加载状态
   const [showVoicePanel, setShowVoicePanel] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechRate, setSpeechRate] = useState(1);
@@ -45,6 +46,13 @@ function App() {
   ]);
   const [showAddContact, setShowAddContact] = useState(false);
   const [showAddDrugModal, setShowAddDrugModal] = useState(false);
+  const [showEditDrugModal, setShowEditDrugModal] = useState(false); // 编辑药品弹窗
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false); // 确认删除弹窗
+  const [pendingDeleteDrug, setPendingDeleteDrug] = useState(null); // 待删除的药品
+  const [showSuccessToast, setShowSuccessToast] = useState(false); // 成功提示弹窗
+  const [toastMessage, setToastMessage] = useState(''); // 提示消息
+  const [showDrugDetailModal, setShowDrugDetailModal] = useState(false); // 药品详情弹窗
+  const [selectedDrug, setSelectedDrug] = useState(null); // 选中的药品
   const fileInputRef = useRef(null);
 
   const handleRegister = (registerData) => {
@@ -54,12 +62,58 @@ function App() {
     setShowRegister(false);
   };
 
+  // 从数据库加载药箱列表
+  const loadMedicineBoxList = async (userId) => {
+    if (!userId) return;
+    
+    try {
+      const response = await fetch(`/api/v1/box/list?userId=${userId}`);
+      const data = await response.json();
+      
+      console.log('=== 药箱列表响应 ===');
+      console.log('状态码:', response.status);
+      console.log('响应数据:', data);
+      console.log('==================');
+      
+      if (response.ok && data.code === 200) {
+        // 转换后端数据格式为前端需要的格式
+        const drugs = data.data.map(item => ({
+          boxItemId: item.boxItemId,
+          drugId: item.drugId,
+          name: item.drugName,
+          spec: item.specification,
+          dosage: item.dosage,
+          frequency: item.frequency,
+          startDate: item.startDate,
+          endDate: item.endDate,
+          expiryDate: item.expiryDate,
+          totalQuantity: item.totalQuantity,
+          remaining: item.remainingQuantity || item.totalQuantity, // 优先使用剩余数量
+          note: item.note,
+          status: item.status,
+          createdAt: item.createdAt
+        }));
+        setDrugList(drugs);
+      } else {
+        console.error('获取药箱列表失败:', data.message);
+      }
+    } catch (err) {
+      console.error('获取药箱列表异常:', err);
+    }
+  };
+
   const handleLogin = (loginData) => {
     setUser({
       username: loginData.username,
       ...loginData
     });
     setIsLoggedIn(true);
+    
+    // 登录成功后加载药箱列表
+    if (loginData.userId) {
+      loadMedicineBoxList(loginData.userId);
+    }
+    
     if (loginData.needProfile) {
       setShowProfileModal(true);
     }
@@ -92,23 +146,125 @@ function App() {
     alert('✅ 联系人已删除！');
   };
 
-  const handleAddDrug = (drugData) => {
+  // 打开药品详情弹窗
+  const handleOpenDrugDetail = (drug) => {
+    setSelectedDrug(drug);
+    setShowDrugDetailModal(true);
+  };
+
+  // 关闭药品详情弹窗
+  const handleCloseDrugDetail = () => {
+    setShowDrugDetailModal(false);
+    setSelectedDrug(null);
+  };
+
+  // 编辑药品
+  const handleEditDrug = (drug) => {
+    // 保持详情弹窗打开，编辑弹窗会覆盖在上面
+    setShowEditDrugModal(true);
+  };
+
+  // 保存编辑药品
+  const handleSaveEditDrug = async (updatedDrug) => {
+    // 关闭编辑弹窗
+    setShowEditDrugModal(false);
+    
+    // 更新选中的药品数据（保持详情弹窗打开）
+    setSelectedDrug(updatedDrug);
+    
+    // 显示成功提示
+    setToastMessage('药品修改成功！');
+    setShowSuccessToast(true);
+    setTimeout(() => setShowSuccessToast(false), 2000);
+    
+    // 重新加载列表（后台刷新，不影响当前详情显示）
+    if (user && user.userId) {
+      await loadMedicineBoxList(user.userId);
+    }
+  };
+
+  // 删除药品
+  const handleDeleteDrug = (drug) => {
+    // 打开确认删除弹窗
+    setPendingDeleteDrug(drug);
+    setShowConfirmDelete(true);
+  };
+
+  // 确认删除药品
+  const handleConfirmDelete = async () => {
+    if (!pendingDeleteDrug) return;
+    
+    try {
+      const response = await fetch(`/api/v1/box/${pendingDeleteDrug.boxItemId}?userId=${user.userId}`, { method: 'DELETE' });
+      const data = await response.json();
+      
+      console.log('=== 删除药品响应 ===');
+      console.log('状态码:', response.status);
+      console.log('响应数据:', data);
+      console.log('==================');
+      
+      if (response.ok && data.code === 200) {
+        // 关闭确认弹窗
+        setShowConfirmDelete(false);
+        setPendingDeleteDrug(null);
+        
+        // 关闭详情弹窗
+        handleCloseDrugDetail();
+        
+        // 显示成功提示
+        setToastMessage(data.message || '药品删除成功！');
+        setShowSuccessToast(true);
+        setTimeout(() => setShowSuccessToast(false), 2000);
+        
+        // 重新加载列表（从数据库获取最新数据）
+        if (user && user.userId) {
+          await loadMedicineBoxList(user.userId);
+        }
+      } else {
+        alert(data.message || '删除失败，请重试');
+      }
+    } catch (err) {
+      console.error('删除药品异常:', err);
+      alert(' 网络连接失败，请稍后重试');
+    }
+  };
+
+  // 取消删除
+  const handleCancelDelete = () => {
+    setShowConfirmDelete(false);
+    setPendingDeleteDrug(null);
+  };
+
+  const handleAddDrug = async (drugData) => {
     // 构造新药数据
     const newDrug = {
-      id: drugList.length + 1,
+      boxItemId: drugData.boxItemId,
+      drugId: drugData.drugId,
       name: drugData.drugName || drugData.genericName,
       spec: drugData.spec || drugData.specification,
       manufacturer: drugData.manufacturer,
       dosage: drugData.dosage,
       frequency: drugData.frequency,
+      startDate: drugData.startDate,
+      endDate: drugData.endDate,
       expiryDate: drugData.expiryDate,
-      note: drugData.note,
-      remaining: 30 // 默认初始数量
+      totalQuantity: drugData.totalQuantity,
+      remaining: drugData.totalQuantity, // 初始时剩余数量等于总数量
+      note: drugData.note
     };
     
     setDrugList([...drugList, newDrug]);
     setShowAddDrugModal(false);
-    alert('✅ 药品添加成功！');
+    
+    // 显示自定义成功提示
+    setToastMessage('药品添加成功！');
+    setShowSuccessToast(true);
+    setTimeout(() => setShowSuccessToast(false), 2000);
+    
+    // 添加成功后重新加载药箱列表（从数据库获取最新数据）
+    if (user && user.userId) {
+      await loadMedicineBoxList(user.userId);
+    }
   };
 
   const handleLogout = () => {
@@ -730,7 +886,63 @@ function App() {
     </div>
   );
 
-  const renderDrugsTab = () => (
+  const handleSearchDrugs = async (keyword) => {
+    setSearchQuery(keyword);
+    
+    // 如果搜索框为空，显示完整列表
+    if (!keyword.trim()) {
+      setFilteredDrugList([]);
+      return;
+    }
+    
+    try {
+      setIsSearching(true);
+      const response = await fetch(`/api/v1/box/search?userId=${user.userId}&keyword=${encodeURIComponent(keyword)}&status=active`);
+      const data = await response.json();
+      
+      console.log('=== 搜索药箱响应 ===');
+      console.log('状态码:', response.status);
+      console.log('响应数据:', data);
+      console.log('==================');
+      
+      if (response.ok && data.code === 200) {
+        // 转换后端数据格式为前端需要的格式
+        const drugs = data.data.map(item => ({
+          boxItemId: item.boxItemId,
+          drugId: item.drugId,
+          name: item.drugName,
+          spec: item.specification,
+          dosage: item.dosage,
+          frequency: item.frequency,
+          startDate: item.startDate,
+          endDate: item.endDate,
+          expiryDate: item.expiryDate,
+          totalQuantity: item.totalQuantity,
+          remaining: item.remainingQuantity || item.totalQuantity,
+          note: item.note,
+          status: item.status,
+          createdAt: item.createdAt
+        }));
+        setFilteredDrugList(drugs);
+      } else {
+        console.error('搜索失败:', data.message);
+        setFilteredDrugList([]);
+      }
+    } catch (err) {
+      console.error('搜索异常:', err);
+      setFilteredDrugList([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const renderDrugsTab = () => {
+    // 如果有搜索关键词且正在搜索，显示搜索中的药品列表
+    // 如果有搜索关键词且已完成搜索，显示过滤后的药品列表
+    // 否则显示完整列表
+    const displayList = filteredDrugList.length > 0 && searchQuery.trim() ? filteredDrugList : drugList;
+    
+    return (
     <div className="card">
       <h2 className="card-title">
         <span className="card-title-icon">🏠</span>
@@ -743,9 +955,9 @@ function App() {
           <input
             type="text"
             className="search-input"
-            placeholder="搜索药品..."
+            placeholder="搜索药品名称、用量或备注..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchDrugs(e.target.value)}
           />
         </div>
         <button className="btn btn-primary btn-large" onClick={() => setShowAddDrugModal(true)}>
@@ -754,18 +966,33 @@ function App() {
       </div>
 
       <div className="drug-grid">
-        {drugList.map((drug, index) => {
+        {displayList.length === 0 && searchQuery.trim() && !isSearching ? (
+          <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-light)' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
+            <p style={{ fontSize: '22px' }}>未找到与"{searchQuery}"相关的药品</p>
+            <p style={{ fontSize: '18px', marginTop: '12px' }}>请尝试其他关键词</p>
+          </div>
+        ) : (
+          displayList.map((drug, index) => {
           const isExpiring = new Date(drug.expiryDate) - new Date() < 30 * 24 * 60 * 60 * 1000;
-          const remainingPercent = Math.max(0, Math.min(100, (drug.remaining / 30) * 100));
+          // 使用真实总数量计算进度百分比
+          const totalQty = drug.totalQuantity || 30; // 如果没有总数量，默认30
+          const remainingQty = drug.remaining || totalQty;
+          const remainingPercent = Math.max(0, Math.min(100, (remainingQty / totalQty) * 100));
 
           return (
-            <div key={index} className={`drug-bottle-card ${isExpiring ? 'expiring' : ''}`}>
+            <div 
+              key={index} 
+              className={`drug-bottle-card ${isExpiring ? 'expiring' : ''}`}
+              onClick={() => handleOpenDrugDetail(drug)}
+              style={{ cursor: 'pointer' }}
+            >
               {isExpiring && <span className="expiring-tag">即将过期</span>}
               <div className="bottle-icon">💊</div>
               <h4 className="bottle-name">{drug.name}</h4>
               <p className="bottle-info">规格：{drug.spec}</p>
               <p className="bottle-info">用法：{drug.dosage}</p>
-              <p className="bottle-info">剩余：{drug.remaining}片</p>
+              <p className="bottle-info">剩余：{remainingQty}/{totalQty}片</p>
               <div className="bottle-progress">
                 <div className="bottle-progress-fill" style={{ width: `${remainingPercent}%` }}></div>
               </div>
@@ -774,17 +1001,17 @@ function App() {
               </p>
             </div>
           );
-        })}
+        }))}
       </div>
 
       <div className="stats-bar">
         <div className="stats-item">
-          <div className="stats-value">{drugList.length}</div>
+          <div className="stats-value">{displayList.length}</div>
           <div className="stats-label">种药品</div>
         </div>
         <div className="stats-item">
           <div className="stats-value warning">
-            {drugList.filter(d => new Date(d.expiryDate) - new Date() < 30 * 24 * 60 * 60 * 1000).length}
+            {displayList.filter(d => new Date(d.expiryDate) - new Date() < 30 * 24 * 60 * 60 * 1000).length}
           </div>
           <div className="stats-label">需关注</div>
         </div>
@@ -794,7 +1021,8 @@ function App() {
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   const [emergencyMessages, setEmergencyMessages] = useState([
     { id: 1, type: 'ai', text: '您好，我是您的AI健康助手。请描述一下您目前的不适症状，我会尽力为您提供一些建议。' }
@@ -1031,6 +1259,108 @@ function App() {
             />
           ))}
         </div>
+      )}
+
+      {/* 成功提示弹窗 */}
+      {showSuccessToast && (
+        <div className="success-toast">
+          <div className="success-toast-content">
+            <div className="success-toast-icon">✓</div>
+            <p className="success-toast-message">{toastMessage}</p>
+          </div>
+        </div>
+      )}
+
+      {/* 药品详情弹窗 */}
+      {showDrugDetailModal && selectedDrug && (
+        <div className="modal-overlay" onClick={handleCloseDrugDetail}>
+          <div className="modal-content drug-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">💊 药品详情</h3>
+              <button className="modal-close-btn" onClick={handleCloseDrugDetail}>✕</button>
+            </div>
+
+            <div className="modal-body">
+              <div className="drug-detail-info">
+                <div className="detail-item">
+                  <label className="detail-label">药品名称</label>
+                  <p className="detail-value">{selectedDrug.name}</p>
+                </div>
+                <div className="detail-item">
+                  <label className="detail-label">规格</label>
+                  <p className="detail-value">{selectedDrug.spec || '-'}</p>
+                </div>
+                <div className="detail-item">
+                  <label className="detail-label">用法用量</label>
+                  <p className="detail-value">{selectedDrug.dosage || '-'}</p>
+                </div>
+                <div className="detail-item">
+                  <label className="detail-label">用药频率</label>
+                  <p className="detail-value">{selectedDrug.frequency || '-'}</p>
+                </div>
+                <div className="detail-item">
+                  <label className="detail-label">库存数量</label>
+                  <p className="detail-value">
+                    剩余 {selectedDrug.remaining || 0} / {selectedDrug.totalQuantity || 0} 片
+                  </p>
+                </div>
+                <div className="detail-item">
+                  <label className="detail-label">有效期</label>
+                  <p className="detail-value">{selectedDrug.expiryDate || '-'}</p>
+                </div>
+                {selectedDrug.startDate && (
+                  <div className="detail-item">
+                    <label className="detail-label">开始日期</label>
+                    <p className="detail-value">{selectedDrug.startDate}</p>
+                  </div>
+                )}
+                {selectedDrug.endDate && (
+                  <div className="detail-item">
+                    <label className="detail-label">结束日期</label>
+                    <p className="detail-value">{selectedDrug.endDate}</p>
+                  </div>
+                )}
+                {selectedDrug.note && (
+                  <div className="detail-item">
+                    <label className="detail-label">备注</label>
+                    <p className="detail-value">{selectedDrug.note}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary btn-large" onClick={() => handleEditDrug(selectedDrug)}>
+                ✏️ 修改
+              </button>
+              <button className="btn btn-danger btn-large" onClick={() => handleDeleteDrug(selectedDrug)}>
+                ️ 删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 编辑药品弹窗 */}
+      {showEditDrugModal && selectedDrug && (
+        <EditDrugModal
+          onClose={() => {
+            setShowEditDrugModal(false);
+            setSelectedDrug(null);
+          }}
+          onSave={handleSaveEditDrug}
+          drug={selectedDrug}
+          userId={user?.userId}
+        />
+      )}
+
+      {/* 确认删除弹窗 */}
+      {showConfirmDelete && pendingDeleteDrug && (
+        <ConfirmDeleteModal
+          drugName={pendingDeleteDrug.name}
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
       )}
     </>
   );

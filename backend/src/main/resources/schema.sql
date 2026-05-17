@@ -85,6 +85,8 @@ CREATE TABLE IF NOT EXISTS `user_medicine_box` (
   `start_date` date NULL COMMENT '开始服用日期',
   `end_date` date NULL COMMENT '预计结束日期',
   `expiry_date` date NULL COMMENT '药品有效期',
+  `total_quantity` int NULL COMMENT '总数量（总片数/总瓶数等）',
+  `remaining_quantity` int NULL COMMENT '剩余数量（根据服药记录自动扣减）',
   `note` varchar(500) NULL COMMENT '用户备注',
   `status` varchar(20) NOT NULL DEFAULT 'active' COMMENT '状态：active/stopped',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '添加时间',

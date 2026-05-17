@@ -2,7 +2,6 @@ package com.example.backend.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -15,11 +14,16 @@ import java.time.LocalDateTime;
  * @since 1.0.0
  */
 @Data
-@EqualsAndHashCode(callSuper = true)
 @TableName("user_medicine_box")
-public class UserMedicineBox extends BaseEntity {
+public class UserMedicineBox {
 
     private static final long serialVersionUID = 1L;
+
+    /**
+     * 主键ID
+     */
+    @TableId(type = IdType.AUTO)
+    private Long id;
 
     /**
      * 所属老人ID
@@ -69,6 +73,20 @@ public class UserMedicineBox extends BaseEntity {
      */
     @TableField("expiry_date")
     private LocalDate expiryDate;
+
+    /**
+     * 总数量
+     * 用户添加时填写的总片数/总瓶数
+     */
+    @TableField("total_quantity")
+    private Integer totalQuantity;
+
+    /**
+     * 剩余数量
+     * 根据服药记录自动扣减
+     */
+    @TableField("remaining_quantity")
+    private Integer remainingQuantity;
 
     /**
      * 用户备注

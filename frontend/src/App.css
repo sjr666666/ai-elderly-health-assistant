@@ -2773,3 +2773,259 @@ body {
     font-size: 36px;
   }
 }
+
+/* ============ SUCCESS TOAST ============ */
+.success-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+  animation: toastFadeIn 0.3s ease;
+}
+
+.success-toast-content {
+  background: linear-gradient(135deg, #5CB85C 0%, #449D44 100%);
+  color: white;
+  padding: 40px 60px;
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(92, 184, 92, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  min-width: 320px;
+  animation: toastBounce 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.success-toast-icon {
+  width: 64px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  font-weight: bold;
+  animation: iconPop 0.4s ease 0.2s both;
+}
+
+.success-toast-message {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+  text-align: center;
+  letter-spacing: 1px;
+  animation: textFadeIn 0.4s ease 0.3s both;
+}
+
+@keyframes toastFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes toastBounce {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes iconPop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes textFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============ DRUG DETAIL MODAL ============ */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-content {
+  background: white;
+  border-radius: var(--radius-large);
+  box-shadow: var(--shadow-strong);
+  max-width: 600px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 32px;
+  border-bottom: 2px solid var(--cream-dark);
+  background: linear-gradient(135deg, var(--warm-apricot-light) 0%, var(--mint-green-light) 100%);
+  border-radius: var(--radius-large) var(--radius-large) 0 0;
+}
+
+.modal-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+.modal-close-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: white;
+  border-radius: 50%;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  color: var(--text-light);
+}
+
+.modal-close-btn:hover {
+  background: var(--danger-red);
+  color: white;
+  transform: rotate(90deg);
+}
+
+.modal-body {
+  padding: 32px;
+}
+
+.drug-detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--cream-white);
+  border-radius: var(--radius-small);
+  border-left: 4px solid var(--tech-blue);
+  transition: all var(--transition-fast);
+}
+
+.detail-item:hover {
+  background: var(--mint-green-light);
+  transform: translateX(4px);
+}
+
+.detail-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.detail-value {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text-dark);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 16px;
+  padding: 24px 32px;
+  border-top: 2px solid var(--cream-dark);
+  background: var(--cream-white);
+  border-radius: 0 0 var(--radius-large) var(--radius-large);
+}
+
+.modal-footer .btn {
+  flex: 1;
+  min-height: 56px;
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, var(--danger-red) 0%, #C0392B 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius-medium);
+  cursor: pointer;
+  transition: all var(--transition-medium);
+  box-shadow: 0 4px 16px rgba(231, 76, 60, 0.3);
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, #E74C3C 0%, #A93226 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(231, 76, 60, 0.4);
+}
+
+.btn-danger:active {
+  transform: translateY(0);
+}
