@@ -15,11 +15,17 @@ import java.time.LocalDateTime;
  * @since 1.0.0
  */
 @Data
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = false)
 @TableName("ocr_record")
-public class OcrRecord extends BaseEntity {
+public class OcrRecord {
 
     private static final long serialVersionUID = 1L;
+
+    /**
+     * 记录ID
+     */
+    @TableId(type = IdType.AUTO)
+    private Long id;
 
     /**
      * 上传用户ID
