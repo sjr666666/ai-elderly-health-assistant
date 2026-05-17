@@ -1,6 +1,9 @@
 server:
   port: 8080
 
+upload:
+  path: ./uploads
+
 spring:
   application:
     name: backend
@@ -71,23 +74,23 @@ minio:
 # ==================== 阿里云OSS 配置 ====================
 aliyun:
   oss:
-    endpoint: oss-cn-hangzhou.aliyuncs.com
-    access-key-id: dev_access_key_id
-    access-key-secret: dev_access_key_secret
-    bucket-name: dev-bucket
-    region: cn-hangzhou
+    endpoint: oss-cn-beijing.aliyuncs.com
+    access-key-id: LTAI***REDACTED***
+    access-key-secret: ***REDACTED***
+    bucket-name: cxcy-aa
+    region: cn-beijing
 
 # ==================== 百度OCR 配置 ====================
 baidu:
   ocr:
-    app-id: dev_app_id
-    api-key: dev_api_key
-    secret-key: dev_secret_key
+    app-id: 123338866
+    api-key: PdKDCZZpPBNTvGnwhmyv20cu
+    secret-key: aWW9rvJZFloDvu9k4YW6H3kk4Gpf5VLS
 
 # ==================== DeepSeek 大模型配置 ====================
 deepseek:
   api-url: https://api.deepseek.com/v1
-  api-key: dev_deepseek_api_key
+  api-key: sk-***REDACTED***
   model: deepseek-chat
 
 # ==================== 日志配置 ====================
