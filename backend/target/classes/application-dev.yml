@@ -83,7 +83,7 @@ aliyun:
 # ==================== 百度OCR 配置 ====================
 baidu:
   ocr:
-    app-id: 7756153
+    app-id: 123338866
     api-key: PdKDCZZpPBNTvGnwhmyv20cu
     secret-key: aWW9rvJZFloDvu9k4YW6H3kk4Gpf5VLS
 
