@@ -26,6 +26,7 @@ build/
 # Backend - Spring Boot
 *.log
 logs/
+backend/uploads/
 
 # Backend - Java
 *.class
