@@ -332,17 +332,103 @@ function App() {
     }
   };
 
-  const analyzeImage = () => {
+  const [ocrTaskId, setOcrTaskId] = useState(null);
+  const [ocrPolling, setOcrPolling] = useState(false);
+
+  const analyzeImage = async () => {
+    if (!fileInputRef.current?.files[0]) {
+      alert('请先选择图片');
+      return;
+    }
+
     setIsLoading(true);
-    setTimeout(() => {
-      setRecognizedDrugs([
-        { id: 1, name: '硝苯地平缓释片(Ⅰ)', spec: '5mg×30片', manufacturer: '德州德药制药厂', matchScore: 96 },
-        { id: 2, name: '硝苯地平缓释片(II)', spec: '10mg×30片', manufacturer: '德州德药制药厂', matchScore: 87 },
-        { id: 3, name: '硝苯地平控释片', spec: '20mg×7片', manufacturer: '上海现代制药厂', matchScore: 73 }
-      ]);
+    setOcrTaskId(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', fileInputRef.current.files[0]);
+
+      const response = await fetch('/api/v1/drug/recognize/upload', {
+        method: 'POST',
+        headers: {
+          'X-User-Id': user?.userId || '1'
+        },
+        body: formData
+      });
+
+      const data = await response.json();
+
+      console.log('上传响应:', data);
+
+      if (data.code === 200 && data.data?.taskId) {
+        setOcrTaskId(data.data.taskId);
+        pollOcrResult(data.data.taskId);
+      } else {
+        alert(data.message || '上传失败');
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error('上传失败:', error);
+      alert('上传失败，请检查网络连接');
       setIsLoading(false);
-      setActiveTab('recognition');
-    }, 2500);
+    }
+  };
+
+  const pollOcrResult = async (taskId) => {
+    setOcrPolling(true);
+    let pollingCount = 0;
+    const maxPollingCount = 30;
+
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/v1/drug/recognize/result/${taskId}`);
+        const data = await response.json();
+
+        console.log('查询结果:', data);
+
+        if (data.code === 200 && data.data) {
+          const result = data.data;
+          
+          if (result.status === 'matched' || result.status === 'unmatched' || result.status === 'failed') {
+            setOcrPolling(false);
+            setIsLoading(false);
+            
+            if (result.status === 'matched' && result.matchedDrugName) {
+              setRecognizedDrugs([{
+                id: Date.now(),
+                name: result.matchedDrugName,
+                spec: result.matchedDrugSpec || '',
+                manufacturer: '',
+                matchScore: result.matchScore ? Math.round(result.matchScore * 100) : 0
+              }]);
+              setActiveTab('recognition');
+            } else if (result.status === 'unmatched') {
+              alert('未能识别出匹配的药品，请尝试手动输入');
+            } else if (result.status === 'failed') {
+              alert('识别失败，请重试');
+            }
+          } else if (pollingCount < maxPollingCount) {
+            pollingCount++;
+            setTimeout(poll, 1000);
+          } else {
+            setOcrPolling(false);
+            setIsLoading(false);
+            alert('识别超时，请重试');
+          }
+        } else {
+          setOcrPolling(false);
+          setIsLoading(false);
+          alert(data.message || '查询失败');
+        }
+      } catch (error) {
+        console.error('查询失败:', error);
+        setOcrPolling(false);
+        setIsLoading(false);
+        alert('查询失败，请检查网络连接');
+      }
+    };
+
+    poll();
   };
 
   const addToMedicineBox = (drug) => {
