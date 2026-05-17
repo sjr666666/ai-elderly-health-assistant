@@ -3,7 +3,9 @@ import React, { useState, useRef } from 'react';
 function Register({ onRegister }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [realName, setRealName] = useState('');
   const [age, setAge] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -223,20 +225,6 @@ function Register({ onRegister }) {
           <p style={{ fontSize: '18px', color: '#6B6B6B', marginTop: '8px' }}>请填写基本信息完成注册</p>
         </div>
 
-        {error && (
-          <div style={{
-            background: '#FFEBEE',
-            color: '#E74C3C',
-            padding: '16px 20px',
-            borderRadius: '12px',
-            marginBottom: '24px',
-            fontSize: '16px',
-            fontWeight: '600'
-          }}>
-            ⚠️ {error}
-          </div>
-        )}
-
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '24px' }}>
             <label style={{
@@ -298,42 +286,75 @@ function Register({ onRegister }) {
               <span style={{ color: '#E74C3C', marginRight: '4px' }}>*</span>
               密码
             </label>
-            <input
-              ref={passwordRef}
-              type="password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                // 清除错误状态
-                if (e.target.value.length >= 6) {
-                  passwordRef.current.setCustomValidity('');
-                }
-              }}
-              placeholder="请输入密码（至少6个字符）"
-              required
-              minLength={6}
-              style={{
-                width: '100%',
-                padding: '18px 24px',
-                fontSize: '20px',
-                border: '3px solid #F0EBE3',
-                borderRadius: '16px',
-                outline: 'none',
-                transition: 'all 0.3s ease',
-                background: '#FAF7F2',
-                fontFamily: 'inherit'
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = '#4A90E2';
-                e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
-                e.target.style.background = 'white';
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = '#F0EBE3';
-                e.target.style.boxShadow = 'none';
-                e.target.style.background = '#FAF7F2';
-              }}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                ref={passwordRef}
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  // 清除错误状态
+                  if (e.target.value.length >= 6) {
+                    passwordRef.current.setCustomValidity('');
+                  }
+                }}
+                placeholder="请输入密码（至少6个字符）"
+                required
+                minLength={6}
+                style={{
+                  width: '100%',
+                  padding: '18px 60px 18px 24px',
+                  fontSize: '20px',
+                  border: '3px solid #F0EBE3',
+                  borderRadius: '16px',
+                  outline: 'none',
+                  transition: 'all 0.3s ease',
+                  background: '#FAF7F2',
+                  fontFamily: 'inherit',
+                  boxSizing: 'border-box'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#4A90E2';
+                  e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
+                  e.target.style.background = 'white';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#F0EBE3';
+                  e.target.style.boxShadow = 'none';
+                  e.target.style.background = '#FAF7F2';
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '16px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 1
+                }}
+              >
+                {showPassword ? (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" strokeWidth="2">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                ) : (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" strokeWidth="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
 
           <div style={{ marginBottom: '24px' }}>
@@ -347,41 +368,74 @@ function Register({ onRegister }) {
               <span style={{ color: '#E74C3C', marginRight: '4px' }}>*</span>
               确认密码
             </label>
-            <input
-              ref={confirmPasswordRef}
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => {
-                setConfirmPassword(e.target.value);
-                // 清除错误状态
-                if (e.target.value === password && e.target.value.length > 0) {
-                  confirmPasswordRef.current.setCustomValidity('');
-                }
-              }}
-              placeholder="请再次输入密码"
-              required
-              style={{
-                width: '100%',
-                padding: '18px 24px',
-                fontSize: '20px',
-                border: '3px solid #F0EBE3',
-                borderRadius: '16px',
-                outline: 'none',
-                transition: 'all 0.3s ease',
-                background: '#FAF7F2',
-                fontFamily: 'inherit'
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = '#4A90E2';
-                e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
-                e.target.style.background = 'white';
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = '#F0EBE3';
-                e.target.style.boxShadow = 'none';
-                e.target.style.background = '#FAF7F2';
-              }}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                ref={confirmPasswordRef}
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  // 清除错误状态
+                  if (e.target.value === password && e.target.value.length > 0) {
+                    confirmPasswordRef.current.setCustomValidity('');
+                  }
+                }}
+                placeholder="请再次输入密码"
+                required
+                style={{
+                  width: '100%',
+                  padding: '18px 60px 18px 24px',
+                  fontSize: '20px',
+                  border: '3px solid #F0EBE3',
+                  borderRadius: '16px',
+                  outline: 'none',
+                  transition: 'all 0.3s ease',
+                  background: '#FAF7F2',
+                  fontFamily: 'inherit',
+                  boxSizing: 'border-box'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#4A90E2';
+                  e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
+                  e.target.style.background = 'white';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#F0EBE3';
+                  e.target.style.boxShadow = 'none';
+                  e.target.style.background = '#FAF7F2';
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '16px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 1
+                }}
+              >
+                {showConfirmPassword ? (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" strokeWidth="2">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                ) : (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" strokeWidth="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
 
           <div style={{ marginBottom: '24px' }}>
@@ -525,6 +579,22 @@ function Register({ onRegister }) {
               '✅ 完成注册'
             )}
           </button>
+
+          {error && (
+            <div style={{
+              marginTop: '16px',
+              marginBottom: '16px',
+              background: '#FFEBEE',
+              color: '#E74C3C',
+              padding: '16px 20px',
+              borderRadius: '12px',
+              fontSize: '16px',
+              fontWeight: '600',
+              textAlign: 'center'
+            }}>
+              ⚠️ {error}
+            </div>
+          )}
 
           <div style={{
             marginTop: '32px',

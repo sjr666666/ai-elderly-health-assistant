@@ -15,6 +15,16 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UserProfileUpdateRequest {
     /**
+     * 真实姓名/称呼
+     */
+    private String realName;
+
+    /**
+     * 年龄
+     */
+    private Integer age;
+
+    /**
      * 过敏史
      */
     private String allergyHistory;

@@ -27,6 +27,8 @@ function ProfileEdit({ user, onSave, onClose }) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          realName: realName || null,
+          age: age ? parseInt(age) : null,
           allergyHistory: allergyHistory || null,
           chronicDiseases: chronicDiseases || null
         }),

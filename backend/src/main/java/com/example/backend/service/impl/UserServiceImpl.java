@@ -106,8 +106,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void updateUserProfile(Long userId, UserProfileUpdateRequest request) {
-        logger.info("更新用户档案信息 - userId: {}, allergyHistory: {}, chronicDiseases: {}", 
-                userId, request.getAllergyHistory(), request.getChronicDiseases());
+        logger.info("更新用户档案信息 - userId: {}, realName: {}, age: {}, allergyHistory: {}, chronicDiseases: {}",
+                userId, request.getRealName(), request.getAge(), request.getAllergyHistory(), request.getChronicDiseases());
         
         LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(SysUser::getUserId, userId);
@@ -117,10 +117,19 @@ public class UserServiceImpl implements UserService {
             throw new RuntimeException("用户不存在");
         }
 
-        // 只更新过敏史和慢性病史
+        // 更新称呼（realName）
+        if (request.getRealName() != null && !request.getRealName().trim().isEmpty()) {
+            user.setRealName(request.getRealName().trim());
+        }
+        // 更新年龄
+        if (request.getAge() != null) {
+            user.setAge(request.getAge());
+        }
+        // 更新过敏史
         if (request.getAllergyHistory() != null) {
             user.setAllergyHistory(request.getAllergyHistory());
         }
+        // 更新慢性病史
         if (request.getChronicDiseases() != null) {
             user.setChronicDiseases(request.getChronicDiseases());
         }

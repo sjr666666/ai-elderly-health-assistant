@@ -3,13 +3,32 @@ import React, { useState } from 'react';
 function Login({ onLogin, onShowRegister }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogin = async () => {
-    if (!username || !password) {
-      alert('请输入用户名和密码');
-      return;
+  const handleLogin = async (e) => {
+    // 阻止表单默认提交
+    if (e) e.preventDefault();
+
+    // 手动验证并触发表单气泡提示
+    if (!username.trim() || !password) {
+      const usernameInput = document.querySelector('input[type="text"]');
+      const passwordInput = document.querySelector('input[placeholder="请输入密码"]');
+      
+      if (!username.trim()) {
+        usernameInput.setCustomValidity('请输入用户名');
+        usernameInput.reportValidity();
+        usernameInput.focus();
+        return;
+      }
+      
+      if (!password) {
+        passwordInput.setCustomValidity('请输入密码');
+        passwordInput.reportValidity();
+        passwordInput.focus();
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -86,81 +105,141 @@ function Login({ onLogin, onShowRegister }) {
           </div>
         )}
 
-        <div style={{ marginBottom: '28px' }}>
-          <label style={{
-            fontSize: '20px',
-            fontWeight: '600',
-            marginBottom: '12px',
-            display: 'block',
-            color: '#3D3D3D'
-          }}>用户名</label>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="请输入用户名"
-            style={{
-              width: '100%',
-              padding: '20px 24px',
+        <form onSubmit={handleLogin}>
+          <div style={{ marginBottom: '28px' }}>
+            <label style={{
               fontSize: '20px',
-              border: '3px solid #F0EBE3',
-              borderRadius: '20px',
-              outline: 'none',
-              transition: 'all 0.3s ease',
-              background: '#FAF7F2',
-              fontFamily: 'inherit'
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = '#4A90E2';
-              e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
-              e.target.style.background = 'white';
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = '#F0EBE3';
-              e.target.style.boxShadow = 'none';
-              e.target.style.background = '#FAF7F2';
-            }}
-          />
-        </div>
+              fontWeight: '600',
+              marginBottom: '12px',
+              display: 'block',
+              color: '#3D3D3D'
+            }}>用户名 <span style={{ color: '#E74C3C' }}>*</span></label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                // 清除自定义验证错误
+                e.target.setCustomValidity('');
+              }}
+              onKeyPress={handleKeyPress}
+              placeholder="请输入用户名"
+              required
+              minLength={4}
+              style={{
+                width: '100%',
+                padding: '20px 24px',
+                fontSize: '20px',
+                border: '3px solid #F0EBE3',
+                borderRadius: '20px',
+                outline: 'none',
+                transition: 'all 0.3s ease',
+                background: '#FAF7F2',
+                fontFamily: 'inherit'
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = '#4A90E2';
+                e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
+                e.target.style.background = 'white';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = '#F0EBE3';
+                e.target.style.boxShadow = 'none';
+                e.target.style.background = '#FAF7F2';
+              }}
+              onInvalid={(e) => {
+                if (!e.target.value) {
+                  e.target.setCustomValidity('请输入用户名');
+                } else if (e.target.value.length < 4) {
+                  e.target.setCustomValidity(`用户名至少需要 4 个字符（当前 ${e.target.value.length} 个）`);
+                }
+              }}
+            />
+          </div>
 
-        <div style={{ marginBottom: '36px' }}>
-          <label style={{
-            fontSize: '20px',
-            fontWeight: '600',
-            marginBottom: '12px',
-            display: 'block',
-            color: '#3D3D3D'
-          }}>密码</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="请输入密码"
-            style={{
-              width: '100%',
-              padding: '20px 24px',
+          <div style={{ marginBottom: '36px' }}>
+            <label style={{
               fontSize: '20px',
-              border: '3px solid #F0EBE3',
-              borderRadius: '20px',
-              outline: 'none',
-              transition: 'all 0.3s ease',
-              background: '#FAF7F2',
-              fontFamily: 'inherit'
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = '#4A90E2';
-              e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
-              e.target.style.background = 'white';
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = '#F0EBE3';
-              e.target.style.boxShadow = 'none';
-              e.target.style.background = '#FAF7F2';
-            }}
-          />
-        </div>
+              fontWeight: '600',
+              marginBottom: '12px',
+              display: 'block',
+              color: '#3D3D3D'
+            }}>密码 <span style={{ color: '#E74C3C' }}>*</span></label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  // 清除自定义验证错误
+                  e.target.setCustomValidity('');
+                }}
+                onKeyPress={handleKeyPress}
+                placeholder="请输入密码"
+                required
+                minLength={6}
+                style={{
+                  width: '100%',
+                  padding: '20px 60px 20px 24px',
+                  fontSize: '20px',
+                  border: '3px solid #F0EBE3',
+                  borderRadius: '20px',
+                  outline: 'none',
+                  transition: 'all 0.3s ease',
+                  background: '#FAF7F2',
+                  fontFamily: 'inherit',
+                  boxSizing: 'border-box'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#4A90E2';
+                  e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
+                  e.target.style.background = 'white';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#F0EBE3';
+                  e.target.style.boxShadow = 'none';
+                  e.target.style.background = '#FAF7F2';
+                }}
+                onInvalid={(e) => {
+                  if (!e.target.value) {
+                    e.target.setCustomValidity('请输入密码');
+                  } else if (e.target.value.length < 6) {
+                    e.target.setCustomValidity(`密码至少需要 6 个字符（当前 ${e.target.value.length} 个）`);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '16px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 1
+                }}
+              >
+                {showPassword ? (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" strokeWidth="2">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                ) : (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" strokeWidth="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
 
         <button
           onClick={handleLogin}
@@ -229,6 +308,7 @@ function Login({ onLogin, onShowRegister }) {
             立即注册
           </button>
         </div>
+        </form>
       </div>
 
       <style>{`

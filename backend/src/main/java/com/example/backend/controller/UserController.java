@@ -26,8 +26,13 @@ public class UserController {
 
     @PostMapping("/register")
     public ResponseResult<UserRegisterResponse> register(@Valid @RequestBody UserRegisterRequest request) {
-        UserRegisterResponse response = userService.register(request);
-        return ResponseResult.success("创建成功", response);
+        try {
+            UserRegisterResponse response = userService.register(request);
+            return ResponseResult.success("创建成功", response);
+        } catch (Exception e) {
+            // 捕获业务异常，返回友好的错误信息
+            return ResponseResult.fail(e.getMessage());
+        }
     }
 
     @PostMapping("/login")

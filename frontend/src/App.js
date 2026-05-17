@@ -18,14 +18,11 @@ function App() {
   const [drugList, setDrugList] = useState([]); // 从数据库动态加载
   const [imagePreview, setImagePreview] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [recognizedText, setRecognizedText] = useState('');
   const [manualDrugName, setManualDrugName] = useState('');
   const [manualSpec, setManualSpec] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredDrugList, setFilteredDrugList] = useState([]); // 搜索后的药品列表
-  const [isSearching, setIsSearching] = useState(false); // 搜索加载状态
-  const [showVoicePanel, setShowVoicePanel] = useState(false);
+  const [filteredDrugList, setFilteredDrugList] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechRate, setSpeechRate] = useState(1);
   const [reminders, setReminders] = useState([
@@ -38,7 +35,6 @@ function App() {
   const [takenButtons, setTakenButtons] = useState({});
   const [recognizedDrugs, setRecognizedDrugs] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [voiceLoading, setVoiceLoading] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [emergencyContacts, setEmergencyContacts] = useState([
     { id: 1, name: '张小明', phone: '13800138000', relationship: '儿子', isPrimary: true },
@@ -133,7 +129,11 @@ function App() {
       ...profileData
     }));
     setShowProfileEdit(false);
-    alert('✅ 个人信息已更新！');
+    
+    // 显示成功提示弹窗
+    setToastMessage('个人信息已更新！');
+    setShowSuccessToast(true);
+    setTimeout(() => setShowSuccessToast(false), 2000);
   };
 
   const handleAddContact = (contact) => {
@@ -160,7 +160,9 @@ function App() {
 
   // 编辑药品
   const handleEditDrug = (drug) => {
-    // 保持详情弹窗打开，编辑弹窗会覆盖在上面
+    // 关闭药品详情弹窗
+    setShowDrugDetailModal(false);
+    // 打开编辑弹窗
     setShowEditDrugModal(true);
   };
 
@@ -305,45 +307,6 @@ function App() {
         setImagePreview(e.target.result);
       };
       reader.readAsDataURL(file);
-    }
-  };
-
-  const startVoiceRecognition = () => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'zh-CN';
-      recognition.continuous = false;
-      recognition.interimResults = false;
-
-      recognition.onstart = () => {
-        setIsListening(true);
-        setShowVoicePanel(true);
-        setVoiceLoading(true);
-      };
-
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setRecognizedText(transcript);
-        setIsListening(false);
-        setVoiceLoading(false);
-      };
-
-      recognition.onerror = (event) => {
-        console.error('语音识别错误:', event.error);
-        setIsListening(false);
-        setVoiceLoading(false);
-        alert('语音识别失败，请重试');
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-        setVoiceLoading(false);
-      };
-
-      recognition.start();
-    } else {
-      alert('您的浏览器不支持语音识别功能');
     }
   };
 
@@ -585,13 +548,6 @@ function App() {
           disabled={!imagePreview || isLoading}
         >
           🔍 开始识别
-        </button>
-        <button
-          className="btn btn-secondary btn-large"
-          onClick={startVoiceRecognition}
-          disabled={isLoading}
-        >
-          🎤 说不出名字？点这里说话
         </button>
       </div>
 
@@ -1068,9 +1024,6 @@ function App() {
           <button className="btn btn-primary btn-large" onClick={handleEmergencySubmit}>
             🤖 咨询AI助手
           </button>
-          <button className="btn btn-secondary btn-large" onClick={startVoiceRecognition}>
-            🎤 语音输入
-          </button>
         </div>
       </div>
 
@@ -1086,78 +1039,6 @@ function App() {
       </button>
     </div>
   );
-
-  const renderVoiceAssistant = () => (
-    <div
-      className={`voice-assistant ${isListening ? 'listening' : ''}`}
-      onClick={startVoiceRecognition}
-    >
-      <div className="voice-wave"></div>
-      <div className="voice-wave"></div>
-      <div className="voice-wave"></div>
-      <div className="voice-assistant-icon">🎤</div>
-    </div>
-  );
-
-  const renderVoicePanel = () => {
-    if (!showVoicePanel) return null;
-
-    return (
-      <div className="voice-panel">
-        <div className="voice-panel-header">
-          <h4 className="voice-panel-title">🎤 语音助手</h4>
-          <button className="voice-panel-close" onClick={() => {
-            setShowVoicePanel(false);
-            setRecognizedText('');
-          }}>✕</button>
-        </div>
-
-        <p className="voice-panel-subtitle">点击麦克风开始说话</p>
-
-        {voiceLoading || isListening ? (
-          <>
-            <div className={`voice-panel-mic ${isListening ? 'listening' : ''}`}>
-              <span className="voice-panel-mic-icon">🎤</span>
-            </div>
-            <p className="voice-panel-status">
-              {isListening ? '🔊 正在听您说话...' : '⏳ 正在启动...'}
-            </p>
-          </>
-        ) : recognizedText ? (
-          <>
-            <div className="voice-panel-result">
-              <p className="voice-panel-result-label">您说的是：</p>
-              <p className="voice-panel-result-text">{recognizedText}</p>
-            </div>
-            <div className="voice-panel-actions">
-              <button className="btn btn-secondary" onClick={() => {
-                setShowVoicePanel(false);
-                setRecognizedText('');
-              }}>
-                取消
-              </button>
-              <button className="btn btn-primary" onClick={() => {
-                setShowVoicePanel(false);
-                setRecognizedText('');
-                setActiveTab('upload');
-              }}>
-                确认
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="voice-panel-mic">
-              <span className="voice-panel-mic-icon">🎤</span>
-            </div>
-            <button className="btn btn-primary" style={{ width: '100%' }} onClick={startVoiceRecognition}>
-              开始说话
-            </button>
-          </>
-        )}
-      </div>
-    );
-  };
 
   return (
     <>
@@ -1205,8 +1086,6 @@ function App() {
             {activeTab === 'emergency' && renderEmergencyTab()}
           </div>
 
-          {renderVoiceAssistant()}
-          {renderVoicePanel()}
         </div>
       )}
 
@@ -1334,7 +1213,7 @@ function App() {
                 ✏️ 修改
               </button>
               <button className="btn btn-danger btn-large" onClick={() => handleDeleteDrug(selectedDrug)}>
-                ️ 删除
+                 删除
               </button>
             </div>
           </div>
