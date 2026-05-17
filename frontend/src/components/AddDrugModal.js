@@ -231,7 +231,6 @@ function AddDrugModal({ onClose, onAdd, userId }) {
       }}>
         {/* 关闭按钮 */}
         <button
-          onClick={onClose}
           style={{
             position: 'absolute',
             top: '20px',

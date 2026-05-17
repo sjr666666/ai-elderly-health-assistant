@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 /**
  * 编辑药品弹窗组件
@@ -13,7 +13,7 @@ const EditDrugModal = ({ onClose, onSave, drug, userId }) => {
   const [totalQuantity, setTotalQuantity] = useState(drug?.totalQuantity || '');
   const [remainingQuantity, setRemainingQuantity] = useState(drug?.remaining || drug?.totalQuantity || '');
   const [note, setNote] = useState(drug?.note || '');
-  const [status, setStatus] = useState(drug?.status || 'active');
+  const [status, ] = useState(drug?.status || 'active');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 获取今天日期
