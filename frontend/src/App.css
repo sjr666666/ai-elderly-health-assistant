@@ -1329,6 +1329,44 @@ body {
   z-index: 1;
 }
 
+.drug-details-card {
+  background: white;
+  border-radius: var(--radius-large);
+  padding: 28px;
+  margin-top: 24px;
+  box-shadow: var(--shadow-soft);
+  border: 2px solid var(--mint-green-light);
+}
+
+.detail-section {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid var(--cream-dark);
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.detail-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--tech-blue);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-content {
+  font-size: 16px;
+  color: var(--text-dark);
+  line-height: 1.7;
+  padding-left: 28px;
+}
+
 .chat-section {
   position: relative;
   z-index: 1;
