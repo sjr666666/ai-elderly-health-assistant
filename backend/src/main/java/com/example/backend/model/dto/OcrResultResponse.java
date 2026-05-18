@@ -12,7 +12,6 @@ public class OcrResultResponse {
     private String rawText;
     private Long matchedDrugId;
     private String matchedDrugName;
-    private String matchedDrugSpec;
     private BigDecimal matchScore;
     private String status;
 
@@ -74,14 +73,6 @@ public class OcrResultResponse {
 
     public void setMatchedDrugName(String matchedDrugName) {
         this.matchedDrugName = matchedDrugName;
-    }
-
-    public String getMatchedDrugSpec() {
-        return matchedDrugSpec;
-    }
-
-    public void setMatchedDrugSpec(String matchedDrugSpec) {
-        this.matchedDrugSpec = matchedDrugSpec;
     }
 
     public BigDecimal getMatchScore() {

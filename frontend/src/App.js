@@ -289,17 +289,27 @@ function App() {
 
   const handleDragOver = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(true);
   };
 
   const handleDragLeave = (e) => {
     e.preventDefault();
-    setIsDragging(false);
+    e.stopPropagation();
+    // 只有当鼠标真正离开上传区域时才设置为非拖拽状态
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+      setIsDragging(false);
+    }
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(false);
+    
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) {
       const reader = new FileReader();
@@ -307,7 +317,18 @@ function App() {
         setImagePreview(e.target.result);
       };
       reader.readAsDataURL(file);
+      
+      // 同时更新隐藏的文件输入
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInputRef.current.files = dt.files;
     }
+  };
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
   };
 
   const speak = (text, rate = speechRate) => {
@@ -335,6 +356,64 @@ function App() {
   const [ocrTaskId, setOcrTaskId] = useState(null);
   const [ocrPolling, setOcrPolling] = useState(false);
 
+  // 将图片转换为JPEG格式
+  const convertToJpeg = (file) => {
+    return new Promise((resolve) => {
+      console.log('=== 图片转换 ===');
+      console.log('原始文件名:', file.name);
+      console.log('原始文件类型:', file.type);
+      console.log('原始文件大小:', file.size);
+      
+      if (!file.type.startsWith('image/')) {
+        console.log('不是图片类型，直接返回');
+        resolve(file);
+        return;
+      }
+
+      // 如果不是WebP格式，直接返回
+      if (!file.type.includes('webp') && !file.name.toLowerCase().endsWith('.webp')) {
+        console.log('不是WebP格式，直接返回');
+        resolve(file);
+        return;
+      }
+
+      console.log('开始转换WebP到JPEG...');
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const jpegFile = new File([blob], file.name.replace(/\.webp$/i, '.jpg'), { type: 'image/jpeg' });
+              console.log('转换成功，新文件大小:', jpegFile.size);
+              resolve(jpegFile);
+            } else {
+              console.log('转换失败，返回原始文件');
+              resolve(file);
+            }
+          }, 'image/jpeg', 0.9);
+        };
+        img.onerror = () => {
+          console.log('图片加载失败，返回原始文件');
+          resolve(file);
+        };
+        img.src = e.target.result;
+      };
+      reader.onerror = () => {
+        console.log('FileReader失败，返回原始文件');
+        resolve(file);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const analyzeImage = async () => {
     if (!fileInputRef.current?.files[0]) {
       alert('请先选择图片');
@@ -345,20 +424,32 @@ function App() {
     setOcrTaskId(null);
 
     try {
+      // 将WebP图片转换为JPEG格式
+      const file = await convertToJpeg(fileInputRef.current.files[0]);
+      
+      console.log('=== 准备上传 ===');
+      console.log('文件名:', file.name);
+      console.log('文件类型:', file.type);
+      console.log('文件大小:', file.size);
+      
       const formData = new FormData();
-      formData.append('file', fileInputRef.current.files[0]);
+      formData.append('file', file);
 
+      // 不设置Content-Type，让浏览器自动处理
       const response = await fetch('/api/v1/drug/recognize/upload', {
         method: 'POST',
         headers: {
           'X-User-Id': user?.userId || '1'
+          // 注意：不要设置Content-Type，浏览器会自动设置multipart/form-data及boundary
         },
         body: formData
       });
 
       const data = await response.json();
 
-      console.log('上传响应:', data);
+      console.log('=== 上传响应 ===');
+      console.log('状态码:', response.status);
+      console.log('响应数据:', data);
 
       if (data.code === 200 && data.data?.taskId) {
         setOcrTaskId(data.data.taskId);
@@ -368,7 +459,7 @@ function App() {
         setIsLoading(false);
       }
     } catch (error) {
-      console.error('上传失败:', error);
+      console.error('=== 上传失败 ===', error);
       alert('上传失败，请检查网络连接');
       setIsLoading(false);
     }
@@ -431,18 +522,64 @@ function App() {
     poll();
   };
 
-  const addToMedicineBox = (drug) => {
-    const newDrug = {
-      id: Date.now(),
-      name: drug.name,
-      spec: drug.spec,
-      manufacturer: drug.manufacturer,
-      expiryDate: '2026-12-31',
-      dosage: '每日两次，每次一片',
-      remaining: 30
-    };
-    setDrugList([...drugList, newDrug]);
-    alert('✅ 药品已加入药箱！');
+  const addToMedicineBox = async (drug) => {
+    if (!user || !user.userId) {
+      alert('请先登录');
+      return;
+    }
+
+    try {
+      // 先查询药品基础库，获取药品ID
+      const searchResponse = await fetch(`/api/v1/drug/list?keyword=${encodeURIComponent(drug.name)}`);
+      const searchData = await searchResponse.json();
+      
+      let drugId = null;
+      if (searchData.code === 200 && searchData.data && searchData.data.length > 0) {
+        drugId = searchData.data[0].id;
+      }
+
+      // 如果找不到药品ID，使用默认值或提示用户
+      if (!drugId) {
+        alert('未找到匹配的药品，请手动添加');
+        setActiveTab('drugs');
+        return;
+      }
+
+      // 构造添加药品请求
+      const today = new Date();
+      const oneYearLater = new Date();
+      oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+
+      const addResponse = await fetch(`/api/v1/box?userId=${user.userId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          drugId: drugId,
+          dosage: '每日两次，每次一片',
+          frequency: '每日两次',
+          startDate: today.toISOString().split('T')[0],
+          expiryDate: oneYearLater.toISOString().split('T')[0],
+          totalQuantity: 30
+        })
+      });
+
+      const addData = await addResponse.json();
+
+      if (addResponse.ok && addData.code === 200) {
+        // 添加成功后重新加载药箱列表
+        await loadMedicineBoxList(user.userId);
+        setToastMessage('✅ 药品已加入药箱！');
+        setShowSuccessToast(true);
+        setTimeout(() => setShowSuccessToast(false), 2000);
+      } else {
+        alert(addData.message || '添加失败，请重试');
+      }
+    } catch (error) {
+      console.error('添加药品失败:', error);
+      alert('添加失败，请稍后重试');
+    }
   };
 
   const markAsTaken = (id, event) => {
@@ -591,11 +728,16 @@ function App() {
       </h2>
 
       <div
-        className={`upload-area ${isDragging ? 'dragging' : ''}`}
-        onClick={() => fileInputRef.current?.click()}
+        className={`upload-area ${isDragging ? 'dragging' : ''} ${imagePreview ? 'has-image' : ''}`}
+        onClick={(e) => {
+          if (!imagePreview) {
+            fileInputRef.current?.click();
+          }
+        }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        onDragEnter={handleDragEnter}
       >
         <input
           ref={fileInputRef}
@@ -605,14 +747,35 @@ function App() {
           style={{ display: 'none' }}
           onChange={handleFileUpload}
         />
-        <span className="upload-icon">💊</span>
-        <p className="upload-text">拖拽药盒图片到此处，或点击上传</p>
-        <p className="upload-hint">支持 JPG、PNG 格式，文件小于10MB</p>
+        
+        {/* 图片预览 */}
+        {imagePreview && (
+          <div className="upload-preview-container">
+            <img src={imagePreview} alt="药品预览" className="upload-preview-image" />
+            <button 
+              className="upload-clear-btn" 
+              onClick={(e) => {
+                e.stopPropagation();
+                setImagePreview(null);
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = '';
+                }
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        
+        {/* 默认提示内容 */}
+        {!imagePreview && (
+          <>
+            <span className="upload-icon">💊</span>
+            <p className="upload-text">拖拽药盒图片到此处，或点击上传</p>
+            <p className="upload-hint">支持 JPG、PNG 格式，文件小于10MB</p>
+          </>
+        )}
       </div>
-
-      {imagePreview && (
-        <img src={imagePreview} alt="药品预览" className="preview-image" />
-      )}
 
       {isLoading && (
         <div className="loading-container">

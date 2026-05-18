@@ -8,7 +8,5 @@ public interface OcrService {
 
     OcrUploadResponse uploadAndRecognize(MultipartFile file, Long userId);
 
-    void processOcrAsync(Long recordId);
-
     OcrResultResponse getOcrResult(String taskId);
 }
