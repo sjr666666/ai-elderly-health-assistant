@@ -92,6 +92,12 @@ deepseek:
   api-url: https://api.deepseek.com/v1
   api-key: sk-***REDACTED***
   model: deepseek-chat
+  timeout: 30000
+
+# ==================== 网络请求超时配置 ====================
+rest:
+  connection-timeout: 10000
+  read-timeout: 30000
 
 # ==================== 日志配置 ====================
 logging:
