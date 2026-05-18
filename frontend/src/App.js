@@ -817,7 +817,14 @@ function App() {
             <div className="dna-dot"></div>
             <div className="dna-dot"></div>
           </div>
-          <p className="loading-text">🔍 AI正在识别药品，请稍候...</p>
+          <p className="loading-text">
+            {ocrPolling ? '⏳ 正在查询识别结果，请稍候...' : '🔍 AI正在识别药品，请稍候...'}
+          </p>
+          {ocrTaskId && (
+            <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
+              任务ID: {ocrTaskId}
+            </p>
+          )}
         </div>
       )}
 
