@@ -485,14 +485,45 @@ function App() {
             setIsLoading(false);
             
             if (result.status === 'matched' && result.matchedDrugName) {
-              setRecognizedDrugs([{
+              const drug = {
                 id: Date.now(),
                 name: result.matchedDrugName,
                 spec: result.matchedDrugSpec || '',
                 manufacturer: '',
                 matchScore: result.matchScore ? Math.round(result.matchScore * 100) : 0
-              }]);
-              setActiveTab('recognition');
+              };
+              setRecognizedDrugs([drug]);
+              
+              // 调用API获取药品详细信息
+              fetch(`/api/v1/drug/detail?drugName=${encodeURIComponent(result.matchedDrugName)}`)
+                .then(res => res.json())
+                .then(data => {
+                  if (data.code === 200 && data.data) {
+                    const drugDetail = data.data;
+                    const fullDrugInfo = {
+                      ...drug,
+                      genericName: drugDetail.genericName || drug.name,
+                      tradeName: drugDetail.tradeName || '',
+                      approvalNumber: drugDetail.approvalNumber || '',
+                      category: drugDetail.category || '',
+                      ingredient: drugDetail.ingredient || '',
+                      indications: drugDetail.indications || '',
+                      usage: drugDetail.usage || '',
+                      precautions: drugDetail.precautions || '',
+                      adverseReactions: drugDetail.adverseReactions || '',
+                      description: drugDetail.description || ''
+                    };
+                    setSelectedDrug(fullDrugInfo);
+                  } else {
+                    setSelectedDrug(drug);
+                  }
+                  setActiveTab('explanation');
+                })
+                .catch(error => {
+                  console.error('获取药品详情失败:', error);
+                  setSelectedDrug(drug);
+                  setActiveTab('explanation');
+                });
             } else if (result.status === 'unmatched') {
               alert('未能识别出匹配的药品，请尝试手动输入');
             } else if (result.status === 'failed') {
@@ -824,9 +855,54 @@ function App() {
             onChange={(e) => setManualSpec(e.target.value)}
           />
         </div>
-        <button className="btn btn-success btn-large">
-          ➕ 添加到药箱
-        </button>
+        <div className="btn-group" style={{ gap: '12px' }}>
+          <button 
+            className="btn btn-primary btn-large"
+            onClick={() => {
+              if (!manualDrugName.trim()) {
+                alert('请输入药品名称');
+                return;
+              }
+              // 调用API查询药品详细信息
+              fetch(`/api/v1/drug/detail?drugName=${encodeURIComponent(manualDrugName)}`)
+                .then(res => res.json())
+                .then(data => {
+                  if (data.code === 200 && data.data) {
+                    const drugDetail = data.data;
+                    const drug = {
+                      id: Date.now(),
+                      name: drugDetail.genericName || manualDrugName,
+                      spec: drugDetail.specification || manualSpec,
+                      manufacturer: drugDetail.manufacturer || '',
+                      genericName: drugDetail.genericName || manualDrugName,
+                      tradeName: drugDetail.tradeName || '',
+                      approvalNumber: drugDetail.approvalNumber || '',
+                      category: drugDetail.category || '',
+                      ingredient: drugDetail.ingredient || '',
+                      indications: drugDetail.indications || '',
+                      usage: drugDetail.usage || '',
+                      precautions: drugDetail.precautions || '',
+                      adverseReactions: drugDetail.adverseReactions || '',
+                      description: drugDetail.description || ''
+                    };
+                    setSelectedDrug(drug);
+                    setActiveTab('explanation');
+                  } else {
+                    alert('未查询到该药品信息');
+                  }
+                })
+                .catch(error => {
+                  console.error('查询药品失败:', error);
+                  alert('查询失败，请稍后重试');
+                });
+            }}
+          >
+            🔍 查询药品信息
+          </button>
+          <button className="btn btn-success btn-large">
+            ➕ 添加到药箱
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -848,8 +924,18 @@ function App() {
               <p className="drug-info">生产厂家：{drug.manufacturer}</p>
               <p className="drug-info">匹配度：<span className="drug-match">{drug.matchScore}%</span></p>
               <button
-                className="btn btn-success"
+                className="btn btn-primary"
                 style={{ marginTop: '20px', width: '100%', minHeight: '56px' }}
+                onClick={() => {
+                  setSelectedDrug(drug);
+                  setActiveTab('explanation');
+                }}
+              >
+                📖 查看用药说明
+              </button>
+              <button
+                className="btn btn-success"
+                style={{ marginTop: '12px', width: '100%', minHeight: '56px' }}
                 onClick={() => addToMedicineBox(drug)}
               >
                 ➕ 加入我的药箱
@@ -868,89 +954,146 @@ function App() {
     </div>
   );
 
-  const renderExplanationTab = () => (
-    <div className="card explanation-card">
-      <div className="herb-pattern"></div>
-      <h2 className="card-title">
-        <span className="card-title-icon">📖</span>
-        用药说明
-      </h2>
+  const renderExplanationTab = () => {
+    // 根据选中的药品获取用药说明数据
+    const drugInfo = selectedDrug || {
+      name: '硝苯地平缓释片',
+      spec: '5mg × 30片',
+      manufacturer: '德州德药制药厂',
+      dosage: '每日两次，每次一片',
+      note: '建议饭前半小时服用'
+    };
 
-      <div className="explanation-layout">
-        <div className="drug-info-panel">
-          <div className="drug-info-card">
-            <div className="drug-info-icon">💊</div>
-            <h3 className="drug-info-name">硝苯地平缓释片</h3>
-            <p className="drug-info-spec">规格：5mg × 30片</p>
-            <p className="drug-info-mfr">德州德药制药厂</p>
-            <div className="drug-info-divider"></div>
-            <p className="drug-info-dosage">每日两次，每次一片</p>
-            <p className="drug-info-note">建议饭前半小时服用</p>
-          </div>
-        </div>
+    // 使用从API获取的真实药品详细信息，如果没有则使用默认值
+    const drugDetails = {
+      ingredient: drugInfo.ingredient || '暂无详细信息',
+      indications: drugInfo.indications || '暂无详细信息',
+      usage: drugInfo.usage || drugInfo.dosage || '暂无详细信息',
+      precautions: drugInfo.precautions || '暂无详细信息',
+      adverseReactions: drugInfo.adverseReactions || '暂无详细信息'
+    };
 
-        <div className="chat-section">
-          <div className="chat-header">
-            <div className="speaker-avatar">👨‍⚕️</div>
-            <div className="speaker-info">
-              <p className="speaker-name">虚拟药剂师</p>
-              <p className="speaker-title">您的用药小助手</p>
+    const speechText = `阿姨，您查询的药品是${drugInfo.name}。${drugDetails.indications}用法用量：${drugDetails.usage}请注意：${drugDetails.precautions}常见不良反应包括：${drugDetails.adverseReactions}请严格按照医嘱服用。`;
+
+    return (
+      <div className="card explanation-card">
+        <div className="herb-pattern"></div>
+        <h2 className="card-title">
+          <span className="card-title-icon">📖</span>
+          用药说明
+        </h2>
+
+        <div className="explanation-layout">
+          <div className="drug-info-panel">
+            <div className="drug-info-card">
+              <div className="drug-info-icon">💊</div>
+              <h3 className="drug-info-name">{drugInfo.name}</h3>
+              <p className="drug-info-spec">规格：{drugInfo.spec}</p>
+              <p className="drug-info-mfr">{drugInfo.manufacturer}</p>
+              <div className="drug-info-divider"></div>
+              <p className="drug-info-dosage">💉 {drugInfo.dosage}</p>
+              <p className="drug-info-note">📌 {drugInfo.note}</p>
             </div>
-          </div>
 
-          <div className="chat-bubble-wrapper">
-            <div className="chat-bubble-avatar">👨‍⚕️</div>
-            <div className="chat-bubble-content">
-              <p className="chat-bubble-text">
-                👋 阿姨，这药每天<span className="highlight">早晚各吃一片</span>，<br/>
-                <span className="highlight">饭后半小时</span>吃最好哦。<br/><br/>
-                每片5毫克，您需要吃<span className="highlight">半片</span>。<br/>
-                记得<span className="highlight">不要喝酒</span>，会影响药效！
-              </p>
-              <div className="voice-wave-animation">
-                <span className="wave-bar"></span>
-                <span className="wave-bar"></span>
-                <span className="wave-bar"></span>
-                <span className="wave-bar"></span>
-                <span className="wave-bar"></span>
+            {/* 药品详细信息卡片 */}
+            <div className="drug-details-card">
+              <div className="detail-section">
+                <h4 className="detail-title">🧪 药品成分</h4>
+                <p className="detail-content">{drugDetails.ingredient}</p>
+              </div>
+              <div className="detail-section">
+                <h4 className="detail-title">🎯 适应症</h4>
+                <p className="detail-content">{drugDetails.indications}</p>
+              </div>
+              <div className="detail-section">
+                <h4 className="detail-title">📋 用法用量</h4>
+                <p className="detail-content">{drugDetails.usage}</p>
+              </div>
+              <div className="detail-section">
+                <h4 className="detail-title">⚠️ 注意事项</h4>
+                <p className="detail-content">{drugDetails.precautions}</p>
+              </div>
+              <div className="detail-section">
+                <h4 className="detail-title">🤒 不良反应</h4>
+                <p className="detail-content">{drugDetails.adverseReactions}</p>
               </div>
             </div>
           </div>
 
-          <div className="voice-controls">
-            <button
-              className={`btn ${isSpeaking ? 'btn-secondary' : 'btn-primary'}`}
-              onClick={() => isSpeaking ? stopSpeaking() : speak('阿姨，这药每天早晚各吃一片，饭后半小时吃最好哦。每片5毫克，您需要吃半片。记得不要喝酒，会影响药效！')}
-            >
-              {isSpeaking ? '⏸️ 停止播放' : '🔊 播放语音'}
-            </button>
-            <div className="speed-controls">
-              <span>语速：</span>
+          <div className="chat-section">
+            <div className="chat-header">
+              <div className="speaker-avatar">👨‍⚕️</div>
+              <div className="speaker-info">
+                <p className="speaker-name">虚拟药剂师</p>
+                <p className="speaker-title">您的用药小助手</p>
+              </div>
+            </div>
+
+            <div className="chat-bubble-wrapper">
+              <div className="chat-bubble-avatar">👨‍⚕️</div>
+              <div className="chat-bubble-content">
+                <p className="chat-bubble-text">
+                  👋 阿姨，这药每天<span className="highlight">早晚各吃一片</span>，<br/>
+                  <span className="highlight">饭后半小时</span>吃最好哦。<br/><br/>
+                  每片5毫克，您需要吃<span className="highlight">半片</span>。<br/>
+                  记得<span className="highlight">不要喝酒</span>，会影响药效！
+                </p>
+                <div className="voice-wave-animation">
+                  <span className="wave-bar"></span>
+                  <span className="wave-bar"></span>
+                  <span className="wave-bar"></span>
+                  <span className="wave-bar"></span>
+                  <span className="wave-bar"></span>
+                </div>
+              </div>
+            </div>
+
+            <div className="voice-controls">
               <button
-                className={`speed-btn ${speechRate === 0.6 ? 'active' : ''}`}
-                onClick={() => setSpeechRate(0.6)}
+                className={`btn ${isSpeaking ? 'btn-secondary' : 'btn-primary'}`}
+                onClick={() => isSpeaking ? stopSpeaking() : speak(speechText)}
               >
-                慢速
+                {isSpeaking ? '⏸️ 停止播放' : '🔊 播放语音'}
               </button>
+              <div className="speed-controls">
+                <span>语速：</span>
+                <button
+                  className={`speed-btn ${speechRate === 0.6 ? 'active' : ''}`}
+                  onClick={() => setSpeechRate(0.6)}
+                >
+                  慢速
+                </button>
+                <button
+                  className={`speed-btn ${speechRate === 1 ? 'active' : ''}`}
+                  onClick={() => setSpeechRate(1)}
+                >
+                  正常
+                </button>
+              </div>
+            </div>
+
+            {/* 加入药箱按钮 */}
+            <div className="add-to-box-wrapper">
               <button
-                className={`speed-btn ${speechRate === 1 ? 'active' : ''}`}
-                onClick={() => setSpeechRate(1)}
+                className="btn btn-success btn-large"
+                onClick={() => addToMedicineBox(drugInfo)}
+                style={{ width: '100%', marginTop: '20px' }}
               >
-                正常
+                ➕ 加入我的药箱
               </button>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="warning-box">
-        <h4 className="warning-title">
-          ⚠️ 重要提醒
-        </h4>
-        <p className="warning-text">以上为AI生成，用药请遵医嘱</p>
+        <div className="warning-box">
+          <h4 className="warning-title">
+            ⚠️ 重要提醒
+          </h4>
+          <p className="warning-text">以上为AI生成，用药请遵医嘱</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderConflictTab = () => {
     const hasConflict = drugList.length > 1;
