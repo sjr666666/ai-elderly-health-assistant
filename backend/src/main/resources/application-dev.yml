@@ -86,6 +86,10 @@ baidu:
     app-id: 123338866
     api-key: PdKDCZZpPBNTvGnwhmyv20cu
     secret-key: aWW9rvJZFloDvu9k4YW6H3kk4Gpf5VLS
+  tts:
+    appId: 123370952
+    apiKey: LRmBY6I8VEDw0UteTrZQu8Zb
+    secretKey: FuI0onqIGUgG4JGWUgIxEgZfPkdPVobM
 
 # ==================== DeepSeek 大模型配置 ====================
 deepseek:

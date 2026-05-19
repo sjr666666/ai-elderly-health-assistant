@@ -1017,6 +1017,29 @@ body {
   font-weight: 700;
 }
 
+/* 老年友好用药指导样式 */
+.elderly-guide {
+  font-size: 18px !important;
+  line-height: 2.2 !important;
+  letter-spacing: 1px;
+}
+
+.elderly-guide .highlight {
+  color: var(--warning-orange);
+  font-weight: 800;
+  background: linear-gradient(120deg, #FFF3E0 0%, #FFE0B2 100%);
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.elderly-guide div {
+  margin-bottom: 16px !important;
+  font-size: 17px;
+  text-align: left;
+  text-indent: 0;
+}
+
 .speaker-avatar {
   width: 120px;
   height: 120px;
@@ -1052,6 +1075,15 @@ body {
   flex-wrap: wrap;
 }
 
+/* 老年友好语音控制按钮 - 更大更明显 */
+.voice-controls .btn {
+  min-height: 56px !important;
+  font-size: 18px !important;
+  padding: 12px 32px !important;
+  border-radius: 28px !important;
+  box-shadow: var(--shadow-medium) !important;
+}
+
 .speed-controls {
   display: flex;
   align-items: center;
@@ -1060,24 +1092,30 @@ body {
   color: var(--text-light);
 }
 
+.speed-controls span {
+  font-size: 18px;
+  font-weight: 600;
+}
+
 .speed-btn {
-  padding: 10px 20px;
+  padding: 8px 20px;
   font-size: 16px;
-  border: 2px solid var(--cream-dark);
-  border-radius: var(--radius-small);
-  cursor: pointer;
+  border-radius: 20px;
   background: white;
-  transition: var(--transition-fast);
+  border: 2px solid var(--tech-blue);
+  color: var(--tech-blue);
+  cursor: pointer;
+  transition: all 0.3s;
 }
 
 .speed-btn:hover {
-  border-color: var(--tech-blue);
+  background: var(--tech-blue-light);
 }
 
 .speed-btn.active {
   background: var(--tech-blue);
   color: white;
-  border-color: var(--tech-blue);
+  font-weight: 700;
 }
 
 /* ============ WARNING BOX ============ */
