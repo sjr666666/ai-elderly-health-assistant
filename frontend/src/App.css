@@ -558,6 +558,10 @@ body {
   background: linear-gradient(145deg, var(--mint-green-light), var(--cream-white));
   position: relative;
   overflow: hidden;
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .upload-area::before {
@@ -578,14 +582,12 @@ body {
 .upload-area:hover {
   border-color: var(--mint-green);
   background: linear-gradient(145deg, rgba(152, 212, 187, 0.2), var(--cream-white));
-  transform: scale(1.01);
   box-shadow: var(--shadow-glow-mint);
 }
 
 .upload-area.dragging {
   border-color: var(--tech-blue);
   background: rgba(74, 144, 226, 0.1);
-  transform: scale(1.03);
   box-shadow: var(--shadow-glow-blue);
 }
 
@@ -596,7 +598,7 @@ body {
 }
 
 .upload-area.has-image:hover {
-  transform: scale(1.01);
+  transform: none;
 }
 
 .upload-preview-container {
@@ -1278,11 +1280,272 @@ body {
 }
 
 .explanation-layout {
-  display: grid;
-  grid-template-columns: 1fr 2fr;
-  gap: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
   position: relative;
   z-index: 1;
+}
+
+.pharmacist-section {
+  width: 100%;
+}
+
+.drug-details-section {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.left-drug-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 突出的加入药箱按钮样式 */
+.add-to-box-prominent {
+  position: relative;
+  z-index: 10;
+}
+
+.add-to-box-prominent .btn-extra-large {
+  width: 100%;
+  min-height: 72px;
+  font-size: 22px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 32px rgba(76, 175, 80, 0.4), 0 4px 16px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.add-to-box-prominent .btn-extra-large::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.add-to-box-prominent .btn-extra-large:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(76, 175, 80, 0.5), 0 6px 20px rgba(0, 0, 0, 0.15);
+  background: linear-gradient(135deg, #81c784 0%, #4caf50 100%);
+}
+
+.add-to-box-prominent .btn-extra-large:hover::before {
+  left: 100%;
+}
+
+.add-to-box-prominent .btn-extra-large:active {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 28px rgba(76, 175, 80, 0.45), 0 3px 12px rgba(0, 0, 0, 0.1);
+}
+
+.add-to-box-prominent .btn-icon {
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.add-to-box-prominent .btn-text {
+  letter-spacing: 1px;
+}
+
+/* 优化原有按钮样式 */
+.add-to-box-wrapper {
+  margin-top: 8px;
+}
+
+.add-to-box-wrapper .btn-success {
+  font-size: 20px;
+  font-weight: 700;
+  min-height: 64px;
+  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.35);
+}
+
+/* 核心用药信息卡片 */
+.key-info-card {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border: 3px solid #42a5f5;
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 8px 28px rgba(66, 165, 245, 0.25);
+}
+
+.key-info-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid rgba(66, 165, 245, 0.3);
+}
+
+.key-info-icon {
+  font-size: 44px;
+  background: white;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.key-info-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #1565c0;
+  margin: 0;
+}
+
+.key-info-content {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.key-info-text {
+  font-size: 20px;
+  font-weight: 600;
+  color: #0d47a1;
+  line-height: 2;
+  margin: 0;
+}
+
+/* 重要注意事项卡片 */
+.warning-info-card {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border: 3px solid #ffa726;
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 8px 28px rgba(255, 167, 38, 0.25);
+}
+
+.warning-info-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid rgba(255, 167, 38, 0.3);
+}
+
+.warning-info-icon {
+  font-size: 44px;
+  background: white;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.warning-info-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #e65100;
+  margin: 0;
+}
+
+.warning-info-content {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.warning-info-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: #bf360c;
+  line-height: 2;
+  margin: 0;
+}
+
+/* 不良反应卡片 */
+.side-effect-card {
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+  border: 3px solid #ab47bc;
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 8px 28px rgba(171, 71, 188, 0.25);
+}
+
+.side-effect-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid rgba(171, 71, 188, 0.3);
+}
+
+.side-effect-icon {
+  font-size: 44px;
+  background: white;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.side-effect-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #6a1b9a;
+  margin: 0;
+}
+
+.side-effect-content {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.side-effect-text {
+  font-size: 17px;
+  font-weight: 500;
+  color: #4a148c;
+  line-height: 1.9;
+  margin: 0;
+}
+
+/* 加入药箱按钮区域 */
+.add-to-box-wrapper {
+  margin-top: 8px;
+}
+
+.add-to-box-wrapper .btn-success {
+  font-size: 20px;
+  font-weight: 700;
+  min-height: 64px;
+  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.35);
 }
 
 .drug-info-panel {
@@ -1318,26 +1581,26 @@ body {
 }
 
 .drug-info-name {
-  font-size: 26px;
-  font-weight: 700;
+  font-size: 30px;
+  font-weight: 800;
   color: var(--text-dark);
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   position: relative;
   z-index: 1;
 }
 
 .drug-info-spec {
-  font-size: 18px;
+  font-size: 20px;
   color: var(--text-light);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   position: relative;
   z-index: 1;
 }
 
 .drug-info-mfr {
-  font-size: 16px;
+  font-size: 18px;
   color: var(--text-muted);
-  margin-bottom: 16px;
+  margin-bottom: 18px;
   position: relative;
   z-index: 1;
 }
@@ -1389,19 +1652,19 @@ body {
 }
 
 .detail-title {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
   color: var(--tech-blue);
-  margin-bottom: 10px;
+  margin-bottom: 14px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .detail-content {
-  font-size: 16px;
+  font-size: 18px;
   color: var(--text-dark);
-  line-height: 1.7;
+  line-height: 2;
   padding-left: 28px;
 }
 
@@ -1991,27 +2254,248 @@ body {
 /* ============ LOADING ============ */
 .loading-container {
   text-align: center;
-  padding: 80px;
+  padding: 0;
+  margin: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+}
+
+.loading-overlay {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(232, 245, 240, 0.98));
+  border-radius: var(--radius-xl);
+  padding: 40px 30px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border: 3px solid var(--tech-blue);
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0.8;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.loading-spinner-container {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .loading-spinner {
-  width: 72px;
-  height: 72px;
-  border: 6px solid var(--mint-green-light);
+  width: 60px;
+  height: 60px;
+  border: 4px solid var(--mint-green-light);
   border-top-color: var(--tech-blue);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 28px;
+  animation: spin 1.2s linear infinite;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 15px rgba(74, 144, 226, 0.3);
+}
+
+.loading-spinner-ring {
+  width: 80px;
+  height: 80px;
+  border: 2px solid transparent;
+  border-top-color: var(--mint-green);
+  border-radius: 50%;
+  animation: spin 2s linear infinite reverse;
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
+.loading-progress-bar {
+  width: 80%;
+  max-width: 300px;
+  height: 10px;
+  background: var(--mint-green-light);
+  border-radius: 5px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.loading-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--tech-blue), var(--mint-green));
+  border-radius: 5px;
+  animation: progressFill 2s ease-in-out infinite;
+}
+
+@keyframes progressFill {
+  0% { width: 10%; }
+  50% { width: 70%; }
+  100% { width: 10%; }
+}
+
 .loading-text {
-  font-size: 24px;
+  font-size: 18px;
   color: var(--tech-blue);
+  font-weight: 700;
+  margin-bottom: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.loading-task-id {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.loading-steps {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.loading-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 16px;
+  border-radius: var(--radius-medium);
+  background: white;
+  box-shadow: var(--shadow-soft);
+  transition: all 0.3s ease;
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+.loading-step.completed {
+  background: linear-gradient(135deg, var(--success-green), var(--mint-green));
+  color: white;
+}
+
+.loading-step.active {
+  background: linear-gradient(135deg, var(--tech-blue), var(--mint-green));
+  color: white;
+  box-shadow: var(--shadow-glow-blue);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.loading-step.pending {
+  background: var(--cream-dark);
+  color: var(--text-muted);
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: var(--shadow-glow-blue); }
+  50% { box-shadow: 0 0 30px rgba(74, 144, 226, 0.5); }
+}
+
+.step-icon {
+  font-size: 22px;
+}
+
+.step-text {
+  font-size: 13px;
   font-weight: 600;
+}
+
+.loading-step-arrow {
+  font-size: 18px;
+  color: var(--text-light);
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+/* Button loading state */
+.btn-loading {
+  opacity: 0.8;
+  cursor: not-allowed;
+}
+
+.btn-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Disabled button styles */
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.btn:disabled:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Loading complete state */
+.loading-complete {
+  border-color: var(--success-green) !important;
+  background: linear-gradient(145deg, rgba(232, 245, 232, 0.98), rgba(232, 245, 240, 0.98)) !important;
+}
+
+.loading-complete .loading-text {
+  color: var(--success-green);
+}
+
+.loading-complete-icon {
+  font-size: 80px;
+  animation: completePop 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+@keyframes completePop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.loading-complete .loading-step.active,
+.loading-complete .loading-step.completed {
+  background: linear-gradient(135deg, var(--success-green), var(--mint-green));
 }
 
 .loading-dna {
@@ -2619,7 +3103,59 @@ body {
   }
 
   .explanation-layout {
+    gap: 28px;
+  }
+
+  .drug-details-section {
     grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .left-drug-column {
+    gap: 18px;
+  }
+
+  /* 调整中等屏幕下的新卡片样式 */
+  .key-info-card,
+  .warning-info-card,
+  .side-effect-card {
+    padding: 24px;
+  }
+
+  .key-info-icon,
+  .warning-info-icon,
+  .side-effect-icon {
+    font-size: 38px;
+    width: 52px;
+    height: 52px;
+  }
+
+  .key-info-title,
+  .warning-info-title,
+  .side-effect-title {
+    font-size: 22px;
+  }
+
+  .key-info-text {
+    font-size: 18px;
+  }
+
+  .warning-info-text {
+    font-size: 17px;
+  }
+
+  .side-effect-text {
+    font-size: 16px;
+  }
+
+  /* 中等屏幕下的加入药箱突出按钮 */
+  .add-to-box-prominent .btn-extra-large {
+    min-height: 68px;
+    font-size: 21px;
+  }
+
+  .add-to-box-prominent .btn-icon {
+    font-size: 26px;
   }
 
   .header-title {
@@ -2699,6 +3235,125 @@ body {
 
   .drug-list {
     grid-template-columns: 1fr;
+  }
+
+  /* 小屏幕下的布局调整 */
+  .explanation-layout {
+    gap: 24px;
+  }
+
+  .drug-details-section {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .left-drug-column {
+    gap: 16px;
+  }
+
+  /* 小屏幕下的新卡片样式 */
+  .key-info-card,
+  .warning-info-card,
+  .side-effect-card {
+    padding: 20px;
+    border-radius: 16px;
+  }
+
+  .key-info-header,
+  .warning-info-header,
+  .side-effect-header {
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+  }
+
+  .key-info-icon,
+  .warning-info-icon,
+  .side-effect-icon {
+    font-size: 34px;
+    width: 48px;
+    height: 48px;
+  }
+
+  .key-info-title,
+  .warning-info-title,
+  .side-effect-title {
+    font-size: 20px;
+  }
+
+  .key-info-content,
+  .warning-info-content,
+  .side-effect-content {
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .key-info-text {
+    font-size: 17px;
+    line-height: 1.9;
+  }
+
+  .warning-info-text {
+    font-size: 16px;
+    line-height: 1.9;
+  }
+
+  .side-effect-text {
+    font-size: 15px;
+    line-height: 1.8;
+  }
+
+  /* 调整药品信息卡片 */
+  .drug-info-card {
+    padding: 28px;
+  }
+
+  .drug-info-name {
+    font-size: 26px;
+  }
+
+  .drug-info-spec {
+    font-size: 18px;
+  }
+
+  .drug-info-mfr {
+    font-size: 16px;
+  }
+
+  /* 调整详情标题和内容 */
+  .detail-title {
+    font-size: 20px;
+  }
+
+  .detail-content {
+    font-size: 16px;
+    line-height: 1.9;
+  }
+
+  /* 小屏幕下的加入药箱按钮 */
+  .add-to-box-wrapper .btn-success {
+    font-size: 18px;
+    min-height: 56px;
+  }
+
+  /* 小屏幕下的加入药箱突出按钮 */
+  .add-to-box-prominent .btn-extra-large {
+    min-height: 64px;
+    font-size: 20px;
+    border-radius: 16px;
+  }
+
+  .add-to-box-prominent .btn-icon {
+    font-size: 24px;
+  }
+
+  .add-to-box-prominent .btn-text {
+    letter-spacing: 0.5px;
+  }
+
+  /* 小屏幕下的聊天区域 */
+  .pharmacist-section .chat-section {
+    padding: 24px;
   }
 }
 
@@ -2956,4 +3611,196 @@ body {
 
 .btn-danger:active {
   transform: translateY(0);
+}
+
+/* ============ EXPLANATION EMPTY STATE ============ */
+.explanation-card.empty-state {
+  text-align: center;
+  padding: 60px 40px;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-state-icon {
+  font-size: 80px;
+  margin-bottom: 24px;
+  animation: iconFloat 3s ease-in-out infinite;
+}
+
+@keyframes iconFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.empty-state-content {
+  animation: textFadeIn 0.5s ease;
+}
+
+.empty-state-text {
+  font-size: 20px;
+  color: var(--text-muted);
+  margin-bottom: 32px;
+  line-height: 1.6;
+}
+
+.empty-state-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.empty-state-actions .btn {
+  min-height: 56px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* ============ EXPLANATION HEADER ============ */
+.explanation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.explanation-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-medium {
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ============ DRUG LIST MODAL ============ */
+.drug-list-modal {
+  max-width: 500px;
+}
+
+.drug-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.drug-list-item {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  background: var(--cream-white);
+  border-radius: var(--radius-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 2px solid transparent;
+}
+
+.drug-list-item:hover {
+  background: var(--mint-green-light);
+  border-color: var(--mint-green);
+  transform: translateX(4px);
+}
+
+.drug-item-icon {
+  font-size: 32px;
+  margin-right: 16px;
+  flex-shrink: 0;
+}
+
+.drug-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.drug-item-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drug-item-spec {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drug-item-arrow {
+  font-size: 24px;
+  color: var(--text-light);
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+
+.drug-list-item.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.drug-fetching-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+}
+
+.drug-fetching-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--mint-green-light);
+  border-top-color: var(--tech-blue);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.drug-fetching-text {
+  font-size: 16px;
+  color: var(--tech-blue);
+  font-weight: 600;
+}
+
+.empty-drug-list {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.empty-drug-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.empty-drug-text {
+  font-size: 20px;
+  color: var(--text-primary);
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.empty-drug-hint {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
 }

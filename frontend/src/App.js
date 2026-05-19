@@ -18,6 +18,7 @@ function App() {
   const [drugList, setDrugList] = useState([]); // 从数据库动态加载
   const [imagePreview, setImagePreview] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showComplete, setShowComplete] = useState(false);
   const [manualDrugName, setManualDrugName] = useState('');
   const [manualSpec, setManualSpec] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -424,6 +425,17 @@ function App() {
     }
   }, []);
 
+  // 监听activeTab变化，离开上传页面时清除图片
+  useEffect(() => {
+    if (activeTab !== 'upload') {
+      // 离开上传页面时清除图片预览
+      setImagePreview(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  }, [activeTab]);
+
   const [ocrTaskId, setOcrTaskId] = useState(null);
   const [ocrPolling, setOcrPolling] = useState(false);
   const [elderlyGuide, setElderlyGuide] = useState(''); // 老年友好用药指导
@@ -659,7 +671,6 @@ function App() {
           
           if (result.status === 'matched' || result.status === 'unmatched' || result.status === 'failed') {
             setOcrPolling(false);
-            setIsLoading(false);
             
             if (result.status === 'matched' && result.matchedDrugName) {
               const drug = {
@@ -671,39 +682,27 @@ function App() {
               };
               setRecognizedDrugs([drug]);
               
-              // 调用API获取药品详细信息
-              fetch(`/api/v1/drug/detail?drugName=${encodeURIComponent(result.matchedDrugName)}`)
-                .then(res => res.json())
-                .then(data => {
-                  if (data.code === 200 && data.data) {
-                    const drugDetail = data.data;
-                    const fullDrugInfo = {
-                      ...drug,
-                      genericName: drugDetail.genericName || drug.name,
-                      tradeName: drugDetail.tradeName || '',
-                      approvalNumber: drugDetail.approvalNumber || '',
-                      category: drugDetail.category || '',
-                      ingredient: drugDetail.ingredient || '',
-                      indications: drugDetail.indications || '',
-                      usage: drugDetail.usage || '',
-                      precautions: drugDetail.precautions || '',
-                      adverseReactions: drugDetail.adverseReactions || '',
-                      description: drugDetail.description || ''
-                    };
-                    setSelectedDrug(fullDrugInfo);
-                  } else {
-                    setSelectedDrug(drug);
+              // 显示完成状态
+              setShowComplete(true);
+              
+              // 延迟跳转，让用户看到完成动画
+              setTimeout(() => {
+                // 调用统一的药品信息获取函数
+                fetchDrugDetail(result.matchedDrugName, drug, {
+                  showLoading: false,
+                  onComplete: () => {
+                    // 只有在成功跳转到说明页面后，才清除加载状态
+                    setIsLoading(false);
+                    setShowComplete(false);
+                    console.log('药品信息获取完成，已跳转到说明页面');
                   }
-                  setActiveTab('explanation');
-                })
-                .catch(error => {
-                  console.error('获取药品详情失败:', error);
-                  setSelectedDrug(drug);
-                  setActiveTab('explanation');
                 });
+              }, 1500);
             } else if (result.status === 'unmatched') {
+              setIsLoading(false);
               alert('未能识别出匹配的药品，请尝试手动输入');
             } else if (result.status === 'failed') {
+              setIsLoading(false);
               alert('识别失败，请重试');
             }
           } else if (pollingCount < maxPollingCount) {
@@ -956,8 +955,52 @@ function App() {
           onChange={handleFileUpload}
         />
         
+        {/* 加载动画覆盖层 */}
+        {(isLoading || showComplete) && (
+          <div className={`loading-overlay ${showComplete ? 'loading-complete' : ''}`}>
+            {!showComplete ? (
+              <>
+                <div className="loading-spinner-container">
+                  <div className="loading-spinner"></div>
+                  <div className="loading-spinner-ring"></div>
+                </div>
+                <div className="loading-progress-bar">
+                  <div className="loading-progress-fill"></div>
+                </div>
+              </>
+            ) : (
+              <div className="loading-complete-icon">✅</div>
+            )}
+            <p className="loading-text">
+              {showComplete ? '🎉 识别完成！正在跳转到结果页面...' : 
+               (ocrPolling ? '⏳ 正在查询识别结果，请稍候...' : '🔍 AI正在识别药品，请稍候...')}
+            </p>
+            {ocrTaskId && !showComplete && (
+              <p className="loading-task-id">
+                任务ID: {ocrTaskId}
+              </p>
+            )}
+            <div className="loading-steps">
+              <div className="loading-step completed">
+                <span className="step-icon">📤</span>
+                <span className="step-text">上传图片</span>
+              </div>
+              <div className="loading-step-arrow">→</div>
+              <div className={`loading-step ${showComplete ? 'completed' : 'active'}`}>
+                <span className="step-icon">🔍</span>
+                <span className="step-text">{showComplete ? '识别完成' : (ocrPolling ? '查询结果' : '识别中')}</span>
+              </div>
+              <div className="loading-step-arrow">→</div>
+              <div className={`loading-step ${showComplete ? 'completed' : 'pending'}`}>
+                <span className="step-icon">✅</span>
+                <span className="step-text">完成</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* 图片预览 */}
-        {imagePreview && (
+        {imagePreview && !isLoading && !showComplete && (
           <div className="upload-preview-container">
             <img src={imagePreview} alt="药品预览" className="upload-preview-image" />
             <button 
@@ -976,7 +1019,7 @@ function App() {
         )}
         
         {/* 默认提示内容 */}
-        {!imagePreview && (
+        {!imagePreview && !isLoading && !showComplete && (
           <>
             <span className="upload-icon">💊</span>
             <p className="upload-text">拖拽药盒图片到此处，或点击上传</p>
@@ -985,33 +1028,20 @@ function App() {
         )}
       </div>
 
-      {isLoading && (
-        <div className="loading-container">
-          <div className="loading-dna">
-            <div className="dna-dot"></div>
-            <div className="dna-dot"></div>
-            <div className="dna-dot"></div>
-            <div className="dna-dot"></div>
-            <div className="dna-dot"></div>
-          </div>
-          <p className="loading-text">
-            {ocrPolling ? '⏳ 正在查询识别结果，请稍候...' : '🔍 AI正在识别药品，请稍候...'}
-          </p>
-          {ocrTaskId && (
-            <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
-              任务ID: {ocrTaskId}
-            </p>
-          )}
-        </div>
-      )}
-
       <div className="btn-group">
         <button
-          className="btn btn-primary btn-large"
+          className={`btn btn-primary btn-large ${isLoading ? 'btn-loading' : ''}`}
           onClick={analyzeImage}
           disabled={!imagePreview || isLoading}
         >
-          🔍 开始识别
+          {isLoading ? (
+            <>
+              <span className="btn-spinner"></span>
+              识别中...
+            </>
+          ) : (
+            '🔍 开始识别'
+          )}
         </button>
       </div>
 
@@ -1047,38 +1077,15 @@ function App() {
                 alert('请输入药品名称');
                 return;
               }
-              // 调用API查询药品详细信息
-              fetch(`/api/v1/drug/detail?drugName=${encodeURIComponent(manualDrugName)}`)
-                .then(res => res.json())
-                .then(data => {
-                  if (data.code === 200 && data.data) {
-                    const drugDetail = data.data;
-                    const drug = {
-                      id: Date.now(),
-                      name: drugDetail.genericName || manualDrugName,
-                      spec: drugDetail.specification || manualSpec,
-                      manufacturer: drugDetail.manufacturer || '',
-                      genericName: drugDetail.genericName || manualDrugName,
-                      tradeName: drugDetail.tradeName || '',
-                      approvalNumber: drugDetail.approvalNumber || '',
-                      category: drugDetail.category || '',
-                      ingredient: drugDetail.ingredient || '',
-                      indications: drugDetail.indications || '',
-                      usage: drugDetail.usage || '',
-                      precautions: drugDetail.precautions || '',
-                      adverseReactions: drugDetail.adverseReactions || '',
-                      description: drugDetail.description || ''
-                    };
-                    setSelectedDrug(drug);
-                    setActiveTab('explanation');
-                  } else {
-                    alert('未查询到该药品信息');
-                  }
-                })
-                .catch(error => {
-                  console.error('查询药品失败:', error);
-                  alert('查询失败，请稍后重试');
-                });
+              // 使用统一的药品信息获取函数
+              const drugInfo = {
+                id: Date.now(),
+                spec: manualSpec || '',
+                name: manualDrugName
+              };
+              fetchDrugDetail(manualDrugName, drugInfo, {
+                showLoading: false
+              });
             }}
           >
             🔍 查询药品信息
@@ -1111,8 +1118,10 @@ function App() {
                 className="btn btn-primary"
                 style={{ marginTop: '20px', width: '100%', minHeight: '56px' }}
                 onClick={() => {
-                  setSelectedDrug(drug);
-                  setActiveTab('explanation');
+                  // 使用统一的药品信息获取函数
+                  fetchDrugDetail(drug.name, drug, {
+                    showLoading: false
+                  });
                 }}
               >
                 📖 查看用药说明
@@ -1138,15 +1147,138 @@ function App() {
     </div>
   );
 
+  const [showDrugList, setShowDrugList] = useState(false);
+  const [isFetchingDrug, setIsFetchingDrug] = useState(false);
+
+  // 统一的药品信息获取函数
+  const fetchDrugDetail = (drugName, drugInfo = {}, options = {}) => {
+    const { 
+      showLoading = true,  // 是否显示加载状态
+      onComplete = null    // 完成后的回调函数
+    } = options;
+    
+    if (showLoading) {
+      setIsFetchingDrug(true);
+    }
+    
+    fetch(`/api/v1/drug/detail?drugName=${encodeURIComponent(drugName)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.code === 200 && data.data) {
+          const drugDetail = data.data;
+          // 合并基础信息和详细信息，确保字段完整性
+          const fullDrugInfo = {
+            id: drugInfo.id || Date.now(),
+            name: drugInfo.name || drugDetail.genericName || drugName,
+            spec: drugInfo.spec || drugDetail.specification || '',
+            manufacturer: drugInfo.manufacturer || drugDetail.manufacturer || '',
+            matchScore: drugInfo.matchScore || 0,
+            genericName: drugDetail.genericName || drugName,
+            tradeName: drugDetail.tradeName || '',
+            approvalNumber: drugDetail.approvalNumber || '',
+            category: drugDetail.category || '',
+            ingredient: drugDetail.ingredient || '',
+            indications: drugDetail.indications || '',
+            usage: drugDetail.usage || '',
+            precautions: drugDetail.precautions || '',
+            adverseReactions: drugDetail.adverseReactions || '',
+            description: drugDetail.description || '',
+            dosage: drugDetail.usage || drugInfo.dosage || '',
+            note: drugInfo.note || ''
+          };
+          // 先设置药品数据，然后立即切换标签
+          setSelectedDrug(fullDrugInfo);
+          setActiveTab('explanation');
+          // 确保回调被调用
+          setTimeout(() => {
+            if (onComplete) onComplete();
+          }, 0);
+        } else {
+          // 如果API返回数据不完整，使用现有信息并标记为不完整
+          const fallbackDrug = {
+            ...drugInfo,
+            name: drugInfo.name || drugName,
+            genericName: drugInfo.genericName || drugName,
+            ingredient: drugInfo.ingredient || '暂无详细信息',
+            indications: drugInfo.indications || '暂无详细信息',
+            usage: drugInfo.usage || drugInfo.dosage || '暂无详细信息',
+            precautions: drugInfo.precautions || '暂无详细信息',
+            adverseReactions: drugInfo.adverseReactions || '暂无详细信息',
+            description: drugInfo.description || ''
+          };
+          setSelectedDrug(fallbackDrug);
+          setActiveTab('explanation');
+          setTimeout(() => {
+            if (onComplete) onComplete();
+          }, 0);
+        }
+      })
+      .catch(error => {
+        console.error('获取药品详情失败:', error);
+        // API调用失败时使用现有信息
+        const fallbackDrug = {
+          ...drugInfo,
+          name: drugInfo.name || drugName,
+          genericName: drugInfo.genericName || drugName,
+          ingredient: drugInfo.ingredient || '暂无详细信息',
+          indications: drugInfo.indications || '暂无详细信息',
+          usage: drugInfo.usage || drugInfo.dosage || '暂无详细信息',
+          precautions: drugInfo.precautions || '暂无详细信息',
+          adverseReactions: drugInfo.adverseReactions || '暂无详细信息',
+          description: drugInfo.description || ''
+        };
+        setSelectedDrug(fallbackDrug);
+        setActiveTab('explanation');
+        setTimeout(() => {
+          if (onComplete) onComplete();
+        }, 0);
+      })
+      .finally(() => {
+        if (showLoading) {
+          setIsFetchingDrug(false);
+        }
+      });
+  };
+
   const renderExplanationTab = () => {
+    // 初始状态：没有选中的药品时保持空白
+    const hasSelectedDrug = selectedDrug !== null && selectedDrug !== undefined;
+    
+    if (!hasSelectedDrug) {
+      return (
+        <div className="card explanation-card empty-state">
+          <div className="empty-state-icon">💊</div>
+          <h2 className="card-title">
+            <span className="card-title-icon">📖</span>
+            用药说明（老年友好版）
+          </h2>
+          
+          <div className="empty-state-content">
+            <p className="empty-state-text">
+              请先选择或识别一种药品，获取详细的用药指导
+            </p>
+            
+            <div className="empty-state-actions">
+              <button 
+                className="btn btn-primary btn-large"
+                onClick={() => setShowDrugList(true)}
+              >
+                📦 从药箱选择药品
+              </button>
+              <button 
+                className="btn btn-secondary btn-large"
+                onClick={() => setActiveTab('upload')}
+              >
+                📷 上传图片识别
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     // 根据选中的药品获取用药说明数据
-    const drugInfo = selectedDrug || {
-      name: '硝苯地平缓释片',
-      spec: '5mg × 30片',
-      manufacturer: '德州德药制药厂',
-      dosage: '每日两次，每次一片',
-      note: '建议饭前半小时服用'
-    };
+    const drugInfo = selectedDrug;
 
     // 使用从API获取的真实药品详细信息，如果没有则使用默认值
     const drugDetails = {
@@ -1182,128 +1314,178 @@ function App() {
     return (
       <div className="card explanation-card">
         <div className="herb-pattern"></div>
-        <h2 className="card-title">
-          <span className="card-title-icon">📖</span>
-          用药说明（老年友好版）
-        </h2>
+        
+        {/* 头部区域：标题和操作按钮 */}
+        <div className="explanation-header">
+          <h2 className="card-title">
+            <span className="card-title-icon">📖</span>
+            用药说明（老年友好版）
+          </h2>
+          
+          <div className="explanation-actions">
+            <button 
+              className="btn btn-secondary btn-medium"
+              onClick={() => setShowDrugList(true)}
+            >
+              📦 切换药品
+            </button>
+            <button 
+              className="btn btn-primary btn-medium"
+              onClick={() => setActiveTab('upload')}
+            >
+              📷 上传识别
+            </button>
+          </div>
+        </div>
 
         <div className="explanation-layout">
-          <div className="drug-info-panel">
-            <div className="drug-info-card">
-              <div className="drug-info-icon">💊</div>
-              <h3 className="drug-info-name">{drugInfo.name}</h3>
-              <p className="drug-info-spec">规格：{drugInfo.spec}</p>
-              <p className="drug-info-mfr">{drugInfo.manufacturer}</p>
-              <div className="drug-info-divider"></div>
-              <p className="drug-info-dosage">💉 {drugInfo.dosage}</p>
-              <p className="drug-info-note">📌 {drugInfo.note}</p>
-            </div>
+          {/* 上方区域：虚拟药剂师 */}
+          <div className="pharmacist-section">
+            <div className="chat-section">
+              <div className="chat-header">
+                <div className="speaker-avatar">👨‍⚕️</div>
+                <div className="speaker-info">
+                  <p className="speaker-name">虚拟药剂师</p>
+                  <p className="speaker-title">老年友好用药指导</p>
+                </div>
+              </div>
 
-            {/* 药品详细信息卡片 */}
-            <div className="drug-details-card">
-              <div className="detail-section">
-                <h4 className="detail-title">🧪 药品成分</h4>
-                <p className="detail-content">{drugDetails.ingredient}</p>
+              <div className="chat-bubble-wrapper">
+                <div className="chat-bubble-avatar">👨‍⚕️</div>
+                <div className="chat-bubble-content">
+                  {isLoadingGuide ? (
+                    <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                      <div className="loading-dna" style={{ marginBottom: '10px' }}>
+                        <div className="dna-dot"></div>
+                        <div className="dna-dot"></div>
+                        <div className="dna-dot"></div>
+                      </div>
+                      <p style={{ fontSize: '14px' }}>正在生成老年友好用药指导...</p>
+                    </div>
+                  ) : elderlyGuide ? (
+                    <div 
+                      className="chat-bubble-text elderly-guide"
+                      style={{ 
+                        whiteSpace: 'pre-wrap', 
+                        lineHeight: '2',
+                        fontSize: '16px'
+                      }}
+                      dangerouslySetInnerHTML={{ __html: displayGuideHtml }}
+                    />
+                  ) : (
+                    <p className="chat-bubble-text" style={{ color: '#999' }}>
+                      正在加载用药指导...
+                    </p>
+                  )}
+                  <div className="voice-wave-animation">
+                    <span className="wave-bar"></span>
+                    <span className="wave-bar"></span>
+                    <span className="wave-bar"></span>
+                    <span className="wave-bar"></span>
+                    <span className="wave-bar"></span>
+                  </div>
+                </div>
               </div>
-              <div className="detail-section">
-                <h4 className="detail-title">🎯 适应症</h4>
-                <p className="detail-content">{drugDetails.indications}</p>
-              </div>
-              <div className="detail-section">
-                <h4 className="detail-title">📋 用法用量</h4>
-                <p className="detail-content">{drugDetails.usage}</p>
-              </div>
-              <div className="detail-section">
-                <h4 className="detail-title">⚠️ 注意事项</h4>
-                <p className="detail-content">{drugDetails.precautions}</p>
-              </div>
-              <div className="detail-section">
-                <h4 className="detail-title">🤒 不良反应</h4>
-                <p className="detail-content">{drugDetails.adverseReactions}</p>
+
+              <div className="voice-controls">
+                <button
+                  className={`btn ${isSpeaking ? 'btn-secondary' : 'btn-primary'}`}
+                  onClick={() => isSpeaking ? stopSpeaking() : speak(elderlyGuide || '您好，正在加载用药指导')}
+                  disabled={!elderlyGuide}
+                >
+                  {isSpeaking ? '⏸️ 停止播放' : '🔊 播放语音'}
+                </button>
+                <div className="speed-controls">
+                  <span>语速：</span>
+                  <button
+                    className={`speed-btn ${speechRate === 0.6 ? 'active' : ''}`}
+                    onClick={() => setSpeechRate(0.6)}
+                  >
+                    慢速
+                  </button>
+                  <button
+                    className={`speed-btn ${speechRate === 1 ? 'active' : ''}`}
+                    onClick={() => setSpeechRate(1)}
+                  >
+                    正常
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="chat-section">
-            <div className="chat-header">
-              <div className="speaker-avatar">👨‍⚕️</div>
-              <div className="speaker-info">
-                <p className="speaker-name">虚拟药剂师</p>
-                <p className="speaker-title">老年友好用药指导</p>
-              </div>
-            </div>
+          {/* 下方区域：药品信息 */}
+          <div className="drug-details-section">
+            <div className="left-drug-column">
+              <div className="drug-info-panel">
+                <div className="drug-info-card">
+                  <div className="drug-info-icon">💊</div>
+                  <h3 className="drug-info-name">{drugInfo.name}</h3>
+                  <p className="drug-info-spec">规格：{drugInfo.spec}</p>
+                  <p className="drug-info-mfr">{drugInfo.manufacturer}</p>
+                  <div className="drug-info-divider"></div>
+                  <p className="drug-info-dosage">💉 {drugInfo.dosage}</p>
+                  <p className="drug-info-note">📌 {drugInfo.note}</p>
+                </div>
 
-            <div className="chat-bubble-wrapper">
-              <div className="chat-bubble-avatar">👨‍⚕️</div>
-              <div className="chat-bubble-content">
-                {isLoadingGuide ? (
-                  <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
-                    <div className="loading-dna" style={{ marginBottom: '10px' }}>
-                      <div className="dna-dot"></div>
-                      <div className="dna-dot"></div>
-                      <div className="dna-dot"></div>
-                    </div>
-                    <p style={{ fontSize: '14px' }}>正在生成老年友好用药指导...</p>
+                {/* 药品基本信息卡片 */}
+                <div className="drug-details-card basic-info">
+                  <div className="detail-section">
+                    <h4 className="detail-title">🧪 药品成分</h4>
+                    <p className="detail-content">{drugDetails.ingredient}</p>
                   </div>
-                ) : elderlyGuide ? (
-                  <div 
-                    className="chat-bubble-text elderly-guide"
-                    style={{ 
-                      whiteSpace: 'pre-wrap', 
-                      lineHeight: '2',
-                      fontSize: '16px'
-                    }}
-                    dangerouslySetInnerHTML={{ __html: displayGuideHtml }}
-                  />
-                ) : (
-                  <p className="chat-bubble-text" style={{ color: '#999' }}>
-                    正在加载用药指导...
-                  </p>
-                )}
-                <div className="voice-wave-animation">
-                  <span className="wave-bar"></span>
-                  <span className="wave-bar"></span>
-                  <span className="wave-bar"></span>
-                  <span className="wave-bar"></span>
-                  <span className="wave-bar"></span>
+                  <div className="detail-section">
+                    <h4 className="detail-title">🎯 适应症</h4>
+                    <p className="detail-content">{drugDetails.indications}</p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="voice-controls">
-              <button
-                className={`btn ${isSpeaking ? 'btn-secondary' : 'btn-primary'}`}
-                onClick={() => isSpeaking ? stopSpeaking() : speak(elderlyGuide || '您好，正在加载用药指导')}
-                disabled={!elderlyGuide}
-              >
-                {isSpeaking ? '⏸️ 停止播放' : '🔊 播放语音'}
-              </button>
-              <div className="speed-controls">
-                <span>语速：</span>
+              {/* 突出的加入药箱按钮 - 放在药品信息卡片下方 */}
+              <div className="add-to-box-prominent">
                 <button
-                  className={`speed-btn ${speechRate === 0.6 ? 'active' : ''}`}
-                  onClick={() => setSpeechRate(0.6)}
+                  className="btn btn-success btn-extra-large"
+                  onClick={() => addToMedicineBox(drugInfo)}
                 >
-                  慢速
-                </button>
-                <button
-                  className={`speed-btn ${speechRate === 1 ? 'active' : ''}`}
-                  onClick={() => setSpeechRate(1)}
-                >
-                  正常
+                  <span className="btn-icon">➕</span>
+                  <span className="btn-text">加入我的药箱</span>
                 </button>
               </div>
             </div>
 
-            {/* 加入药箱按钮 */}
-            <div className="add-to-box-wrapper">
-              <button
-                className="btn btn-success btn-large"
-                onClick={() => addToMedicineBox(drugInfo)}
-                style={{ width: '100%', marginTop: '20px' }}
-              >
-                ➕ 加入我的药箱
-              </button>
+            <div className="right-panel">
+              {/* 核心用药信息 - 突出显示 */}
+              <div className="key-info-card">
+                <div className="key-info-header">
+                  <div className="key-info-icon">📋</div>
+                  <h3 className="key-info-title">用法用量</h3>
+                </div>
+                <div className="key-info-content">
+                  <p className="key-info-text">{drugDetails.usage}</p>
+                </div>
+              </div>
+
+              {/* 重要注意事项 */}
+              <div className="warning-info-card">
+                <div className="warning-info-header">
+                  <div className="warning-info-icon">⚠️</div>
+                  <h3 className="warning-info-title">注意事项</h3>
+                </div>
+                <div className="warning-info-content">
+                  <p className="warning-info-text">{drugDetails.precautions}</p>
+                </div>
+              </div>
+
+              {/* 不良反应 */}
+              <div className="side-effect-card">
+                <div className="side-effect-header">
+                  <div className="side-effect-icon">🤒</div>
+                  <h3 className="side-effect-title">不良反应</h3>
+                </div>
+                <div className="side-effect-content">
+                  <p className="side-effect-text">{drugDetails.adverseReactions}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1713,6 +1895,80 @@ function App() {
           onClose={() => setShowProfileModal(false)}
           userId={user?.userId}
         />
+      )}
+
+      {/* 药品选择弹窗 */}
+      {showDrugList && (
+        <div className="modal-overlay" onClick={() => setShowDrugList(false)}>
+          <div className="modal-content drug-list-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">📦 选择药品</h3>
+              <button className="modal-close-btn" onClick={() => setShowDrugList(false)}>
+                ✕
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              {drugList.length > 0 ? (
+                <div className="drug-list-container">
+                  {drugList.map((drug, index) => (
+                    <div 
+                      key={index}
+                      className={`drug-list-item ${isFetchingDrug ? 'disabled' : ''}`}
+                      onClick={() => {
+                        if (!isFetchingDrug) {
+                          // 先关闭弹窗，然后获取药品信息
+                          setShowDrugList(false);
+                          setIsFetchingDrug(true);
+                          // 使用统一的药品信息获取函数
+                          fetchDrugDetail(drug.name, drug, {
+                            showLoading: false,
+                            onComplete: () => {
+                              setIsFetchingDrug(false);
+                            }
+                          });
+                        }
+                      }}
+                    >
+                      <div className="drug-item-icon">💊</div>
+                      <div className="drug-item-info">
+                        <p className="drug-item-name">{drug.name}</p>
+                        <p className="drug-item-spec">{drug.spec}</p>
+                      </div>
+                      <div className="drug-item-arrow">→</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-drug-list">
+                  <div className="empty-drug-icon">📭</div>
+                  <p className="empty-drug-text">您的药箱是空的</p>
+                  <p className="empty-drug-hint">请先添加药品到药箱，或直接上传图片识别新药品</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="modal-footer">
+              <button 
+                className="btn btn-primary btn-large"
+                onClick={() => {
+                  setShowDrugList(false);
+                  setActiveTab('upload');
+                }}
+              >
+                📷 上传图片识别
+              </button>
+              {drugList.length > 0 && (
+                <button 
+                  className="btn btn-secondary btn-large"
+                  onClick={() => setShowDrugList(false)}
+                >
+                  取消
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {showProfileEdit && (
