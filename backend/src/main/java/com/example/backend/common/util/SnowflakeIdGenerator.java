@@ -1,5 +1,8 @@
 package com.example.backend.common.util;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
 /**
  * 雪花算法ID生成器
  * 用于生成分布式唯一ID
@@ -7,6 +10,7 @@ package com.example.backend.common.util;
  * @author backend
  * @since 1.0.0
  */
+@Component
 public class SnowflakeIdGenerator {
 
     // 开始时间戳 (2024-01-01 00:00:00)
@@ -33,7 +37,15 @@ public class SnowflakeIdGenerator {
     private long lastTimestamp = -1L; // 上一次时间戳
 
     /**
-     * 构造函数
+     * 构造函数 - 使用默认值
+     */
+    public SnowflakeIdGenerator() {
+        this.dataCenterId = 0;
+        this.machineId = 0;
+    }
+
+    /**
+     * 构造函数 - 自定义数据中心和机器ID
      * @param dataCenterId 数据中心ID (0-31)
      * @param machineId 机器标识ID (0-31)
      */

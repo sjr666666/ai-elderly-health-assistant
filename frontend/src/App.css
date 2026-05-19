@@ -3804,3 +3804,899 @@ body {
   color: var(--text-muted);
   margin: 0;
 }
+
+/* ============ MANUAL DRUG SEARCH COMPONENT ============ */
+.manual-search-wrapper {
+  position: relative;
+  z-index: 10;
+}
+
+.manual-search-container {
+  width: 100%;
+}
+
+.manual-search-container input[type="text"] {
+  width: 100%;
+  padding: 20px 24px 20px 64px;
+  font-size: 20px;
+  border: 3px solid var(--cream-dark);
+  border-radius: var(--radius-medium);
+  outline: none;
+  transition: all var(--transition-medium);
+  background: var(--cream-white);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.manual-search-container input[type="text"]:focus {
+  border-color: var(--tech-blue);
+  box-shadow: 0 0 0 6px rgba(74, 144, 226, 0.12);
+  background: white;
+}
+
+.manual-search-container input[type="text"]::placeholder {
+  color: var(--text-muted);
+}
+
+/* Search results dropdown */
+.manual-search-results {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: white;
+  border-radius: var(--radius-medium);
+  box-shadow: var(--shadow-medium);
+  z-index: 100;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 2px solid var(--cream-dark);
+}
+
+.manual-search-results-header {
+  padding: 16px 20px;
+  background: linear-gradient(135deg, var(--mint-green-light) 0%, var(--warm-apricot-light) 100%);
+  border-bottom: 2px solid var(--tech-blue);
+  border-radius: var(--radius-medium) var(--radius-medium) 0 0;
+}
+
+.manual-search-results-header p {
+  font-size: 16px;
+  color: var(--tech-blue);
+  font-weight: 600;
+  margin: 0;
+}
+
+.manual-search-result-item {
+  padding: 16px 20px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--cream-dark);
+  background-color: white;
+  transition: background-color var(--transition-fast);
+}
+
+.manual-search-result-item:last-child {
+  border-bottom: none;
+}
+
+.manual-search-result-item:hover,
+.manual-search-result-item.active {
+  background-color: var(--mint-green-light);
+}
+
+.manual-search-result-item .result-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-dark);
+  margin: 0 0 4px 0;
+}
+
+.manual-search-result-item .result-info {
+  font-size: 14px;
+  color: var(--text-light);
+  margin: 0;
+}
+
+.manual-search-result-item .match-score {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.match-score.high {
+  background: var(--success-green-light);
+  color: var(--success-green);
+}
+
+.match-score.medium {
+  background: var(--warning-orange-light);
+  color: var(--warning-orange);
+}
+
+.match-score.low {
+  background: var(--danger-red-light);
+  color: var(--danger-red);
+}
+
+.manual-search-results-footer {
+  padding: 12px 20px;
+  background: var(--cream-white);
+  border-radius: 0 0 var(--radius-medium) var(--radius-medium);
+  text-align: center;
+}
+
+.manual-search-results-footer p {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Empty results */
+.manual-search-empty {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: white;
+  border-radius: var(--radius-medium);
+  box-shadow: var(--shadow-medium);
+  padding: 32px;
+  text-align: center;
+}
+
+.manual-search-empty .empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.manual-search-empty .empty-text {
+  font-size: 18px;
+  color: var(--text-light);
+  margin: 0 0 8px 0;
+}
+
+.manual-search-empty .empty-hint {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Confirmation modal */
+.manual-search-confirm-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  backdrop-filter: blur(4px);
+}
+
+.manual-search-confirm-content {
+  background: white;
+  border-radius: var(--radius-large);
+  padding: 32px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: var(--shadow-strong);
+  animation: modalSlideIn 0.3s ease;
+}
+
+.manual-search-confirm-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.manual-search-confirm-icon {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, var(--warning-orange) 0%, #E65100 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  font-size: 40px;
+}
+
+.manual-search-confirm-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 0 0 12px 0;
+}
+
+.manual-search-confirm-desc {
+  font-size: 16px;
+  color: var(--text-light);
+  margin: 0;
+}
+
+.manual-search-confirm-drug {
+  margin-top: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, var(--mint-green-light) 0%, var(--warm-apricot-light) 100%);
+  border-radius: var(--radius-medium);
+  border: 2px solid var(--tech-blue);
+}
+
+.manual-search-confirm-drug-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 0 0 8px 0;
+}
+
+.manual-search-confirm-drug-info {
+  font-size: 16px;
+  color: var(--text-light);
+  margin: 4px 0;
+}
+
+.manual-search-confirm-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.manual-search-confirm-actions .btn {
+  flex: 1;
+  padding: 16px;
+  font-size: 18px;
+  font-weight: 600;
+  border-radius: var(--radius-medium);
+  cursor: pointer;
+  transition: all var(--transition-medium);
+  border: 2px solid var(--cream-dark);
+  background: white;
+  color: var(--text-light);
+}
+
+.manual-search-confirm-actions .btn:hover {
+  border-color: var(--tech-blue);
+  color: var(--tech-blue);
+}
+
+.manual-search-confirm-actions .btn-primary {
+  flex: 2;
+  border: none;
+  background: linear-gradient(135deg, var(--tech-blue) 0%, var(--tech-blue-dark) 100%);
+  color: white;
+  box-shadow: 0 4px 16px rgba(74, 144, 226, 0.3);
+}
+
+.manual-search-confirm-actions .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .manual-search-container input[type="text"] {
+    padding: 16px 20px 16px 52px;
+    font-size: 18px;
+  }
+
+  .manual-search-confirm-content {
+    padding: 24px;
+  }
+
+  .manual-search-confirm-actions {
+    flex-direction: column;
+  }
+
+  .manual-search-confirm-actions .btn {
+    width: 100%;
+  }
+}
+
+/* ============ EMERGENCY ASSISTANT COMPONENT ============ */
+.emergency-card {
+  background: linear-gradient(145deg, #F5E6FF 0%, #FFE4E1 50%, #E8F5F0 100%);
+  min-height: 80vh;
+}
+
+.emergency-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.emergency-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 32px;
+  background: linear-gradient(135deg, #6B5B95 0%, #8B5CF6 100%);
+  border-radius: var(--radius-large);
+  color: white;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-medium);
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.emergency-icon {
+  font-size: 36px;
+  animation: emergencyIconPulse 2s infinite;
+}
+
+@keyframes emergencyIconPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.header-title h2 {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.clear-btn {
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  font-size: 20px;
+  color: white;
+  cursor: pointer;
+  transition: all var(--transition-medium);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+/* 紧急呼叫区域 */
+.emergency-call-section {
+  margin-bottom: 24px;
+}
+
+.emergency-call-btn {
+  background: linear-gradient(135deg, var(--danger-red), #C0392B);
+  color: white;
+  padding: 24px 48px;
+  font-size: 24px;
+  font-weight: 800;
+  border: none;
+  border-radius: var(--radius-large);
+  cursor: pointer;
+  transition: var(--transition-medium);
+  box-shadow: 0 12px 40px rgba(231, 76, 60, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 80px;
+  animation: emergencyPulse 2s infinite;
+}
+
+@keyframes emergencyPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+.emergency-call-btn:hover {
+  transform: scale(1.03);
+  box-shadow: 0 16px 50px rgba(231, 76, 60, 0.5);
+}
+
+.call-icon {
+  font-size: 40px;
+}
+
+.call-text {
+  letter-spacing: 2px;
+}
+
+/* 分类标签区域 */
+.category-section {
+  margin-bottom: 20px;
+}
+
+.category-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 16px;
+}
+
+.category-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.category-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: white;
+  border: 2px solid var(--cream-dark);
+  border-radius: var(--radius-medium);
+  cursor: pointer;
+  transition: all var(--transition-medium);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-dark);
+}
+
+.category-tag:hover {
+  background: linear-gradient(135deg, var(--mint-green-light), var(--warm-apricot-light));
+  border-color: var(--mint-green);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-soft);
+}
+
+.tag-icon {
+  font-size: 20px;
+}
+
+.tag-name {
+  font-size: 16px;
+}
+
+/* 紧急模式开关 */
+.emergency-toggle {
+  margin-bottom: 20px;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.toggle-label input[type="checkbox"] {
+  width: 48px;
+  height: 28px;
+  appearance: none;
+  background: var(--cream-dark);
+  border-radius: 14px;
+  position: relative;
+  cursor: pointer;
+  transition: all var(--transition-medium);
+}
+
+.toggle-label input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: white;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: all var(--transition-medium);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-label input[type="checkbox"]:checked {
+  background: linear-gradient(135deg, var(--danger-red), #C0392B);
+}
+
+.toggle-label input[type="checkbox"]:checked::before {
+  transform: translateX(20px);
+}
+
+.toggle-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+/* 消息区域 */
+.messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: white;
+  border-radius: var(--radius-large);
+  box-shadow: var(--shadow-soft);
+  margin-bottom: 20px;
+  min-height: 300px;
+  max-height: 500px;
+}
+
+.welcome-message {
+  text-align: center;
+  padding: 48px 20px;
+}
+
+.welcome-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  animation: iconFloat 3s ease-in-out infinite;
+}
+
+@keyframes iconFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.welcome-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 12px;
+}
+
+.welcome-desc {
+  font-size: 18px;
+  color: var(--text-light);
+  line-height: 1.6;
+}
+
+/* 消息项 - 老年友好优化 */
+.message-item {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  animation: messageFadeIn 0.3s ease;
+}
+
+@keyframes messageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-item.user {
+  flex-direction: row-reverse;
+}
+
+.message-avatar {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--tech-blue), var(--mint-green));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-soft);
+  border: 3px solid white;
+}
+
+.message-item.user .message-avatar {
+  background: linear-gradient(135deg, var(--warm-apricot), var(--mint-green));
+}
+
+.message-content {
+  max-width: 80%;
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.message-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.message-time {
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+/* 老年友好消息文本 - 高对比度、大字体 */
+.message-text {
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #FFFFFF, #F5F5F5);
+  border-radius: 16px;
+  font-size: 18px;
+  line-height: 2;
+  color: #1a1a1a;
+  border-left: 6px solid var(--tech-blue);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  letter-spacing: 0.5px;
+  word-spacing: 2px;
+}
+
+/* AI消息内使用高对比度样式 */
+.message-text p {
+  margin: 0 0 16px 0;
+  line-height: 2.2;
+}
+
+.message-text p:last-child {
+  margin-bottom: 0;
+}
+
+/* 列表样式优化 */
+.message-text ul,
+.message-text ol {
+  margin: 16px 0;
+  padding-left: 32px;
+}
+
+.message-text li {
+  margin-bottom: 12px;
+  line-height: 2;
+  font-size: 18px;
+}
+
+/* 强调标记样式 */
+.message-text strong,
+.message-text b {
+  color: #d32f2f;
+  font-weight: 700;
+}
+
+/* 紧急提醒样式 */
+.message-text .emergency-highlight {
+  background: #fff3e0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 2px solid #ff9800;
+  margin: 12px 0;
+  font-weight: 600;
+}
+
+.message-item.user .message-text {
+  background: linear-gradient(135deg, #FFFFFF, #F5F5F5);
+  border-left: none;
+  border-right: 6px solid var(--mint-green);
+}
+
+.message-item.emergency .message-text {
+  background: linear-gradient(135deg, #FFFFFF, #FFF8E1);
+  border-left-color: var(--danger-red);
+  border-right-color: var(--danger-red);
+  border-left-width: 6px;
+  border-right-width: 6px;
+}
+
+.message-item.user.emergency .message-text {
+  background: linear-gradient(135deg, #FFFFFF, #FFF8E1);
+  border-right-color: var(--danger-red);
+}
+
+.emergency-badge {
+  background: var(--danger-red);
+  color: white;
+  padding: 6px 16px;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  animation: badgePulse 1.5s infinite;
+}
+
+@keyframes badgePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.offline-badge {
+  background: var(--warning-orange);
+  color: white;
+  padding: 6px 16px;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* 加载消息 */
+.loading-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+}
+
+.loading-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.loading-dots span {
+  width: 12px;
+  height: 12px;
+  background: var(--tech-blue);
+  border-radius: 50%;
+  animation: loadingDot 1.4s ease-in-out infinite both;
+}
+
+.loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+.loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+.loading-dots span:nth-child(3) { animation-delay: 0s; }
+
+@keyframes loadingDot {
+  0%, 80%, 100% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.loading-text {
+  font-size: 18px;
+  color: var(--tech-blue);
+  font-weight: 500;
+}
+
+/* 错误消息 */
+.error-message {
+  background: var(--danger-red-light);
+  color: var(--danger-red);
+  padding: 16px 20px;
+  border-radius: var(--radius-medium);
+  font-size: 18px;
+  font-weight: 500;
+  margin-bottom: 16px;
+  text-align: center;
+  animation: errorShake 0.5s ease;
+}
+
+@keyframes errorShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+
+/* 输入区域 */
+.input-container {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.question-input {
+  flex: 1;
+  padding: 16px 20px;
+  font-size: 18px;
+  border: 3px solid var(--cream-dark);
+  border-radius: var(--radius-medium);
+  resize: none;
+  outline: none;
+  transition: all var(--transition-medium);
+  background: white;
+  font-family: inherit;
+  min-height: 80px;
+  max-height: 200px;
+}
+
+.question-input:focus {
+  border-color: var(--tech-blue);
+  box-shadow: 0 0 0 6px rgba(74, 144, 226, 0.12);
+}
+
+.question-input::placeholder {
+  color: var(--text-muted);
+}
+
+.question-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.input-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.send-btn {
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, var(--tech-blue), var(--tech-blue-dark));
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  transition: all var(--transition-medium);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(74, 144, 226, 0.3);
+}
+
+.send-btn:hover:not(:disabled) {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.send-btn.loading {
+  background: linear-gradient(135deg, var(--mint-green), var(--mint-green-dark));
+}
+
+.btn-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .emergency-header {
+    padding: 16px 20px;
+  }
+
+  .header-title h2 {
+    font-size: 22px;
+  }
+
+  .emergency-icon {
+    font-size: 28px;
+  }
+
+  .emergency-call-btn {
+    padding: 20px 24px;
+    font-size: 20px;
+    min-height: 64px;
+  }
+
+  .call-icon {
+    font-size: 32px;
+  }
+
+  .category-tags {
+    gap: 8px;
+  }
+
+  .category-tag {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+
+  .message-content {
+    max-width: 85%;
+  }
+
+  .message-text {
+    padding: 12px 16px;
+    font-size: 16px;
+  }
+
+  .input-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .send-btn {
+    align-self: flex-end;
+  }
+}
