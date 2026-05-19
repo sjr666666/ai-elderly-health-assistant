@@ -1,8 +1,8 @@
 ---
-alwaysApply: true
+alwaysApply: false
+description: 当我要提交代码信息时，需要符合以下规范
 scene: git_message
 ---
-
 ## 提交信息规范
 
 ### 格式
