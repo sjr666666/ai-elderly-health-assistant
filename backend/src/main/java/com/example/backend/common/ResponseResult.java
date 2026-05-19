@@ -67,6 +67,13 @@ public class ResponseResult<T> implements Serializable {
                 .build();
     }
 
+    public static <T> ResponseResult<T> fail(ResponseCode responseCode, String message) {
+        return ResponseResult.<T>builder()
+                .code(responseCode.getCode())
+                .message(message)
+                .build();
+    }
+
     public static <T> ResponseResult<T> fail(ResponseCode responseCode) {
         return ResponseResult.<T>builder()
                 .code(responseCode.getCode())

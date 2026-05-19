@@ -8,6 +8,8 @@ import EmergencyContacts from './components/EmergencyContacts';
 import AddDrugModal from './components/AddDrugModal';
 import EditDrugModal from './components/EditDrugModal';
 import ConfirmDeleteModal from './components/ConfirmDeleteModal';
+import ManualDrugSearch from './components/ManualDrugSearch';
+import EmergencyAssistant from './components/EmergencyAssistant';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -19,8 +21,6 @@ function App() {
   const [imagePreview, setImagePreview] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
-  const [manualDrugName, setManualDrugName] = useState('');
-  const [manualSpec, setManualSpec] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredDrugList, setFilteredDrugList] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -1047,53 +1047,57 @@ function App() {
 
       <div style={{ marginTop: '48px' }}>
         <h3 style={{ fontSize: '26px', fontWeight: 'bold', color: 'var(--tech-blue)', marginBottom: '24px' }}>
-          ✍️ 手动输入药品
+          ✍️ 手动搜索药品
         </h3>
-        <div className="input-section">
-          <label className="input-label">药品名称</label>
-          <input
-            type="text"
-            className="text-input"
-            placeholder="请输入药品名称"
-            value={manualDrugName}
-            onChange={(e) => setManualDrugName(e.target.value)}
-          />
-        </div>
-        <div className="input-section">
-          <label className="input-label">规格</label>
-          <input
-            type="text"
-            className="text-input"
-            placeholder="例如：5mg×30片"
-            value={manualSpec}
-            onChange={(e) => setManualSpec(e.target.value)}
-          />
-        </div>
-        <div className="btn-group" style={{ gap: '12px' }}>
-          <button 
-            className="btn btn-primary btn-large"
-            onClick={() => {
-              if (!manualDrugName.trim()) {
-                alert('请输入药品名称');
-                return;
-              }
+        <div className="manual-search-wrapper">
+          <ManualDrugSearch 
+            onSelectDrug={(drug, callbacks = {}) => {
+              const { onComplete, onProgress } = callbacks;
+              
               // 使用统一的药品信息获取函数
               const drugInfo = {
-                id: Date.now(),
-                spec: manualSpec || '',
-                name: manualDrugName
+                id: drug.id || Date.now(),
+                spec: drug.spec || '',
+                name: drug.name,
+                manufacturer: drug.manufacturer || '',
+                matchScore: drug.matchScore || 0,
+                genericName: drug.genericName || drug.name,
+                tradeName: drug.tradeName || '',
+                category: drug.category || ''
               };
-              fetchDrugDetail(manualDrugName, drugInfo, {
-                showLoading: false
+              
+              // 更新进度消息
+              if (onProgress) {
+                onProgress('正在获取药品详情...');
+              }
+              
+              fetchDrugDetail(drug.name, drugInfo, {
+                showLoading: false,
+                onComplete: () => {
+                  // 更新进度消息
+                  if (onProgress) {
+                    onProgress('正在跳转到用药说明页面...');
+                  }
+                  // 延迟执行完成回调，确保页面跳转完成
+                  setTimeout(() => {
+                    if (onComplete) {
+                      onComplete();
+                    }
+                  }, 500);
+                }
               });
             }}
-          >
-            🔍 查询药品信息
-          </button>
-          <button className="btn btn-success btn-large">
-            ➕ 添加到药箱
-          </button>
+          />
         </div>
+        <p style={{ 
+          fontSize: '14px', 
+          color: '#9E9E9E', 
+          marginTop: '16px', 
+          textAlign: 'center',
+          lineHeight: '1.6'
+        }}>
+          💡 支持输入药品名称、别名、商品名或类别（如：感冒药、止痛药）进行智能搜索
+        </p>
       </div>
     </div>
   );
@@ -1777,66 +1781,6 @@ function App() {
     );
   };
 
-  const [emergencyMessages, setEmergencyMessages] = useState([
-    { id: 1, type: 'ai', text: '您好，我是您的AI健康助手。请描述一下您目前的不适症状，我会尽力为您提供一些建议。' }
-  ]);
-  const [emergencyInput, setEmergencyInput] = useState('');
-
-  const handleEmergencySubmit = () => {
-    if (!emergencyInput.trim()) return;
-    const userMsg = { id: Date.now(), type: 'user', text: emergencyInput };
-    setEmergencyMessages(prev => [...prev, userMsg]);
-    setEmergencyInput('');
-
-    setTimeout(() => {
-      const aiResponse = { id: Date.now() + 1, type: 'ai', text: '我理解您的不适。请不要担心，先深呼吸放松一下。如果症状持续或加重，建议您尽快联系家人或医生。🏥' };
-      setEmergencyMessages(prev => [...prev, aiResponse]);
-    }, 1500);
-  };
-
-  const renderEmergencyTab = () => (
-    <div className="emergency-container">
-      <h2 className="emergency-title">🚨 您哪里不舒服？</h2>
-
-      <div className="emergency-conversation">
-        {emergencyMessages.map((msg) => (
-          <div key={msg.id} className={`emergency-bubble ${msg.type}`}>
-            <span className="bubble-avatar">{msg.type === 'ai' ? '🤖' : '👤'}</span>
-            <p className="bubble-text">{msg.text}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="emergency-input-area">
-        <textarea
-          className="emergency-textarea"
-          placeholder="请描述您的症状..."
-          rows="3"
-          value={emergencyInput}
-          onChange={(e) => setEmergencyInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleEmergencySubmit())}
-        />
-
-        <div className="emergency-buttons">
-          <button className="btn btn-primary btn-large" onClick={handleEmergencySubmit}>
-            🤖 咨询AI助手
-          </button>
-        </div>
-      </div>
-
-      <button
-        className="emergency-call-btn"
-        style={{ marginTop: '48px', marginLeft: 'auto', marginRight: 'auto' }}
-        onClick={() => window.location.href = 'tel:13800138000'}
-      >
-        <span className="emergency-call-icon">📞</span>
-        一键呼叫家人
-        <span className="emergency-call-label">主要联系人</span>
-        <span className="emergency-contact">张小明 - 138-0013-8000</span>
-      </button>
-    </div>
-  );
-
   return (
     <>
       {/* 百度TTS音频播放器 */}
@@ -1883,7 +1827,11 @@ function App() {
             {activeTab === 'conflict' && renderConflictTab()}
             {activeTab === 'calendar' && renderCalendarTab()}
             {activeTab === 'drugs' && renderDrugsTab()}
-            {activeTab === 'emergency' && renderEmergencyTab()}
+            {activeTab === 'emergency' && (
+              <div className="card emergency-card">
+                <EmergencyAssistant emergencyContacts={emergencyContacts} />
+              </div>
+            )}
           </div>
 
         </div>
