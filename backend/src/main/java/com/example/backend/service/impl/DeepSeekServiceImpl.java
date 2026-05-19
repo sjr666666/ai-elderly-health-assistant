@@ -281,4 +281,158 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         }
         return "暂无详细信息";
     }
+
+    @Override
+    public String generateElderlyFriendlyGuide(DrugDetailResponse drugDetail) {
+        if (drugDetail == null) {
+            logger.warn("药品信息为空，无法生成老年友好用药指导");
+            return "对不起，未能获取到药品信息，请稍后再试。";
+        }
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            logger.warn("DeepSeek API Key未配置，使用本地生成老年友好指导");
+            return generateLocalElderlyGuide(drugDetail);
+        }
+
+        try {
+            logger.info("开始调用DeepSeek AI生成老年友好用药指导 - 药品: {}", drugDetail.getGenericName());
+
+            // 构建请求体
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("temperature", 0.5);
+            requestBody.put("max_tokens", 300); // 限制字数在80-150字左右
+
+            // 构建消息 - 针对老年人群体的特殊需求进行优化
+            String systemPrompt = "你是一位慈祥的药剂师，专门为老年人提供用药指导。请用最简单、最亲切的语言，生成一段适合老年人阅读和听力的用药指导。\n\n" +
+                    "重要要求：\n" +
+                    "1. 语言必须通俗易懂，避免所有专业医学术语\n" +
+                    "2. 重点突出三个关键信息：\n" +
+                    "   - 【吃多少】每次吃几片，每天吃几次\n" +
+                    "   - 【什么时候吃】饭前吃还是饭后吃，早上还是晚上\n" +
+                    "   - 【不能做什么】服药后不能做的活动或行为禁忌\n" +
+                    "3. 【重要】字数必须控制在80-150字之间，不要太长\n" +
+                    "4. 使用第二人称\"您\"，语气亲切温暖\n" +
+                    "5. 重要信息前加\"请您注意\"或\"特别提醒\"\n\n" +
+                    "输出格式：直接输出一段话，不要使用标题、列表、编号等格式，就像面对面和老人说话一样。";
+
+            String userPrompt = "请为以下药品生成老年友好版本的用药指导：\n\n" +
+                    "药品名称：" + (drugDetail.getGenericName() != null ? drugDetail.getGenericName() : "未知") + "\n" +
+                    "规格：" + (drugDetail.getSpecification() != null ? drugDetail.getSpecification() : "未知") + "\n" +
+                    "用法用量：" + (drugDetail.getUsage() != null ? drugDetail.getUsage() : "未知") + "\n" +
+                    "注意事项：" + (drugDetail.getPrecautions() != null ? drugDetail.getPrecautions() : "未知") + "\n" +
+                    "不良反应：" + (drugDetail.getAdverseReactions() != null ? drugDetail.getAdverseReactions() : "未知") + "\n\n" +
+                    "请用最简单的话告诉老人怎么吃这个药，有什么禁忌。";
+
+            Map<String, String> systemMessage = new HashMap<>();
+            systemMessage.put("role", "system");
+            systemMessage.put("content", systemPrompt);
+
+            Map<String, String> userMessage = new HashMap<>();
+            userMessage.put("role", "user");
+            userMessage.put("content", userPrompt);
+
+            requestBody.put("messages", new Object[]{systemMessage, userMessage});
+
+            // 设置请求头
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Authorization", "Bearer " + apiKey);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+
+            // 发送请求
+            ResponseEntity<String> response = restTemplate.postForEntity(DEEPSEEK_API_URL, request, String.class);
+
+            if (response.getStatusCode() == HttpStatus.OK) {
+                String responseBody = response.getBody();
+                String guideText = parseResponse(responseBody);
+                
+                if (guideText != null && !guideText.isEmpty()) {
+                    logger.info("DeepSeek AI生成老年友好指导成功");
+                    return guideText.trim();
+                } else {
+                    logger.info("DeepSeek AI未能生成有效指导，使用本地生成");
+                    return generateLocalElderlyGuide(drugDetail);
+                }
+            } else {
+                logger.error("DeepSeek API请求失败 - 状态码: {}, 响应: {}", response.getStatusCode(), response.getBody());
+                return generateLocalElderlyGuide(drugDetail);
+            }
+
+        } catch (Exception e) {
+            logger.error("调用DeepSeek AI生成老年友好指导失败 - 错误: {}", e.getMessage(), e);
+            return generateLocalElderlyGuide(drugDetail);
+        }
+    }
+
+    /**
+     * 本地生成老年友好用药指导（当AI不可用时使用）
+     * 使用规则化的方式生成简单易懂的指导文本，控制在80-150字
+     */
+    private String generateLocalElderlyGuide(DrugDetailResponse drugDetail) {
+        StringBuilder guide = new StringBuilder();
+        String drugName = drugDetail.getGenericName() != null ? drugDetail.getGenericName() : "这个药品";
+        
+        // 问候语和药品名称（20字左右）
+        guide.append("您好，您查询的药品是").append(drugName).append("。");
+        
+        // 提取用法用量信息（30-40字）
+        String usage = drugDetail.getUsage() != null ? drugDetail.getUsage() : "";
+        if (!usage.isEmpty()) {
+            guide.append("用法：").append(usage).append("。");
+        }
+        
+        // 服用时间（20字左右）
+        if (usage.contains("饭前") || usage.contains("空腹")) {
+            guide.append("建议饭前半个小时吃，效果更好。");
+        } else if (usage.contains("饭后")) {
+            guide.append("建议吃完饭半小时后吃，减少胃刺激。");
+        } else if (usage.contains("睡前")) {
+            guide.append("建议晚上睡觉前服用。");
+        }
+        
+        // 注意事项和禁忌（30-40字）
+        String precautions = drugDetail.getPrecautions() != null ? drugDetail.getPrecautions() : "";
+        if (precautions.contains("酒")) {
+            guide.append("请您注意：服药期间千万不要喝酒！");
+        } else if (precautions.contains("开车")) {
+            guide.append("请您注意：吃完药后最好不要开车。");
+        }
+        
+        // 结束语（10字左右）
+        guide.append("请严格按照医嘱服用，祝您早日康复！");
+        
+        return guide.toString().replace("\n", "");
+    }
+
+    /**
+     * 将专业的不良反应描述转换为通俗语言
+     */
+    private String parseAdverseReactions(String reactions) {
+        if (reactions == null || reactions.isEmpty()) {
+            return "轻微的不适";
+        }
+        
+        // 常见不良反应关键词替换
+        String result = reactions
+            .replace("头晕", "头晕乎乎的")
+            .replace("恶心", "想吐")
+            .replace("呕吐", "呕吐")
+            .replace("腹泻", "拉肚子")
+            .replace("便秘", "大便不通畅")
+            .replace("皮疹", "身上起疹子")
+            .replace("瘙痒", "身上痒")
+            .replace("嗜睡", "总想睡觉")
+            .replace("乏力", "浑身没力气")
+            .replace("胃部不适", "胃不舒服")
+            .replace("口干", "嘴巴发干");
+        
+        // 如果太长，截取前100个字符
+        if (result.length() > 100) {
+            result = result.substring(0, 100) + "...";
+        }
+        
+        return result;
+    }
 }

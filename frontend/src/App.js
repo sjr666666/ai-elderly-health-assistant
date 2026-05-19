@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 import Login from './components/Login';
 import Register from './components/Register';
@@ -331,30 +331,207 @@ function App() {
     setIsDragging(true);
   };
 
-  const speak = (text, rate = speechRate) => {
-    if ('speechSynthesis' in window) {
+  const audioRef = useRef(null);
+
+  const speak = async (text, rate = speechRate) => {
+    if (!text || text.trim() === '') {
+      alert('没有可播放的内容');
+      return;
+    }
+
+    // 优先尝试调用百度TTS API
+    try {
       setIsSpeaking(true);
+
+      // 将前端语速(0.6-1)映射到百度TTS语速(3-5)
+      const baiduRate = rate === 0.6 ? 3 : 5;
+      const response = await fetch(`/api/ai/tts?text=${encodeURIComponent(text)}&speechRate=${baiduRate}`);
+
+      if (response.ok) {
+        const result = await response.json();
+
+        if (result.code === 200 && result.data) {
+          // 播放百度返回的音频
+          if (audioRef.current) {
+            audioRef.current.src = result.data;
+            audioRef.current.play();
+            return; // 成功则返回
+          }
+        }
+      }
+
+      // 如果百度TTS失败，使用浏览器原生语音（备用方案）
+      console.warn('百度TTS不可用，使用浏览器原生语音');
+      speakWithBrowser(text, rate);
+
+    } catch (error) {
+      console.error('百度TTS调用失败，使用备用方案:', error);
+      speakWithBrowser(text, rate);
+    }
+  };
+
+  // 浏览器原生语音（备用方案）
+  const speakWithBrowser = (text, rate) => {
+    if ('speechSynthesis' in window) {
+      // 停止当前播放
+      window.speechSynthesis.cancel();
+
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'zh-CN';
       utterance.rate = rate;
       utterance.volume = 1;
+
+      // 尝试选择最好的中文语音
+      const voices = window.speechSynthesis.getVoices();
+      const chineseVoice = voices.find(v => v.lang.includes('zh') && v.name.includes('Female'));
+      if (chineseVoice) {
+        utterance.voice = chineseVoice;
+      }
+
       utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
+      utterance.onerror = () => {
+        console.error('浏览器语音播放失败');
+        setIsSpeaking(false);
+      };
+
       window.speechSynthesis.speak(utterance);
     } else {
       alert('您的浏览器不支持语音播报功能');
-    }
-  };
-
-  const stopSpeaking = () => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
       setIsSpeaking(false);
     }
   };
 
+  const stopSpeaking = () => {
+    // 停止百度TTS
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    // 停止浏览器语音
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+  };
+
+  // 监听音频播放结束
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      const handleEnded = () => setIsSpeaking(false);
+      audio.addEventListener('ended', handleEnded);
+      return () => audio.removeEventListener('ended', handleEnded);
+    }
+  }, []);
+
   const [ocrTaskId, setOcrTaskId] = useState(null);
   const [ocrPolling, setOcrPolling] = useState(false);
+  const [elderlyGuide, setElderlyGuide] = useState(''); // 老年友好用药指导
+  const [isLoadingGuide, setIsLoadingGuide] = useState(false); // 是否正在加载AI指导
+
+  // 当selectedDrug变化时，自动调用AI生成老年友好指导
+  useEffect(() => {
+    if (selectedDrug && selectedDrug.name) {
+      fetchElderlyGuide(selectedDrug);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDrug?.name, selectedDrug?.usage, selectedDrug?.precautions]);
+
+  // 调用AI生成老年友好用药指导
+  const fetchElderlyGuide = async (drugInfo) => {
+    if (!drugInfo || !drugInfo.name) return;
+    
+    setIsLoadingGuide(true);
+    setElderlyGuide('');
+    
+    try {
+      // 构造药品详细信息对象
+      const drugDetail = {
+        genericName: drugInfo.name,
+        tradeName: drugInfo.tradeName || '',
+        specification: drugInfo.spec || drugInfo.specification || '',
+        manufacturer: drugInfo.manufacturer || '',
+        category: drugInfo.category || '',
+        ingredient: drugInfo.ingredient || '',
+        indications: drugInfo.indications || '',
+        usage: drugInfo.usage || drugInfo.dosage || '',
+        precautions: drugInfo.precautions || '',
+        adverseReactions: drugInfo.adverseReactions || '',
+        description: drugInfo.description || ''
+      };
+
+      const response = await fetch('/api/ai/elderly-guide', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(drugDetail)
+      });
+
+      const data = await response.json();
+      
+      if (data.code === 200 && data.data) {
+        // 将<br/>标签替换为换行符，方便阅读
+        const guideText = data.data.replace(/<br\/>/g, '\n');
+        setElderlyGuide(guideText);
+        console.log('老年友好用药指导生成成功:', guideText);
+      } else {
+        console.error('生成老年友好指导失败:', data.message);
+        // 生成默认指导
+        setElderlyGuide(generateFallbackGuide(drugInfo));
+      }
+    } catch (error) {
+      console.error('调用AI服务失败:', error);
+      // 生成默认指导
+      setElderlyGuide(generateFallbackGuide(drugInfo));
+    } finally {
+      setIsLoadingGuide(false);
+    }
+  };
+
+  // 生成备用老年友好指导（当AI不可用时使用）
+  const generateFallbackGuide = (drugInfo) => {
+    const usage = drugInfo.usage || drugInfo.dosage || '';
+    const precautions = drugInfo.precautions || '';
+    const adverseReactions = drugInfo.adverseReactions || '';
+    
+    let guide = `您好，您查询的药品是${drugInfo.name}。\n\n`;
+    
+    // 用法用量
+    if (usage) {
+      guide += `【吃多少】：${usage}\n\n`;
+    }
+    
+    // 服用时间
+    if (usage.includes('饭前') || usage.includes('空腹')) {
+      guide += `【什么时候吃】：建议在饭前半个小时吃，这样药效会更好。\n\n`;
+    } else if (usage.includes('饭后')) {
+      guide += `【什么时候吃】：建议在吃完饭半小时后吃，这样可以减少对胃的刺激。\n\n`;
+    } else if (usage.includes('睡前')) {
+      guide += `【什么时候吃】：建议在晚上睡觉前吃。\n\n`;
+    } else {
+      guide += `【什么时候吃】：按照医生说的时间吃就好。\n\n`;
+    }
+    
+    // 注意事项
+    if (precautions) {
+      const warnings = [];
+      if (precautions.includes('酒')) warnings.push('服药期间千万不要喝酒');
+      if (precautions.includes('开车')) warnings.push('吃完药后最好不要开车');
+      if (warnings.length > 0) {
+        guide += `【特别提醒您】：${warnings.join('；')}。\n\n`;
+      }
+    }
+    
+    // 不良反应
+    if (adverseReactions && adverseReactions !== '暂无详细信息') {
+      guide += `【可能出现的不舒服】：有的人吃了这个药可能会有点${adverseReactions}，如果感觉很难受，一定要去找医生看看。\n\n`;
+    }
+    
+    guide += `请您一定按照医生说的剂量和时间来吃药。\n祝您早日康复！`;
+    
+    return guide;
+  };
 
   // 将图片转换为JPEG格式
   const convertToJpeg = (file) => {
@@ -980,14 +1157,34 @@ function App() {
       adverseReactions: drugInfo.adverseReactions || '暂无详细信息'
     };
 
-    const speechText = `阿姨，您查询的药品是${drugInfo.name}。${drugDetails.indications}用法用量：${drugDetails.usage}请注意：${drugDetails.precautions}常见不良反应包括：${drugDetails.adverseReactions}请严格按照医嘱服用。`;
+    // 将老年友好指导转换为HTML格式显示
+    const formatGuideForDisplay = (guideText) => {
+      if (!guideText) return '';
+      
+      // 将换行符转换为HTML换行，并添加高亮样式
+      return guideText
+        .split('\n')
+        .filter(line => line.trim())
+        .map((line, index) => {
+          // 为【】中的内容添加高亮
+          let formattedLine = line.replace(
+            /【([^】]+)】/g,
+            '<span class="highlight">【$1】</span>'
+          );
+          return `<div key={${index}} style="margin-bottom: 12px; line-height: 1.8;">${formattedLine}</div>`;
+        })
+        .join('');
+    };
+
+    // 生成用于显示的HTML内容
+    const displayGuideHtml = formatGuideForDisplay(elderlyGuide);
 
     return (
       <div className="card explanation-card">
         <div className="herb-pattern"></div>
         <h2 className="card-title">
           <span className="card-title-icon">📖</span>
-          用药说明
+          用药说明（老年友好版）
         </h2>
 
         <div className="explanation-layout">
@@ -1032,19 +1229,37 @@ function App() {
               <div className="speaker-avatar">👨‍⚕️</div>
               <div className="speaker-info">
                 <p className="speaker-name">虚拟药剂师</p>
-                <p className="speaker-title">您的用药小助手</p>
+                <p className="speaker-title">老年友好用药指导</p>
               </div>
             </div>
 
             <div className="chat-bubble-wrapper">
               <div className="chat-bubble-avatar">👨‍⚕️</div>
               <div className="chat-bubble-content">
-                <p className="chat-bubble-text">
-                  👋 阿姨，这药每天<span className="highlight">早晚各吃一片</span>，<br/>
-                  <span className="highlight">饭后半小时</span>吃最好哦。<br/><br/>
-                  每片5毫克，您需要吃<span className="highlight">半片</span>。<br/>
-                  记得<span className="highlight">不要喝酒</span>，会影响药效！
-                </p>
+                {isLoadingGuide ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                    <div className="loading-dna" style={{ marginBottom: '10px' }}>
+                      <div className="dna-dot"></div>
+                      <div className="dna-dot"></div>
+                      <div className="dna-dot"></div>
+                    </div>
+                    <p style={{ fontSize: '14px' }}>正在生成老年友好用药指导...</p>
+                  </div>
+                ) : elderlyGuide ? (
+                  <div 
+                    className="chat-bubble-text elderly-guide"
+                    style={{ 
+                      whiteSpace: 'pre-wrap', 
+                      lineHeight: '2',
+                      fontSize: '16px'
+                    }}
+                    dangerouslySetInnerHTML={{ __html: displayGuideHtml }}
+                  />
+                ) : (
+                  <p className="chat-bubble-text" style={{ color: '#999' }}>
+                    正在加载用药指导...
+                  </p>
+                )}
                 <div className="voice-wave-animation">
                   <span className="wave-bar"></span>
                   <span className="wave-bar"></span>
@@ -1058,7 +1273,8 @@ function App() {
             <div className="voice-controls">
               <button
                 className={`btn ${isSpeaking ? 'btn-secondary' : 'btn-primary'}`}
-                onClick={() => isSpeaking ? stopSpeaking() : speak(speechText)}
+                onClick={() => isSpeaking ? stopSpeaking() : speak(elderlyGuide || '您好，正在加载用药指导')}
+                disabled={!elderlyGuide}
               >
                 {isSpeaking ? '⏸️ 停止播放' : '🔊 播放语音'}
               </button>
@@ -1096,7 +1312,7 @@ function App() {
           <h4 className="warning-title">
             ⚠️ 重要提醒
           </h4>
-          <p className="warning-text">以上为AI生成，用药请遵医嘱</p>
+          <p className="warning-text">以上内容由AI生成，用药请遵医嘱</p>
         </div>
       </div>
     );
@@ -1441,6 +1657,9 @@ function App() {
 
   return (
     <>
+      {/* 百度TTS音频播放器 */}
+      <audio ref={audioRef} style={{ display: 'none' }} />
+
       <div className="watermark-bg"></div>
       {showRegister ? (
         <Register onRegister={handleRegister} />

@@ -23,4 +23,13 @@ public interface DeepSeekService {
      * @return 药品详细信息，如果查询失败则返回null
      */
     DrugDetailResponse queryDrugInfoWithAI(String drugName);
+
+    /**
+     * 使用DeepSeek AI生成老年友好版本的用药指导
+     * 针对老年人群体的特殊需求进行优化
+     *
+     * @param drugDetail 药品详细信息
+     * @return 老年友好的用药指导文本
+     */
+    String generateElderlyFriendlyGuide(DrugDetailResponse drugDetail);
 }
