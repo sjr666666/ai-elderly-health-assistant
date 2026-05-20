@@ -623,6 +623,12 @@ function App() {
       
       const formData = new FormData();
       formData.append('file', file);
+      
+      // 调试：检查FormData内容
+      console.log('FormData内容:');
+      for (let pair of formData.entries()) {
+        console.log('  键:', pair[0], ', 值:', pair[1]);
+      }
 
       // 不设置Content-Type，让浏览器自动处理
       const response = await fetch('/api/v1/drug/recognize/upload', {
@@ -633,6 +639,10 @@ function App() {
         },
         body: formData
       });
+      
+      // 调试：查看实际发送的请求头
+      console.log('响应状态:', response.status);
+      console.log('响应头:', [...response.headers.entries()]);
 
       const data = await response.json();
 
