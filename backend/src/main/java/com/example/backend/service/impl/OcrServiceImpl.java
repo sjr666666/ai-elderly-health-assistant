@@ -91,9 +91,11 @@ public class OcrServiceImpl implements OcrService {
         logger.info("文件信息 - originalFilename: {}, contentType: {}, size: {}", 
                 originalFilename, file.getContentType(), file.getSize());
 
+        // 自动创建上传目录（如果不存在）
         Path uploadDir = Paths.get(uploadPath);
         if (!Files.exists(uploadDir)) {
             Files.createDirectories(uploadDir);
+            logger.info("自动创建上传目录: {}", uploadDir.toAbsolutePath());
         }
 
         String fileName = fileId + extension;

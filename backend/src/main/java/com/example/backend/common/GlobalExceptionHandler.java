@@ -48,9 +48,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ResponseResult<Void>> handleException(Exception e) {
-        logger.error("服务器内部错误", e);
+        logger.error("服务器内部错误: {}, 消息: {}", e.getClass().getName(), e.getMessage(), e);
+        String detailedMessage = e.getClass().getSimpleName() + ": " + e.getMessage();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ResponseResult.fail(ResponseCode.INTERNAL_ERROR));
+                .body(ResponseResult.fail(ResponseCode.INTERNAL_ERROR.getCode(), "系统内部错误: " + detailedMessage));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
