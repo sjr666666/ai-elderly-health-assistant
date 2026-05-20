@@ -9,7 +9,11 @@ module.exports = function(app) {
       secure: false,
       logLevel: 'debug',
       onProxyReq: (proxyReq, req, res) => {
-        console.log('[Proxy] Forwarding:', req.method, req.url, '->', proxyReq.path);
+        console.log('[Proxy] Forwarding:', req.method, req.url);
+        // 确保UTF-8编码
+        if (proxyReq.getHeader('Content-Type')) {
+          proxyReq.setHeader('Content-Type', 'application/json;charset=UTF-8');
+        }
       },
       onError: (err, req, res) => {
         console.error('[Proxy Error]', err.message);
