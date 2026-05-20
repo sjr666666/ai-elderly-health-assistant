@@ -52,6 +52,7 @@ public class DrugServiceImpl implements DrugService {
         CATEGORY_KEYWORDS.put("心脏病药", Arrays.asList("心脏", "心律", "心肌"));
         CATEGORY_KEYWORDS.put("抗过敏药", Arrays.asList("过敏", "皮肤痒", "荨麻疹"));
         CATEGORY_KEYWORDS.put("镇静催眠药", Arrays.asList("失眠", "睡眠", "安眠"));
+        CATEGORY_KEYWORDS.put("跌打损伤药", Arrays.asList("摔伤", "跌打", "扭伤", "撞伤", "骨折", "外伤", "瘀血", "肿痛", "活血", "化瘀"));
     }
 
     // 常见药品别名映射
@@ -61,22 +62,167 @@ public class DrugServiceImpl implements DrugService {
         DRUG_ALIASES.put("泰诺", "对乙酰氨基酚");
         DRUG_ALIASES.put("泰诺林", "对乙酰氨基酚");
         DRUG_ALIASES.put("百服宁", "对乙酰氨基酚");
+        DRUG_ALIASES.put("必理通", "对乙酰氨基酚");
+        // 布洛芬
         DRUG_ALIASES.put("芬必得", "布洛芬");
         DRUG_ALIASES.put("美林", "布洛芬");
         DRUG_ALIASES.put("安瑞克", "布洛芬");
+        DRUG_ALIASES.put("芬必得布洛芬", "布洛芬");
+        // 阿司匹林
         DRUG_ALIASES.put("乙酰水杨酸", "阿司匹林");
+        DRUG_ALIASES.put("拜阿司匹林", "阿司匹林");
+        DRUG_ALIASES.put("拜阿司匹灵", "阿司匹林");
+        // 硝苯地平
         DRUG_ALIASES.put("心痛定", "硝苯地平");
         DRUG_ALIASES.put("拜新同", "硝苯地平");
+        DRUG_ALIASES.put("伲福达", "硝苯地平");
+        // 二甲双胍
         DRUG_ALIASES.put("格华止", "二甲双胍");
+        DRUG_ALIASES.put("盐酸二甲双胍", "二甲双胍");
+        // 阿莫西林
         DRUG_ALIASES.put("阿莫仙", "阿莫西林");
         DRUG_ALIASES.put("安必仙", "阿莫西林");
+        DRUG_ALIASES.put("阿莫灵", "阿莫西林");
+        // 头孢克肟
         DRUG_ALIASES.put("世福素", "头孢克肟");
         DRUG_ALIASES.put("达力芬", "头孢克肟");
+        // 蒙脱石散
         DRUG_ALIASES.put("思密达", "蒙脱石散");
+        DRUG_ALIASES.put("蒙脱石", "蒙脱石散");
+        // 奥美拉唑
         DRUG_ALIASES.put("洛赛克", "奥美拉唑");
         DRUG_ALIASES.put("奥克", "奥美拉唑");
+        DRUG_ALIASES.put("奥美", "奥美拉唑");
+        // 氯雷他定
         DRUG_ALIASES.put("开瑞坦", "氯雷他定");
         DRUG_ALIASES.put("息斯敏", "氯雷他定");
+        DRUG_ALIASES.put("雷诺敏", "氯雷他定");
+        // 西替利嗪
+        DRUG_ALIASES.put("仙特明", "盐酸西替利嗪");
+        DRUG_ALIASES.put("西可韦", "盐酸西替利嗪");
+        // 氨氯地平
+        DRUG_ALIASES.put("络活喜", "苯磺酸氨氯地平");
+        DRUG_ALIASES.put("安内真", "苯磺酸氨氯地平");
+        // 氨溴索
+        DRUG_ALIASES.put("沐舒坦", "盐酸氨溴索");
+        DRUG_ALIASES.put("氨溴索", "盐酸氨溴索");
+        // 云南白药
+        DRUG_ALIASES.put("白药", "云南白药");
+        DRUG_ALIASES.put("白药气雾剂", "云南白药气雾剂");
+        // 藿香正气
+        DRUG_ALIASES.put("藿香正气", "藿香正气水");
+        DRUG_ALIASES.put("霍香正气", "藿香正气水");
+        // 板蓝根
+        DRUG_ALIASES.put("板兰根", "板蓝根");
+        // 葡萄糖酸钙
+        DRUG_ALIASES.put("钙片", "葡萄糖酸钙片");
+        DRUG_ALIASES.put("钙尔奇", "钙尔奇D片");
+        // 阿卡波糖
+        DRUG_ALIASES.put("拜糖平", "阿卡波糖");
+        // 格列齐特
+        DRUG_ALIASES.put("达美康", "格列齐特");
+        // 辛伐他汀
+        DRUG_ALIASES.put("舒降之", "辛伐他汀");
+        // 氯吡格雷
+        DRUG_ALIASES.put("波立维", "硫酸氢氯吡格雷");
+        // 阿托伐他汀
+        DRUG_ALIASES.put("立普妥", "阿托伐他汀钙");
+        // 丹参滴丸
+        DRUG_ALIASES.put("丹参滴丸", "复方丹参滴丸");
+        // 银杏叶
+        DRUG_ALIASES.put("银杏叶", "银杏叶片");
+        // 甲钴胺
+        DRUG_ALIASES.put("甲钴胺", "甲钴胺片");
+        DRUG_ALIASES.put("弥可保", "甲钴胺片");
+        // 多潘立酮
+        DRUG_ALIASES.put("吗丁啉", "多潘立酮");
+        // 泮托拉唑
+        DRUG_ALIASES.put("泮托拉唑", "泮托拉唑钠");
+        DRUG_ALIASES.put("潘妥洛克", "泮托拉唑钠");
+        // 左氧氟沙星
+        DRUG_ALIASES.put("可乐必妥", "左氧氟沙星");
+        DRUG_ALIASES.put("左克", "左氧氟沙星");
+        // 阿奇霉素
+        DRUG_ALIASES.put("希舒美", "阿奇霉素");
+        // 罗红霉素
+        DRUG_ALIASES.put("罗红霉素", "罗红霉素");
+        DRUG_ALIASES.put("仁苏", "罗红霉素");
+        // 甲硝唑
+        DRUG_ALIASES.put("甲硝唑", "甲硝唑");
+        DRUG_ALIASES.put("灭滴灵", "甲硝唑");
+        // 替硝唑
+        DRUG_ALIASES.put("替硝唑", "替硝唑");
+        // 克霉唑
+        DRUG_ALIASES.put("克霉唑", "克霉唑");
+        DRUG_ALIASES.put("凯妮汀", "克霉唑");
+        // 咪康唑
+        DRUG_ALIASES.put("咪康唑", "咪康唑");
+        DRUG_ALIASES.put("达克宁", "咪康唑");
+        // 特比萘芬
+        DRUG_ALIASES.put("特比萘芬", "特比萘芬");
+        DRUG_ALIASES.put("兰美抒", "特比萘芬");
+        // 炉甘石
+        DRUG_ALIASES.put("炉甘石", "炉甘石洗剂");
+        // 碘伏
+        DRUG_ALIASES.put("碘伏", "碘伏");
+        DRUG_ALIASES.put("碘酒", "碘伏");
+        // 酒精
+        DRUG_ALIASES.put("酒精", "乙醇");
+        // 生理盐水
+        DRUG_ALIASES.put("生理盐水", "氯化钠注射液");
+        // 葡萄糖
+        DRUG_ALIASES.put("葡萄糖", "葡萄糖注射液");
+        // 氯化钾
+        DRUG_ALIASES.put("氯化钾", "氯化钾");
+        // 维生素C
+        DRUG_ALIASES.put("维C", "维生素C");
+        DRUG_ALIASES.put("维生素C", "维生素C片");
+        // 维生素B
+        DRUG_ALIASES.put("维B", "复合维生素B");
+        DRUG_ALIASES.put("B族", "复合维生素B");
+        // 褪黑素
+        DRUG_ALIASES.put("褪黑素", "褪黑素片");
+        DRUG_ALIASES.put("脑白金", "褪黑素片");
+        // 安神补脑
+        DRUG_ALIASES.put("安神补脑", "安神补脑液");
+        // 养血安神
+        DRUG_ALIASES.put("养血安神", "养血安神片");
+        // 红花油
+        DRUG_ALIASES.put("红花油", "红花油");
+        DRUG_ALIASES.put("正红花油", "红花油");
+        // 正骨水
+        DRUG_ALIASES.put("正骨水", "正骨水");
+        // 扶他林
+        DRUG_ALIASES.put("扶他林", "双氯芬酸二乙胺");
+        DRUG_ALIASES.put("双氯芬酸", "双氯芬酸钠");
+        // 派瑞松
+        DRUG_ALIASES.put("派瑞松", "曲安奈德益康唑");
+        // 百多邦
+        DRUG_ALIASES.put("百多邦", "莫匹罗星");
+        // 皮炎平
+        DRUG_ALIASES.put("皮炎平", "复方醋酸地塞米松");
+        // 珍视明
+        DRUG_ALIASES.put("珍视明", "四味珍层冰硼滴眼液");
+        DRUG_ALIASES.put("珍珠明目", "珍珠明目滴眼液");
+        // 氯霉素
+        DRUG_ALIASES.put("氯霉素", "氯霉素滴眼液");
+        // 玻璃酸钠
+        DRUG_ALIASES.put("玻璃酸钠", "玻璃酸钠滴眼液");
+        DRUG_ALIASES.put("海露", "玻璃酸钠滴眼液");
+        // 茶苯海明
+        DRUG_ALIASES.put("茶苯海明", "茶苯海明片");
+        DRUG_ALIASES.put("乘晕宁", "茶苯海明片");
+        // 地芬尼多
+        DRUG_ALIASES.put("地芬尼多", "盐酸地芬尼多");
+        DRUG_ALIASES.put("眩晕停", "盐酸地芬尼多");
+        // 清开灵
+        DRUG_ALIASES.put("清开灵", "清开灵颗粒");
+        // 小儿氨酚黄那敏
+        DRUG_ALIASES.put("小儿氨酚黄那敏", "小儿氨酚黄那敏颗粒");
+        DRUG_ALIASES.put("小快克", "小儿氨酚黄那敏颗粒");
+        // 小儿肺热咳喘
+        DRUG_ALIASES.put("小儿肺热咳喘", "小儿肺热咳喘口服液");
+        DRUG_ALIASES.put("葵花肺热咳喘", "小儿肺热咳喘口服液");
     }
 
     @Override
@@ -222,11 +368,18 @@ public class DrugServiceImpl implements DrugService {
             return Collections.emptyList();
         }
 
-        String normalizedKeyword = keyword.trim().toLowerCase();
+        // 最小搜索长度限制
+        String trimmedKeyword = keyword.trim();
+        if (trimmedKeyword.length() < 2) {
+            logger.info("搜索关键词太短（少于2个字符），返回空结果");
+            return Collections.emptyList();
+        }
+
+        String normalizedKeyword = trimmedKeyword.toLowerCase();
         List<DrugSearchResponse> results = new ArrayList<>();
         Set<String> seenDrugs = new HashSet<>(); // 去重
 
-        // 1. 先检查是否为类别关键词
+        // 1. 先检查是否为类别关键词（要求完整匹配或至少包含完整的关键词）
         String matchedCategory = matchCategory(normalizedKeyword);
         if (matchedCategory != null) {
             logger.info("匹配到药品类别: {}", matchedCategory);
@@ -252,17 +405,24 @@ public class DrugServiceImpl implements DrugService {
             }
         });
 
-        // 4. 如果数据库没有结果，使用AI搜索作为补充
-        if (results.isEmpty()) {
+        // 4. 过滤掉匹配度太低的结果（只保留匹配度>=0.3的结果）
+        List<DrugSearchResponse> filteredResults = results.stream()
+                .filter(r -> r.getMatchScore() == null || r.getMatchScore() >= 0.3)
+                .collect(Collectors.toList());
+
+        // 5. 如果数据库没有结果，使用AI搜索作为补充
+        if (filteredResults.isEmpty()) {
             logger.info("数据库未找到匹配结果，尝试AI搜索");
             return searchDrugsWithAI(keyword);
         }
 
         // 按匹配度排序
-        results.sort((a, b) -> Double.compare(b.getMatchScore(), a.getMatchScore()));
+        filteredResults.sort((a, b) -> Double.compare(
+                b.getMatchScore() != null ? b.getMatchScore() : 0, 
+                a.getMatchScore() != null ? a.getMatchScore() : 0));
 
-        logger.info("智能搜索完成，找到 {} 个结果", results.size());
-        return results;
+        logger.info("智能搜索完成，找到 {} 个结果", filteredResults.size());
+        return filteredResults;
     }
 
     @Override
@@ -270,6 +430,13 @@ public class DrugServiceImpl implements DrugService {
         logger.info("使用AI搜索药品 - keyword: {}", keyword);
 
         if (keyword == null || keyword.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 最小搜索长度限制
+        String trimmedKeyword = keyword.trim();
+        if (trimmedKeyword.length() < 2) {
+            logger.info("AI搜索关键词太短（少于2个字符），返回空结果");
             return Collections.emptyList();
         }
 

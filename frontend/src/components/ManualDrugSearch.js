@@ -308,22 +308,6 @@ function ManualDrugSearch({ onSelectDrug }) {
   };
 
   useEffect(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    debounceRef.current = setTimeout(() => {
-      searchDrugs(searchQuery);
-    }, 200);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
     const handleKeyDown = (e) => {
       if (!showResults || searchResults.length === 0) return;
 
@@ -357,7 +341,10 @@ function ManualDrugSearch({ onSelectDrug }) {
   useEffect(() => {
     const handleClickOutside = (e) => {
       const searchContainer = document.querySelector('.manual-search-container');
-      if (searchContainer && !searchContainer.contains(e.target)) {
+      const resultsContainer = document.querySelector('.manual-search-results');
+      // 点击搜索容器内部或搜索结果列表内部不关闭
+      if (searchContainer && !searchContainer.contains(e.target) && 
+          (!resultsContainer || !resultsContainer.contains(e.target))) {
         setShowResults(false);
       }
     };
@@ -367,21 +354,15 @@ function ManualDrugSearch({ onSelectDrug }) {
   }, []);
 
   const handleSelectDrug = (drug) => {
-    // 关闭搜索结果列表，避免弹窗时列表仍显示
+    // 关闭搜索结果列表
     setShowResults(false);
     setSelectedIndex(-1);
     
-    if (drug.matchScore && drug.matchScore < 0.8) {
-      setConfirmingDrug(drug);
-      setShowConfirmModal(true);
-    } else {
-      confirmAndSelect(drug);
-    }
+    // 直接确认选择，不显示确认弹窗
+    confirmAndSelect(drug);
   };
 
   const confirmAndSelect = (drug) => {
-    setShowConfirmModal(false);
-    setConfirmingDrug(null);
     setShowResults(false);
     setSearchQuery('');
     setIsLoading(true);
@@ -656,13 +637,13 @@ function ManualDrugSearch({ onSelectDrug }) {
             alignItems: 'center',
             gap: '8px'
           }}>
-            💡 提示：请点击"搜索识别"按钮或按 Enter 键搜索"【{searchQuery}】"
+            � 提示：请点击"搜索识别"按钮或按 Enter 键搜索"【{searchQuery}】"
           </p>
         </div>
       )}
 
       {showResults && searchResults.length > 0 && (
-        <div style={{
+        <div className="manual-search-results" style={{
           position: 'absolute',
           top: 'calc(100% + 8px)',
           left: 0,
@@ -808,12 +789,12 @@ function ManualDrugSearch({ onSelectDrug }) {
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
           padding: '32px',
           textAlign: 'center',
-          border: '2px solid #FF9800'
+          border: '2px solid #E0E0E0'
         }}>
           <div style={{
             width: '80px',
             height: '80px',
-            background: 'linear-gradient(135deg, #FFE0B2 0%, #FFCC80 100%)',
+            background: 'linear-gradient(135deg, #F5F5F5 0%, #E0E0E0 100%)',
             borderRadius: '50%',
             display: 'flex',
             alignItems: 'center',
@@ -821,15 +802,15 @@ function ManualDrugSearch({ onSelectDrug }) {
             margin: '0 auto 20px',
             fontSize: '40px'
           }}>
-            🔍
+            �
           </div>
           <h3 style={{
             fontSize: '20px',
             fontWeight: '700',
-            color: '#E65100',
+            color: '#616161',
             margin: '0 0 12px 0'
           }}>
-            未找到匹配的药品
+            暂无相关信息
           </h3>
           <p style={{
             fontSize: '16px',
@@ -850,19 +831,42 @@ function ManualDrugSearch({ onSelectDrug }) {
               margin: '0 0 8px 0',
               fontWeight: '600'
             }}>
-              💡 建议尝试：
+              � 建议上传药品图片进行识别
             </p>
-            <ul style={{
+            <p style={{
               fontSize: '14px',
               color: '#6B6B6B',
               margin: 0,
+              lineHeight: '1.5'
+            }}>
+              如果您有药品包装盒照片，可以尝试使用页面上方的图片识别功能，通过拍照或上传图片来识别药品信息。
+            </p>
+          </div>
+          <div style={{
+            marginTop: '16px',
+            padding: '12px',
+            background: '#E3F2FD',
+            borderRadius: '12px'
+          }}>
+            <p style={{
+              fontSize: '14px',
+              color: '#1976D2',
+              margin: '0 0 8px 0',
+              fontWeight: '600'
+            }}>
+              💡 也可以尝试：
+            </p>
+            <ul style={{
+              fontSize: '13px',
+              color: '#424242',
+              margin: 0,
               paddingLeft: '20px',
-              textAlign: 'left'
+              textAlign: 'left',
+              lineHeight: '1.6'
             }}>
               <li>使用更通用的类别名称（如：感冒药、止痛药）</li>
               <li>尝试输入具体药品名称（如：布洛芬、阿莫西林）</li>
               <li>使用症状描述（如：发烧、头痛、胃痛）</li>
-              <li>使用商品名别名（如：泰诺、芬必得）</li>
             </ul>
           </div>
           <button
@@ -874,191 +878,24 @@ function ManualDrugSearch({ onSelectDrug }) {
               marginTop: '20px',
               padding: '12px 24px',
               fontSize: '16px',
-              border: 'none',
+              border: '2px solid #E0E0E0',
               borderRadius: '12px',
-              background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
-              color: 'white',
+              background: 'white',
+              color: '#616161',
               cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 4px 16px rgba(255, 152, 0, 0.3)'
+              transition: 'all 0.3s ease'
             }}
             onMouseEnter={(e) => {
-              e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = '0 6px 20px rgba(255, 152, 0, 0.4)';
+              e.target.style.borderColor = '#4A90E2';
+              e.target.style.color = '#4A90E2';
             }}
             onMouseLeave={(e) => {
-              e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = '0 4px 16px rgba(255, 152, 0, 0.3)';
+              e.target.style.borderColor = '#E0E0E0';
+              e.target.style.color = '#616161';
             }}
           >
-            重新搜索
+            返回重新搜索
           </button>
-        </div>
-      )}
-
-      {showConfirmModal && confirmingDrug && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          minHeight: '100vh',
-          minWidth: '100vw',
-          background: 'radial-gradient(ellipse at center, rgba(74, 144, 226, 0.15) 0%, rgba(0, 0, 0, 0.45) 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9998,
-          padding: '24px',
-          margin: 0,
-          overflow: 'hidden',
-          WebkitBackdropFilter: 'blur(12px)',
-          backdropFilter: 'blur(12px)',
-          WebkitOverflowScrolling: 'touch',
-          touchAction: 'none'
-        }}>
-          <div style={{
-            background: 'linear-gradient(145deg, #FFFFFF 0%, #F8F9FA 100%)',
-            borderRadius: '28px',
-            padding: '36px',
-            width: '100%',
-            maxWidth: '480px',
-            boxShadow: '0 24px 72px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.9) inset',
-            animation: 'fadeInUp 0.3s ease-out',
-            WebkitAnimation: 'fadeInUp 0.3s ease-out'
-          }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                width: '80px',
-                height: '80px',
-                background: 'linear-gradient(135deg, #FFD54F 0%, #FFA000 100%)',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 20px'
-              }}>
-                <span style={{ fontSize: '40px' }}>❓</span>
-              </div>
-              <h3 style={{
-                fontSize: '24px',
-                fontWeight: '700',
-                color: '#3D3D3D',
-                margin: '0 0 12px 0'
-              }}>
-                确认选择
-              </h3>
-              <p style={{
-                fontSize: '16px',
-                color: '#6B6B6B',
-                margin: 0
-              }}>
-                系统匹配到以下药品，是否确认选择？
-              </p>
-            </div>
-
-            <div style={{
-              marginTop: '24px',
-              padding: '20px',
-              background: 'linear-gradient(135deg, #E3F2FD 0%, #F1F8E9 100%)',
-              borderRadius: '16px',
-              border: '2px solid #4A90E2'
-            }}>
-              <p style={{
-                fontSize: '20px',
-                fontWeight: '700',
-                color: '#3D3D3D',
-                margin: '0 0 8px 0'
-              }}>
-                {confirmingDrug.drugName || confirmingDrug.genericName}
-              </p>
-              <p style={{
-                fontSize: '16px',
-                color: '#6B6B6B',
-                margin: '4px 0'
-              }}>
-                规格：{confirmingDrug.specification || confirmingDrug.spec || '未知'}
-              </p>
-              <p style={{
-                fontSize: '16px',
-                color: '#6B6B6B',
-                margin: '4px 0'
-              }}>
-                厂家：{confirmingDrug.manufacturer || '未知'}
-              </p>
-              {confirmingDrug.matchScore && (
-                <p style={{
-                  fontSize: '16px',
-                  color: '#E65100',
-                  margin: '8px 0 0 0'
-                }}>
-                  匹配度：{Math.round(confirmingDrug.matchScore * 100)}%
-                </p>
-              )}
-            </div>
-
-            <div style={{
-              display: 'flex',
-              gap: '16px',
-              marginTop: '24px'
-            }}>
-              <button
-                onClick={() => {
-                  setShowConfirmModal(false);
-                  setConfirmingDrug(null);
-                }}
-                style={{
-                  flex: 1,
-                  padding: '16px',
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  border: '2px solid #F0EBE3',
-                  borderRadius: '16px',
-                  background: 'white',
-                  color: '#6B6B6B',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.borderColor = '#4A90E2';
-                  e.target.style.color = '#4A90E2';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.borderColor = '#F0EBE3';
-                  e.target.style.color = '#6B6B6B';
-                }}
-              >
-                重新搜索
-              </button>
-              <button
-                onClick={() => confirmAndSelect(confirmingDrug)}
-                style={{
-                  flex: 2,
-                  padding: '16px',
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  border: 'none',
-                  borderRadius: '16px',
-                  background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
-                  color: 'white',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 4px 16px rgba(74, 144, 226, 0.3)'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.transform = 'translateY(-2px)';
-                  e.target.style.boxShadow = '0 6px 20px rgba(74, 144, 226, 0.4)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.transform = 'translateY(0)';
-                  e.target.style.boxShadow = '0 4px 16px rgba(74, 144, 226, 0.3)';
-                }}
-              >
-                ✅ 确认选择
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>
