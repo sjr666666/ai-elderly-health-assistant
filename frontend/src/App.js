@@ -280,6 +280,7 @@ function App() {
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
+      console.log('文件选择:', file.name, file.type);
       const reader = new FileReader();
       reader.onload = (e) => {
         setImagePreview(e.target.result);
@@ -292,6 +293,11 @@ function App() {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
+    
+    // 关键：阻止浏览器默认的文件打开行为
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
   };
 
   const handleDragLeave = (e) => {
@@ -316,14 +322,27 @@ function App() {
       const reader = new FileReader();
       reader.onload = (e) => {
         setImagePreview(e.target.result);
+        
+        // 同时更新隐藏的文件输入（确保后续分析函数能正确获取文件）
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInputRef.current.files = dt.files;
+        
+        console.log('拖拽文件已设置:', file.name, file.type);
+        
+        // 自动开始识别
+        setTimeout(() => {
+          analyzeImage();
+        }, 100);
       };
       reader.readAsDataURL(file);
-      
-      // 同时更新隐藏的文件输入
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      fileInputRef.current.files = dt.files;
+    } else {
+      console.warn('拖拽的文件不是图片类型');
+      alert('请选择图片文件！');
     }
+    
+    // 确保焦点回到窗口，关闭可能的文件对话框
+    window.focus();
   };
 
   const handleDragEnter = (e) => {
@@ -331,6 +350,26 @@ function App() {
     e.stopPropagation();
     setIsDragging(true);
   };
+
+  // 全局阻止拖拽默认行为，防止文件被浏览器打开
+  useEffect(() => {
+    const preventDefault = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    // 阻止所有拖拽的默认行为
+    document.addEventListener('dragover', preventDefault);
+    document.addEventListener('dragenter', preventDefault);
+    document.addEventListener('drop', preventDefault);
+
+    return () => {
+      // 组件卸载时移除监听器
+      document.removeEventListener('dragover', preventDefault);
+      document.removeEventListener('dragenter', preventDefault);
+      document.removeEventListener('drop', preventDefault);
+    };
+  }, []);
 
   const audioRef = useRef(null);
 
@@ -604,6 +643,11 @@ function App() {
   };
 
   const analyzeImage = async () => {
+    console.log('=== 分析图片 ===');
+    console.log('fileInputRef.current:', fileInputRef.current);
+    console.log('fileInputRef.current?.files:', fileInputRef.current?.files);
+    console.log('fileInputRef.current?.files[0]:', fileInputRef.current?.files[0]);
+    
     if (!fileInputRef.current?.files[0]) {
       alert('请先选择图片');
       return;
