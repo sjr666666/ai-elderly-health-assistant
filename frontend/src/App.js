@@ -631,7 +631,8 @@ function App() {
       }
 
       // 不设置Content-Type，让浏览器自动处理
-      const response = await fetch('/api/v1/drug/recognize/upload', {
+      // 直接调用后端API，绕过代理的multipart问题
+      const response = await fetch('http://localhost:8080/api/v1/drug/recognize/upload', {
         method: 'POST',
         headers: {
           'X-User-Id': user?.userId || '1'

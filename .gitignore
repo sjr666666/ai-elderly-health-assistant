@@ -64,3 +64,4 @@ dist/
 # OS
 Thumbs.db
 Desktop.ini
+backend/uploads/
