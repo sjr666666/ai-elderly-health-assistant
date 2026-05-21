@@ -232,12 +232,6 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
     setShowContactModal(true);
   };
 
-  // 复制到剪贴板
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    alert('已复制到剪贴板');
-  };
-
   // 格式化消息文本（老年友好优化版本）
   const formatMessageText = (text) => {
     // 处理AI回复，使用更好的格式
