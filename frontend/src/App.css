@@ -3001,6 +3001,13 @@ body {
   font-weight: 600;
 }
 
+.radio-primary {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: var(--tech-blue);
+}
+
 .contact-details {
   display: flex;
   gap: 24px;
@@ -3175,6 +3182,44 @@ body {
   background: var(--tech-blue-light);
   border-color: var(--tech-blue-dark);
   color: white;
+}
+
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.btn-edit-primary {
+  width: 100%;
+  padding: 20px;
+  background: white;
+  border: 3px dashed var(--warning-orange);
+  border-radius: var(--radius-medium);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--warning-orange);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-edit-primary:hover {
+  background: var(--warning-orange-light);
+  border-color: var(--warning-orange);
+  color: var(--warning-orange);
+}
+
+.edit-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.edit-actions .btn {
+  flex: 1;
+  min-height: 48px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .add-contact-form {
@@ -3485,11 +3530,17 @@ body {
 /* ============ SUCCESS TOAST ============ */
 .success-toast {
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   z-index: 9999;
   animation: toastFadeIn 0.3s ease;
+  backdrop-filter: blur(4px);
 }
 
 .success-toast-content {

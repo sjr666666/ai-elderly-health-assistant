@@ -74,17 +74,17 @@ const ContactModal = ({ isOpen, onClose, contacts }) => {
                   <div className="global-contact-info">
                     <div className="global-contact-name">
                       {contact.name}
-                      {contact.isPrimary && <span className="global-primary-tag">主要</span>}
+                      {contact.isPrimary === 1 && <span className="global-primary-tag">主要</span>}
                     </div>
-                    <div className="global-contact-phone">📱 {contact.phone}</div>
-                    <div className="global-contact-relation">👨‍👩‍ {contact.relationship}</div>
+                    <div className="global-contact-phone"> {contact.phone}</div>
+                    {contact.relationship && <div className="global-contact-relation">👨‍👩 {contact.relationship}</div>}
                   </div>
                   <div className="global-contact-actions">
                     <button
                       className="global-copy-btn"
                       onClick={() => copyToClipboard(contact.phone)}
                     >
-                      📋 复制电话号码
+                       复制电话号码
                     </button>
                   </div>
                 </div>
