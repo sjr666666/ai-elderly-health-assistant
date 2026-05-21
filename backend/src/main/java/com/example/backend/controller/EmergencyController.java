@@ -2,7 +2,9 @@ package com.example.backend.controller;
 
 import com.example.backend.common.ResponseResult;
 import com.example.backend.model.entity.AiConversationLog;
+import com.example.backend.model.entity.EmergencyContact;
 import com.example.backend.service.AiConversationLogService;
+import com.example.backend.service.EmergencyContactService;
 import com.example.backend.service.impl.AiEmergencyServiceImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,11 +27,14 @@ public class EmergencyController {
 
     private final AiEmergencyServiceImpl aiEmergencyService;
     private final AiConversationLogService conversationLogService;
+    private final EmergencyContactService emergencyContactService;
 
     public EmergencyController(AiEmergencyServiceImpl aiEmergencyService,
-                               AiConversationLogService conversationLogService) {
+                               AiConversationLogService conversationLogService,
+                               EmergencyContactService emergencyContactService) {
         this.aiEmergencyService = aiEmergencyService;
         this.conversationLogService = conversationLogService;
+        this.emergencyContactService = emergencyContactService;
     }
 
     /**
@@ -134,5 +139,31 @@ public class EmergencyController {
         status.put("service", "AI紧急助手服务");
         status.put("timestamp", System.currentTimeMillis());
         return ResponseEntity.ok(status);
+    }
+
+    /**
+     * 根据老人ID获取紧急联系人
+     *
+     * @param elderId 老人ID
+     * @return 紧急联系人信息
+     */
+    @GetMapping("/emergency-contact")
+    public ResponseResult<EmergencyContact> getContactByElderId(@RequestParam("elderId") Long elderId) {
+        logger.info("获取紧急联系人请求 - elderId: {}", elderId);
+        EmergencyContact contact = emergencyContactService.getContactByElderId(elderId);
+        return ResponseResult.success(contact);
+    }
+
+    /**
+     * 更新紧急联系人信息
+     *
+     * @param contact 紧急联系人信息
+     * @return 更新后的紧急联系人信息
+     */
+    @PutMapping("/emergency-contact")
+    public ResponseResult<EmergencyContact> updateContact(@RequestBody EmergencyContact contact) {
+        logger.info("更新紧急联系人请求 - id: {}, elderId: {}", contact.getId(), contact.getElderId());
+        EmergencyContact updatedContact = emergencyContactService.updateContact(contact);
+        return ResponseResult.success(updatedContact);
     }
 }

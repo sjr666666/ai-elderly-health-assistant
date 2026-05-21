@@ -144,7 +144,6 @@ function App() {
 
   const handleDeleteContact = (id) => {
     setEmergencyContacts(emergencyContacts.filter(c => c.id !== id));
-    alert('✅ 联系人已删除！');
   };
 
   // 打开药品详情弹窗
@@ -1988,6 +1987,11 @@ function App() {
           onAdd={handleAddContact}
           onDelete={handleDeleteContact}
           onClose={() => setShowAddContact(false)}
+          onShowToast={(msg) => {
+            setToastMessage(msg);
+            setShowSuccessToast(true);
+            setTimeout(() => setShowSuccessToast(false), 2000);
+          }}
         />
       )}
 
