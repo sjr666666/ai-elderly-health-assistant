@@ -3,6 +3,7 @@ package com.example.backend.model.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 /**
  * 紧急联系人实体类
@@ -12,16 +13,11 @@ import lombok.Data;
  * @since 1.0.0
  */
 @Data
+@EqualsAndHashCode(callSuper = true)
 @TableName("emergency_contact")
-public class EmergencyContact {
+public class EmergencyContact extends BaseEntity {
 
     private static final long serialVersionUID = 1L;
-
-    /**
-     * 主键ID
-     */
-    @TableId(type = IdType.AUTO)
-    private Long id;
 
     /**
      * 所属老人ID
