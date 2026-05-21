@@ -1,8 +1,8 @@
 package com.example.backend.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 
 /**
  * 紧急联系人实体类
@@ -12,11 +12,16 @@ import lombok.EqualsAndHashCode;
  * @since 1.0.0
  */
 @Data
-@EqualsAndHashCode(callSuper = true)
 @TableName("emergency_contact")
-public class EmergencyContact extends BaseEntity {
+public class EmergencyContact {
 
     private static final long serialVersionUID = 1L;
+
+    /**
+     * 主键ID
+     */
+    @TableId(type = IdType.AUTO)
+    private Long id;
 
     /**
      * 所属老人ID
@@ -58,21 +63,6 @@ public class EmergencyContact extends BaseEntity {
      * 0表示否，1表示是，默认值为0
      */
     @TableField("is_primary")
+    @JsonProperty("isPrimary")
     private Integer isPrimary;
-
-    /**
-     * 判断是否为主要联系人
-     * @return true表示是主要联系人，false表示不是
-     */
-    public boolean isPrimary() {
-        return isPrimary != null && isPrimary == 1;
-    }
-
-    /**
-     * 设置是否为主要联系人
-     * @param primary true表示设为主要联系人，false表示设为非主要联系人
-     */
-    public void setPrimary(boolean primary) {
-        this.isPrimary = primary ? 1 : 0;
-    }
 }

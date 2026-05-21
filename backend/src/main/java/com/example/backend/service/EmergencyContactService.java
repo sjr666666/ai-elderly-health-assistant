@@ -2,7 +2,16 @@ package com.example.backend.service;
 
 import com.example.backend.model.entity.EmergencyContact;
 
+import java.util.List;
+
 public interface EmergencyContactService {
+
+    /**
+     * 根据老人ID获取所有紧急联系人
+     * @param elderId 老人ID
+     * @return 紧急联系人列表
+     */
+    List<EmergencyContact> getContactsByElderId(Long elderId);
 
     /**
      * 根据老人ID获取紧急联系人
@@ -25,4 +34,11 @@ public interface EmergencyContactService {
      * @return 保存后的紧急联系人
      */
     EmergencyContact saveContact(EmergencyContact contact);
+
+    /**
+     * 删除紧急联系人
+     * @param id 联系人ID
+     * @return 删除成功返回true，失败返回false
+     */
+    boolean deleteContact(Long id);
 }

@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class EmergencyContactServiceImpl implements EmergencyContactService {
 
@@ -19,6 +21,23 @@ public class EmergencyContactServiceImpl implements EmergencyContactService {
     @Autowired
     public EmergencyContactServiceImpl(EmergencyContactRepository emergencyContactRepository) {
         this.emergencyContactRepository = emergencyContactRepository;
+    }
+
+    @Override
+    public List<EmergencyContact> getContactsByElderId(Long elderId) {
+        logger.info("获取所有紧急联系人 - elderId: {}", elderId);
+
+        LambdaQueryWrapper<EmergencyContact> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(EmergencyContact::getElderId, elderId);
+        queryWrapper.orderByDesc(EmergencyContact::getIsPrimary);
+
+        List<EmergencyContact> contacts = emergencyContactRepository.selectList(queryWrapper);
+
+        logger.info("找到 {} 个紧急联系人 - elderId: {}", contacts.size(), elderId);
+        contacts.forEach(contact -> 
+            logger.info("联系人 - id: {}, name: {}, isPrimary: {}", contact.getId(), contact.getName(), contact.getIsPrimary())
+        );
+        return contacts;
     }
 
     @Override
@@ -59,5 +78,20 @@ public class EmergencyContactServiceImpl implements EmergencyContactService {
 
         logger.info("紧急联系人保存成功 - id: {}", contact.getId());
         return contact;
+    }
+
+    @Override
+    public boolean deleteContact(Long id) {
+        logger.info("删除紧急联系人 - id: {}", id);
+
+        int result = emergencyContactRepository.deleteById(id);
+
+        if (result > 0) {
+            logger.info("紧急联系人删除成功 - id: {}", id);
+            return true;
+        } else {
+            logger.warn("删除紧急联系人失败 - id: {}", id);
+            return false;
+        }
     }
 }

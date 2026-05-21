@@ -1,6 +1,8 @@
 package com.example.backend.controller;
 
 import com.example.backend.common.ResponseResult;
+import com.example.backend.model.dto.AddContactRequest;
+import com.example.backend.model.dto.AddContactResponse;
 import com.example.backend.model.entity.AiConversationLog;
 import com.example.backend.model.entity.EmergencyContact;
 import com.example.backend.service.AiConversationLogService;
@@ -155,6 +157,20 @@ public class EmergencyController {
     }
 
     /**
+     * 获取所有紧急联系人列表
+     * GET /api/v1/contacts
+     *
+     * @param elderId 老人ID
+     * @return 紧急联系人列表
+     */
+    @GetMapping(value = "/v1/contacts", produces = "application/json;charset=UTF-8")
+    public ResponseResult<List<EmergencyContact>> getContactsByElderId(@RequestParam("elderId") Long elderId) {
+        logger.info("获取所有紧急联系人请求 - elderId: {}", elderId);
+        List<EmergencyContact> contacts = emergencyContactService.getContactsByElderId(elderId);
+        return ResponseResult.success(contacts);
+    }
+
+    /**
      * 更新紧急联系人信息
      *
      * @param contact 紧急联系人信息
@@ -162,8 +178,70 @@ public class EmergencyController {
      */
     @PutMapping("/emergency-contact")
     public ResponseResult<EmergencyContact> updateContact(@RequestBody EmergencyContact contact) {
-        logger.info("更新紧急联系人请求 - id: {}, elderId: {}", contact.getId(), contact.getElderId());
+        logger.info("更新紧急联系人请求 - id: {}, elderId: {}, isPrimary: {}", contact.getId(), contact.getElderId(), contact.getIsPrimary());
         EmergencyContact updatedContact = emergencyContactService.updateContact(contact);
         return ResponseResult.success(updatedContact);
+    }
+
+    /**
+     * 添加联系人
+     * POST /api/v1/contacts
+     *
+     * @param request 联系人信息
+     * @return 添加结果
+     */
+    @PostMapping(value = "/v1/contacts", produces = "application/json;charset=UTF-8")
+    public ResponseResult<AddContactResponse> addContact(@RequestBody AddContactRequest request) {
+        logger.info("添加联系人请求 - name: {}, elderId: {}", request.getName(), request.getElderId());
+
+        // 创建联系人实体
+        EmergencyContact contact = new EmergencyContact();
+        contact.setName(request.getName());
+        contact.setElderId(request.getElderId());
+        contact.setPhone(request.getPhone());
+        contact.setEmail(request.getEmail());
+        contact.setRelationship(request.getRelationship());
+        
+        // 检查该用户是否已经有主要联系人
+        EmergencyContact existingPrimary = emergencyContactService.getContactByElderId(request.getElderId());
+        if (existingPrimary == null) {
+            // 如果还没有主要联系人，则新添加的联系人自动成为主要联系人
+            contact.setIsPrimary(1);
+            logger.info("这是第一个联系人，自动设置为主要联系人");
+        } else {
+            // 如果已有主要联系人，新添加的不是主要联系人
+            contact.setIsPrimary(0);
+            logger.info("已存在主要联系人，新联系人不作为主要联系人");
+        }
+
+        // 保存联系人
+        EmergencyContact savedContact = emergencyContactService.saveContact(contact);
+
+        // 构建响应
+        AddContactResponse response = AddContactResponse.builder()
+                .contactId(savedContact.getId())
+                .build();
+
+        return ResponseResult.success("添加成功", response);
+    }
+
+    /**
+     * 删除联系人
+     * DELETE /api/v1/contacts/{id}
+     *
+     * @param id 联系人ID
+     * @return 删除结果
+     */
+    @DeleteMapping(value = "/v1/contacts/{id}", produces = "application/json;charset=UTF-8")
+    public ResponseResult<String> deleteContact(@PathVariable("id") Long id) {
+        logger.info("删除联系人请求 - id: {}", id);
+
+        boolean success = emergencyContactService.deleteContact(id);
+
+        if (success) {
+            return ResponseResult.success("已删除", null);
+        } else {
+            return ResponseResult.fail("删除失败，联系人不存在");
+        }
     }
 }

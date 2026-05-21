@@ -37,10 +37,7 @@ function App() {
   const [recognizedDrugs, setRecognizedDrugs] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
-  const [emergencyContacts, setEmergencyContacts] = useState([
-    { id: 1, name: '张小明', phone: '13800138000', relationship: '儿子', isPrimary: true },
-    { id: 2, name: '张小红', phone: '13900139000', relationship: '女儿', isPrimary: false }
-  ]);
+  const [emergencyContacts, setEmergencyContacts] = useState([]);
   const [showAddContact, setShowAddContact] = useState(false);
   const [showAddDrugModal, setShowAddDrugModal] = useState(false);
   const [showEditDrugModal, setShowEditDrugModal] = useState(false); // 编辑药品弹窗
@@ -107,8 +104,10 @@ function App() {
     setIsLoggedIn(true);
     
     // 登录成功后加载药箱列表
-    if (loginData.userId) {
+    if (loginData.id) {
       loadMedicineBoxList(loginData.userId);
+      // 加载紧急联系人列表（使用数据库主键ID）
+      loadEmergencyContacts(loginData.id);
     }
     
     if (loginData.needProfile) {
@@ -137,13 +136,37 @@ function App() {
     setTimeout(() => setShowSuccessToast(false), 2000);
   };
 
-  const handleAddContact = (contact) => {
-    setEmergencyContacts([...emergencyContacts, contact]);
-    alert('✅ 紧急联系人已添加！');
+  const handleAddContact = async () => {
+    // 刷新联系人列表
+    if (user && user.id) {
+      await loadEmergencyContacts(user.id);
+    }
   };
 
-  const handleDeleteContact = (id) => {
-    setEmergencyContacts(emergencyContacts.filter(c => c.id !== id));
+  const handleDeleteContact = async (id) => {
+    // 删除成功后重新加载联系人列表
+    if (user && user.id) {
+      await loadEmergencyContacts(user.id);
+    }
+  };
+
+  // 加载紧急联系人列表
+  const loadEmergencyContacts = async (id) => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/emergency/v1/contacts?elderId=${id}`);
+      const result = await response.json();
+      
+      if (result.code === 200 && result.data) {
+        // 设置联系人列表
+        setEmergencyContacts(result.data);
+      } else {
+        // 如果没有联系人，设置为空数组
+        setEmergencyContacts([]);
+      }
+    } catch (error) {
+      console.error('加载紧急联系人失败:', error);
+      setEmergencyContacts([]);
+    }
   };
 
   // 打开药品详情弹窗
@@ -1987,6 +2010,7 @@ function App() {
           onAdd={handleAddContact}
           onDelete={handleDeleteContact}
           onClose={() => setShowAddContact(false)}
+          userId={user?.id}
           onShowToast={(msg) => {
             setToastMessage(msg);
             setShowSuccessToast(true);
