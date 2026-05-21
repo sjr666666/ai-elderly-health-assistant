@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 
-function EmergencyContacts({ contacts, onAdd, onDelete, onClose }) {
+function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newContact, setNewContact] = useState({
     name: '',
     phone: '',
+    email: '',
     relationship: ''
   });
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [isClosingDialog, setIsClosingDialog] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
 
   const handleAddContact = () => {
     if (!newContact.name || !newContact.phone) {
@@ -19,15 +23,26 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose }) {
       id: Date.now(),
       isPrimary: contacts.length === 0
     });
-    setNewContact({ name: '', phone: '', relationship: '' });
+    setNewContact({ name: '', phone: '', email: '', relationship: '' });
     setShowAddForm(false);
   };
 
   const handleDeleteContact = (id) => {
-    const shouldDelete = window.confirm('确定要删除这个联系人吗？');
-    if (shouldDelete) {
-      onDelete(id);
-    }
+    setDeleteId(id);
+    setShowConfirmDialog(true);
+  };
+
+  const confirmDelete = () => {
+    setIsClosingDialog(true);
+    setTimeout(() => {
+      onDelete(deleteId);
+      setShowConfirmDialog(false);
+      setIsClosingDialog(false);
+      setDeleteId(null);
+    }, 200);
+    setTimeout(() => {
+      onShowToast && onShowToast('删除成功');
+    }, 300);
   };
 
   return (
@@ -55,6 +70,7 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose }) {
                     </div>
                     <div className="contact-details">
                       <span className="contact-item">📱 {contact.phone}</span>
+                      {contact.email && <span className="contact-item">✉️ {contact.email}</span>}
                       <span className="contact-item">👨‍👩‍ {contact.relationship}</span>
                     </div>
                   </div>
@@ -90,6 +106,17 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose }) {
                   value={newContact.phone}
                   onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
                   placeholder="请输入联系电话"
+                  className="form-input"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">邮箱</label>
+                <input
+                  type="email"
+                  value={newContact.email}
+                  onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
+                  placeholder="请输入邮箱地址（选填）"
                   className="form-input"
                 />
               </div>
@@ -136,6 +163,27 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose }) {
           )}
         </div>
       </div>
+
+      {showConfirmDialog && (
+        <div className={`confirm-dialog-overlay ${isClosingDialog ? 'confirm-dialog-overlay-closing' : ''}`}>
+          <div className={`confirm-dialog ${isClosingDialog ? 'confirm-dialog-closing' : ''}`}>
+            <div className="confirm-icon">⚠️</div>
+            <h3 className="confirm-title">确认删除</h3>
+            <p className="confirm-message">确定要删除这个联系人吗？此操作无法撤销。</p>
+            <div className="confirm-actions">
+              <button className="btn btn-cancel" onClick={() => {
+                setIsClosingDialog(true);
+                setTimeout(() => {
+                  setShowConfirmDialog(false);
+                  setIsClosingDialog(false);
+                }, 200);
+              }}>取消</button>
+              <button className="btn btn-delete-confirm" onClick={confirmDelete}>删除</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
