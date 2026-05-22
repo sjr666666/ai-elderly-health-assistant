@@ -73,7 +73,7 @@ public class PlanController {
      * 7.7 清空用户的所有用药计划（仅用于测试）
      */
     @DeleteMapping("/clear-all")
-    public ResponseResult<Void> clearAllPlans(@RequestParam Long userId) {
+    public ResponseResult<Void> clearAllPlans(@RequestParam(required = false) Long userId) {
         planService.clearAllPlans(userId);
         return ResponseResult.success("已清空所有用药计划", null);
     }

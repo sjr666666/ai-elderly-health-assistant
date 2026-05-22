@@ -429,22 +429,30 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
 
     @Override
     public void clearAllPlans(Long userId) {
-        // 根据雪花算法 user_id 查询实际的自增主键 id
-        LambdaQueryWrapper<SysUser> userQueryWrapper = new LambdaQueryWrapper<>();
-        userQueryWrapper.eq(SysUser::getUserId, userId);
-        SysUser user = userMapper.selectOne(userQueryWrapper);
+        int deletedCount;
         
-        if (user == null) {
-            throw new BusinessException(ResponseCode.PARAM_ERROR, "用户不存在");
+        if (userId == null) {
+            // 清空所有用户的用药计划
+            deletedCount = medicationPlanMapper.delete(null);
+            logger.info("已清空所有用药计划，共删除 {} 条记录", deletedCount);
+        } else {
+            // 根据雪花算法 user_id 查询实际的自增主键 id
+            LambdaQueryWrapper<SysUser> userQueryWrapper = new LambdaQueryWrapper<>();
+            userQueryWrapper.eq(SysUser::getUserId, userId);
+            SysUser user = userMapper.selectOne(userQueryWrapper);
+            
+            if (user == null) {
+                throw new BusinessException(ResponseCode.PARAM_ERROR, "用户不存在");
+            }
+            
+            Long actualUserId = user.getId();
+            
+            // 删除该用户的所有用药计划
+            LambdaQueryWrapper<MedicationPlan> queryWrapper = new LambdaQueryWrapper<>();
+            queryWrapper.eq(MedicationPlan::getUserId, actualUserId);
+            
+            deletedCount = medicationPlanMapper.delete(queryWrapper);
+            logger.info("已清空用户 {} 的所有用药计划，共删除 {} 条记录", userId, deletedCount);
         }
-        
-        Long actualUserId = user.getId();
-        
-        // 删除该用户的所有用药计划
-        LambdaQueryWrapper<MedicationPlan> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(MedicationPlan::getUserId, actualUserId);
-        
-        int deletedCount = medicationPlanMapper.delete(queryWrapper);
-        logger.info("已清空用户 {} 的所有用药计划，共删除 {} 条记录", userId, deletedCount);
     }
 }
