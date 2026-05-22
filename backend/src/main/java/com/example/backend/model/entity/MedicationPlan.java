@@ -17,12 +17,6 @@ import java.time.LocalDate;
 @EqualsAndHashCode(callSuper = true)
 @TableName("medication_plan")
 public class MedicationPlan extends BaseEntity {
-    // ==================== 非数据库字段，用于前端展示 ====================
-    /**
-     * 时段标签（代码中转换，不存数据库）
-     */
-    @TableField(exist = false)
-    private String timeSlotLabel;
 
     private static final long serialVersionUID = 1L;
 

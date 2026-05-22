@@ -75,6 +75,7 @@ public class UserServiceImpl implements UserService {
         }
 
         return UserLoginResponse.builder()
+                .id(user.getId())  // 添加数据库主键ID
                 .userId(String.valueOf(user.getUserId()))  // 转换为 String
                 .username(user.getUsername())
                 .realName(user.getRealName())

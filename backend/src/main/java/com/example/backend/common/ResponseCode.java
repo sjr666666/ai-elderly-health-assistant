@@ -4,6 +4,7 @@ package com.example.backend.common;
  * 响应状态码枚举
  */
 public enum ResponseCode {
+
     SUCCESS(200, "操作成功"),
     FAIL(500, "操作失败"),
     PARAM_ERROR(400, "参数错误"),
