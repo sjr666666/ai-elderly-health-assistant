@@ -168,7 +168,7 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
       for (const contact of updates) {
         console.log(`更新联系人 ${contact.name}，isPrimary:`, contact.isPrimary);
         
-        const response = await fetch(`http://localhost:8080/api/emergency/emergency-contact`, {
+        const response = await fetch(`/api/emergency/emergency-contact`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
