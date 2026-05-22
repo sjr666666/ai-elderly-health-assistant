@@ -29,7 +29,7 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('http://localhost:8080/api/emergency/v1/contacts', {
+      const response = await fetch('/api/emergency/v1/contacts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -72,7 +72,7 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
     
     try {
       console.log('开始删除联系人，ID:', deleteId);
-      const response = await fetch(`http://localhost:8080/api/emergency/v1/contacts/${deleteId}`, {
+      const response = await fetch(`/api/emergency/v1/contacts/${deleteId}`, {
         method: 'DELETE'
       });
 
@@ -168,7 +168,7 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
       for (const contact of updates) {
         console.log(`更新联系人 ${contact.name}，isPrimary:`, contact.isPrimary);
         
-        const response = await fetch(`http://localhost:8080/api/emergency/emergency-contact`, {
+        const response = await fetch(`/api/emergency/emergency-contact`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
