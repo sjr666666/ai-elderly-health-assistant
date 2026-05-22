@@ -107,7 +107,7 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
     }
 
     @Override
-    public ResponseResult<String> handleEmergencyQuestion(Long userId, String question, boolean isEmergency) {
+    public ResponseResult<String> handleEmergencyQuestion(Long userId, String question, boolean isEmergency, List<Map<String, String>> history) {
         if (question == null || question.trim().isEmpty()) {
             return ResponseResult.fail("请输入您的问题");
         }
@@ -116,8 +116,8 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
         boolean safetyPassed = true;
 
         try {
-            // 优先尝试调用AI
-            response = callDeepSeekAI(question, isEmergency);
+            // 优先尝试调用AI，传递历史对话
+            response = callDeepSeekAI(question, isEmergency, history);
 
             if (response == null || response.isEmpty()) {
                 // AI调用失败，使用离线应答
@@ -139,7 +139,7 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
     /**
      * 调用DeepSeek AI处理紧急问题
      */
-    private String callDeepSeekAI(String question, boolean isEmergency) {
+    private String callDeepSeekAI(String question, boolean isEmergency, List<Map<String, String>> history) {
         if (apiKey == null || apiKey.isEmpty()) {
             logger.warn("DeepSeek API Key未配置");
             return null;
@@ -157,17 +157,33 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
             requestBody.put("max_tokens", 500);
 
             String systemPrompt = buildSystemPrompt(isEmergency);
-            String userPrompt = question;
 
+            // 构建消息列表，包含系统提示、历史对话和当前问题
+            List<Map<String, String>> messages = new ArrayList<>();
+            
+            // 1. 系统提示
             Map<String, String> systemMessage = new HashMap<>();
             systemMessage.put("role", "system");
             systemMessage.put("content", systemPrompt);
+            messages.add(systemMessage);
 
+            // 2. 历史对话
+            if (history != null && !history.isEmpty()) {
+                for (Map<String, String> hist : history) {
+                    Map<String, String> histMessage = new HashMap<>();
+                    histMessage.put("role", hist.getOrDefault("role", "user"));
+                    histMessage.put("content", hist.getOrDefault("content", ""));
+                    messages.add(histMessage);
+                }
+            }
+
+            // 3. 当前用户问题
             Map<String, String> userMessage = new HashMap<>();
             userMessage.put("role", "user");
-            userMessage.put("content", userPrompt);
+            userMessage.put("content", question);
+            messages.add(userMessage);
 
-            requestBody.put("messages", new Object[]{systemMessage, userMessage});
+            requestBody.put("messages", messages);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);

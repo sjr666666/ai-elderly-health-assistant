@@ -47,6 +47,7 @@ public class EmergencyController {
         private String question;
         private Boolean isEmergency;
         private String category;
+        private List<Map<String, String>> history; // 对话历史，用于实现记忆功能
 
         public Long getUserId() { return userId; }
         public void setUserId(Long userId) { this.userId = userId; }
@@ -56,6 +57,8 @@ public class EmergencyController {
         public void setIsEmergency(Boolean isEmergency) { this.isEmergency = isEmergency; }
         public String getCategory() { return category; }
         public void setCategory(String category) { this.category = category; }
+        public List<Map<String, String>> getHistory() { return history; }
+        public void setHistory(List<Map<String, String>> history) { this.history = history; }
     }
 
     /**
@@ -70,15 +73,16 @@ public class EmergencyController {
         Long userId = request.getUserId();
         String question = request.getQuestion();
         Boolean isEmergency = request.getIsEmergency();
+        List<Map<String, String>> history = request.getHistory();
         
-        logger.info("收到紧急咨询请求 - 用户ID: {}, 问题: {}, 紧急标识: {}", 
-                userId, question, isEmergency);
+        logger.info("收到紧急咨询请求 - 用户ID: {}, 问题: {}, 紧急标识: {}, 历史记录数: {}", 
+                userId, question, isEmergency, history != null ? history.size() : 0);
 
         // 如果未指定是否紧急，自动判断
         boolean emergencyFlag = isEmergency != null ? isEmergency 
                                                     : aiEmergencyService.isEmergencyQuestion(question);
 
-        return aiEmergencyService.handleEmergencyQuestion(userId, question, emergencyFlag);
+        return aiEmergencyService.handleEmergencyQuestion(userId, question, emergencyFlag, history);
     }
 
     /**

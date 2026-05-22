@@ -149,6 +149,11 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
               question,
               isEmergency: isEmergency || emergencyMode,
               category: category.id,
+              // 传递对话历史以实现记忆功能
+              history: messages.map(msg => ({
+                role: msg.type === 'user' ? 'user' : 'assistant',
+                content: msg.text
+              })),
             }),
             signal: controller.signal,
           });
