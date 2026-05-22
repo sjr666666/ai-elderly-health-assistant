@@ -11,7 +11,6 @@ function AddDrugModal({ onClose, onAdd, userId }) {
 
   // 创建输入框引用
   const drugSelectRef = useRef(null);
-  const dosageRef = useRef(null);
   const frequencyRef = useRef(null);
   const startDateRef = useRef(null);
   const endDateRef = useRef(null);
@@ -20,7 +19,8 @@ function AddDrugModal({ onClose, onAdd, userId }) {
 
   // 表单状态
   const [selectedDrugId, setSelectedDrugId] = useState('');
-  const [dosage, setDosage] = useState('');
+  const [dosageAmount, setDosageAmount] = useState('1'); // 剂量数值
+  const [dosageUnit, setDosageUnit] = useState('片'); // 剂量单位
   const [frequency, setFrequency] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -28,6 +28,20 @@ function AddDrugModal({ onClose, onAdd, userId }) {
   const [totalQuantity, setTotalQuantity] = useState(''); // 新增：总数量
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 常见剂量选项
+  const dosageAmountOptions = [
+    '0.25', '0.5', '1', '1.5', '2', '2.5', '3', '4', '5',
+    '6', '7', '8', '9', '10', '12', '15', '20', '25', '30',
+    '50', '60', '100', '150', '200', '250', '500', '1000'
+  ];
+
+  // 剂量单位选项
+  const dosageUnitOptions = [
+    '片', '粒', '丸', '颗', '胶囊', '瓶', '支', '盒', '袋',
+    'ml', 'g', 'mg', 'μg', 'IU', '单位', '喷', '滴', '贴',
+    '膏', '栓', '锭', '糖浆', '口服液', '针'
+  ];
 
   // 弹窗打开时自动加载药品数据
   useEffect(() => {
@@ -98,15 +112,6 @@ function AddDrugModal({ onClose, onAdd, userId }) {
       drugSelectRef.current.setCustomValidity('');
     }
 
-    if (!dosage.trim()) {
-      dosageRef.current.setCustomValidity('请填写每次用量');
-      dosageRef.current.reportValidity();
-      dosageRef.current.focus();
-      return;
-    } else {
-      dosageRef.current.setCustomValidity('');
-    }
-
     if (!frequency.trim()) {
       frequencyRef.current.setCustomValidity('请填写用药频率');
       frequencyRef.current.reportValidity();
@@ -143,7 +148,7 @@ function AddDrugModal({ onClose, onAdd, userId }) {
       expiryDateRef.current.setCustomValidity('');
     }
 
-    if (!totalQuantity || parseInt(totalQuantity) <= 0) {
+    if (!totalQuantity || parseFloat(totalQuantity) <= 0) {
       totalQuantityRef.current.setCustomValidity('请填写有效的总数量');
       totalQuantityRef.current.reportValidity();
       totalQuantityRef.current.focus();
@@ -158,12 +163,12 @@ function AddDrugModal({ onClose, onAdd, userId }) {
       // 构造提交数据
       const drugData = {
         drugId: parseInt(selectedDrugId),
-        dosage: dosage.trim(),
+        dosage: `${dosageAmount}${dosageUnit}`, // 组合剂量和单位
         frequency: frequency.trim(),
         startDate: startDate,
         endDate: endDate,
         expiryDate: expiryDate,
-        totalQuantity: parseInt(totalQuantity), // 新增：总数量
+        totalQuantity: parseFloat(totalQuantity), // 支持一位小数
         note: note.trim() || null,
         status: 'active'
       };
@@ -189,7 +194,7 @@ function AddDrugModal({ onClose, onAdd, userId }) {
           drugName: selectedDrug.genericName,
           spec: selectedDrug.specification,
           manufacturer: selectedDrug.manufacturer,
-          totalQuantity: parseInt(totalQuantity) // 新增：总数量
+          totalQuantity: parseFloat(totalQuantity) // 支持一位小数
         });
         setIsSubmitting(false);
       } else {
@@ -363,40 +368,100 @@ function AddDrugModal({ onClose, onAdd, userId }) {
             }}>
               💉 每次用量 <span style={{ color: '#E74C3C' }}>*</span>
             </label>
-            <input
-              ref={dosageRef}
-              type="text"
-              value={dosage}
-              onChange={(e) => {
-                setDosage(e.target.value);
-                // 输入内容后清除验证提示
-                if (e.target.value.trim()) {
-                  dosageRef.current.setCustomValidity('');
-                }
-              }}
-              placeholder="例如：1片、半片、5ml"
-              style={{
-                width: '100%',
-                padding: '20px 24px',
-                fontSize: '20px',
-                border: '3px solid #F0EBE3',
-                borderRadius: '20px',
-                outline: 'none',
-                transition: 'all 0.3s ease',
-                background: '#FAF7F2',
-                fontFamily: 'inherit'
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = '#4A90E2';
-                e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
-                e.target.style.background = 'white';
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = '#F0EBE3';
-                e.target.style.boxShadow = 'none';
-                e.target.style.background = '#FAF7F2';
-              }}
-            />
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+              {/* 剂量数值列 */}
+              <div style={{ flex: 1, position: 'relative' }}>
+                <select
+                  value={dosageAmount}
+                  onChange={(e) => {
+                    setDosageAmount(e.target.value);
+                    dosageRef.current.setCustomValidity('');
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '20px 24px',
+                    fontSize: '20px',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    outline: 'none',
+                    background: '#FAF7F2',
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                    appearance: 'none',
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%236B6B6B' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 16px center'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#4A90E2';
+                    e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#F0EBE3';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                >
+                  {dosageAmountOptions.map(amount => (
+                    <option key={amount} value={amount}>{amount}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 连接符号 */}
+              <span style={{ fontSize: '24px', color: '#6B6B6B', fontWeight: 'bold' }}>×</span>
+
+              {/* 剂量单位列 */}
+              <div style={{ flex: 1, position: 'relative' }}>
+                <select
+                  value={dosageUnit}
+                  onChange={(e) => {
+                    setDosageUnit(e.target.value);
+                    dosageRef.current.setCustomValidity('');
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '20px 24px',
+                    fontSize: '20px',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    outline: 'none',
+                    background: '#FAF7F2',
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                    appearance: 'none',
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%236B6B6B' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 16px center'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#4A90E2';
+                    e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#F0EBE3';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                >
+                  {dosageUnitOptions.map(unit => (
+                    <option key={unit} value={unit}>{unit}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* 预览 */}
+            <div style={{
+              marginTop: '12px',
+              padding: '12px 16px',
+              background: 'linear-gradient(135deg, #E3F2FD 0%, #F1F8E9 100%)',
+              borderRadius: '12px',
+              fontSize: '18px',
+              color: '#4A90E2',
+              fontWeight: '600',
+              textAlign: 'center'
+            }}>
+              每次用量：{dosageAmount} {dosageUnit}
+            </div>
           </div>
 
           {/* 用药频率 */}
@@ -593,21 +658,24 @@ function AddDrugModal({ onClose, onAdd, userId }) {
               display: 'block',
               color: '#3D3D3D'
             }}>
-              🔢 总数量（片/瓶） <span style={{ color: '#E74C3C' }}>*</span>
+              🔢 总数量 <span style={{ color: '#E74C3C' }}>*</span>
             </label>
             <input
               ref={totalQuantityRef}
-              type="number"
+              type="text"
               value={totalQuantity}
               onChange={(e) => {
-                setTotalQuantity(e.target.value);
-                // 输入内容后清除验证提示
-                if (e.target.value && parseInt(e.target.value) > 0) {
-                  totalQuantityRef.current.setCustomValidity('');
+                const value = e.target.value;
+                // 允许数字和最多一位小数
+                if (/^\d*\.?\d{0,1}$/.test(value)) {
+                  setTotalQuantity(value);
+                  // 输入内容后清除验证提示
+                  if (value && parseFloat(value) > 0) {
+                    totalQuantityRef.current.setCustomValidity('');
+                  }
                 }
               }}
-              placeholder="例如：30片、60片"
-              min="1"
+              placeholder="例如：30、60.5、100.0"
               style={{
                 width: '100%',
                 padding: '20px 24px',
@@ -630,6 +698,13 @@ function AddDrugModal({ onClose, onAdd, userId }) {
                 e.target.style.background = '#FAF7F2';
               }}
             />
+            <p style={{
+              fontSize: '14px',
+              color: '#6B6B6B',
+              marginTop: '8px'
+            }}>
+              支持整数或一位小数，如：30、60.5、100.0
+            </p>
           </div>
 
           {/* 备注 */}
