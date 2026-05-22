@@ -261,12 +261,11 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
             throw new RuntimeException("删除药箱条目失败");
         }
 
-        // 同时删除该药箱条目对应的用药计划（软删除）
-        LambdaUpdateWrapper<MedicationPlan> planUpdateWrapper = new LambdaUpdateWrapper<>();
-        planUpdateWrapper.eq(MedicationPlan::getUserId, actualUserId)
-                       .eq(MedicationPlan::getBoxItemId, boxId)
-                       .set(MedicationPlan::getDeleted, 1);
-        int planResult = medicationPlanMapper.update(null, planUpdateWrapper);
+        // 同时删除该药箱条目对应的用药计划（硬删除，彻底删除）
+        LambdaQueryWrapper<MedicationPlan> planQueryWrapper = new LambdaQueryWrapper<>();
+        planQueryWrapper.eq(MedicationPlan::getUserId, actualUserId)
+                      .eq(MedicationPlan::getBoxItemId, boxId);
+        int planResult = medicationPlanMapper.delete(planQueryWrapper);
         logger.info("删除药箱条目对应的用药计划 - boxId: {}, 删除数量: {}", boxId, planResult);
     }
 }
