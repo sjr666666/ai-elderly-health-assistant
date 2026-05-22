@@ -1,11 +1,14 @@
 package com.example.backend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.example.backend.mapper.MedicationPlanMapper;
 import com.example.backend.mapper.UserMapper;
 import com.example.backend.mapper.UserMedicineBoxMapper;
 import com.example.backend.model.dto.AddMedicineRequest;
 import com.example.backend.model.dto.MedicineBoxResponse;
 import com.example.backend.model.dto.UpdateMedicineRequest;
+import com.example.backend.model.entity.MedicationPlan;
 import com.example.backend.model.entity.SysUser;
 import com.example.backend.model.entity.UserMedicineBox;
 import com.example.backend.service.MedicineBoxService;
@@ -28,11 +31,15 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
 
     private final UserMedicineBoxMapper userMedicineBoxMapper;
     private final UserMapper userMapper;
+    private final MedicationPlanMapper medicationPlanMapper;
 
     @Autowired
-    public MedicineBoxServiceImpl(UserMedicineBoxMapper userMedicineBoxMapper, UserMapper userMapper) {
+    public MedicineBoxServiceImpl(UserMedicineBoxMapper userMedicineBoxMapper, 
+                                 UserMapper userMapper,
+                                 MedicationPlanMapper medicationPlanMapper) {
         this.userMedicineBoxMapper = userMedicineBoxMapper;
         this.userMapper = userMapper;
+        this.medicationPlanMapper = medicationPlanMapper;
     }
 
     @Override
@@ -253,5 +260,13 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         if (result <= 0) {
             throw new RuntimeException("删除药箱条目失败");
         }
+
+        // 同时删除该药箱条目对应的用药计划（软删除）
+        LambdaUpdateWrapper<MedicationPlan> planUpdateWrapper = new LambdaUpdateWrapper<>();
+        planUpdateWrapper.eq(MedicationPlan::getUserId, actualUserId)
+                       .eq(MedicationPlan::getBoxItemId, boxId)
+                       .set(MedicationPlan::getDeleted, 1);
+        int planResult = medicationPlanMapper.update(null, planUpdateWrapper);
+        logger.info("删除药箱条目对应的用药计划 - boxId: {}, 删除数量: {}", boxId, planResult);
     }
 }
