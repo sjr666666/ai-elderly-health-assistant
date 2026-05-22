@@ -210,6 +210,11 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
 
         // 1. 查询数据库中已有的今日用药计划
         List<MedicationPlan> existingPlans = medicationPlanMapper.selectUserDailyPlans(actualUserId, today);
+        
+        // 按药品ID分组已有的计划（用于判断哪些药品已有用户选择的时间段）
+        Map<Long, List<MedicationPlan>> existingPlansByDrug = existingPlans.stream()
+                .collect(Collectors.groupingBy(MedicationPlan::getDrugId));
+        
         Map<String, MedicationPlan> existingPlanMap = new HashMap<>();
         for (MedicationPlan plan : existingPlans) {
             String key = plan.getDrugId() + "_" + plan.getTimeSlot();
@@ -254,8 +259,18 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             String dosage = boxItem.getDosage();
             String frequency = boxItem.getFrequency();
 
-            // 根据频率解析出服药时间段
-            List<String> timeSlots = parseFrequencyToTimeSlots(frequency);
+            // 优先使用用户已选择的时间段，如果没有则根据频率自动生成
+            List<String> timeSlots;
+            if (existingPlansByDrug.containsKey(boxItem.getDrugId())) {
+                // 用户已经选择过时间段，使用用户的选择
+                timeSlots = existingPlansByDrug.get(boxItem.getDrugId()).stream()
+                        .map(MedicationPlan::getTimeSlot)
+                        .distinct()
+                        .collect(Collectors.toList());
+            } else {
+                // 用户未选择过，根据频率解析出服药时间段
+                timeSlots = parseFrequencyToTimeSlots(frequency);
+            }
 
             for (String timeSlot : timeSlots) {
                 String key = boxItem.getDrugId() + "_" + timeSlot;
@@ -277,6 +292,10 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
                 item.setTimeSlot(timeSlot);
                 item.setTimeSlotLabel(getTimeSlotLabel(timeSlot));
                 item.setRemindBefore(15); // 默认提前15分钟提醒
+                
+                // 设置药箱条目ID和剩余数量（用于更新库存）
+                item.setBoxItemId(boxItem.getId());
+                item.setRemainingQuantity(boxItem.getRemainingQuantity() != null ? boxItem.getRemainingQuantity() : boxItem.getTotalQuantity());
 
                 items.add(item);
             }

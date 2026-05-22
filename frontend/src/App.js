@@ -135,7 +135,9 @@ function App() {
           missed: item.status === 'missed',
           planId: item.planId,
           timeSlot: item.timeSlot,
-          status: item.status
+          status: item.status,
+          boxItemId: item.boxItemId,       // 药箱条目ID（用于更新库存）
+          remainingQuantity: item.remainingQuantity  // 当前剩余数量
         }));
 
         // 合并 localStorage 中保存的本地服药状态
@@ -1076,6 +1078,11 @@ function App() {
           confirmMedicationWithAPI(r.planId);
         }
         
+        // 更新药箱剩余数量（如果有 boxItemId）
+        if (r.boxItemId && r.remainingQuantity !== undefined) {
+          updateMedicineBoxQuantity(r.boxItemId, r.remainingQuantity, r.dosage);
+        }
+        
         return { ...r, taken: true, missed: false };
       }
       return r;
@@ -1102,6 +1109,61 @@ function App() {
     }
   };
 
+  // 解析用量字符串为数字（如 "1片" -> 1, "5ml" -> 5, "2粒" -> 2）
+  const parseDosageToNumber = (dosageStr) => {
+    if (!dosageStr) return 1; // 默认1
+    
+    // 匹配数字（支持整数和小数）
+    const match = dosageStr.match(/(\d+\.?\d*)/);
+    if (match) {
+      return parseInt(match[1], 10) || 1;
+    }
+    
+    return 1; // 默认减少1
+  };
+
+  // 更新药箱剩余数量
+  const updateMedicineBoxQuantity = async (boxItemId, currentRemaining, dosage) => {
+    if (!boxItemId || !user || !user.userId) {
+      console.warn('缺少必要参数，无法更新药箱库存');
+      return false;
+    }
+
+    const reduceAmount = parseDosageToNumber(dosage);
+    const newRemaining = Math.max(0, (currentRemaining || 0) - reduceAmount);
+
+    try {
+      const response = await fetch(`/api/v1/box/${boxItemId}?userId=${user.userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          remainingQuantity: newRemaining
+        })
+      });
+
+      if (response.ok) {
+        console.log(`药箱库存更新成功: boxItemId=${boxItemId}, 减少${reduceAmount}, 剩余${newRemaining}`);
+        
+        // 更新前端 drugList 中的剩余数量
+        setDrugList(prevList => prevList.map(drug => 
+          drug.boxItemId === boxItemId 
+            ? { ...drug, remaining: newRemaining } 
+            : drug
+        ));
+        
+        return true;
+      } else {
+        console.error('药箱库存更新失败:', response.status);
+        return false;
+      }
+    } catch (err) {
+      console.error('药箱库存更新异常:', err);
+      return false;
+    }
+  };
+
   const undoMarkAsTaken = (id) => {
     const shouldUndo = window.confirm('确定要撤销吗？这将标记为未服药状态。');
     if (shouldUndo) {
@@ -1117,6 +1179,20 @@ function App() {
           saveLocalMedicationStatus(id, null);
           if (r.planId) {
             saveLocalMedicationStatus(r.planId, null);
+          }
+          
+          // 恢复药箱剩余数量（如果有 boxItemId）
+          if (r.boxItemId && r.remainingQuantity !== undefined) {
+            const restoreAmount = parseDosageToNumber(r.dosage);
+            const restoredRemaining = r.remainingQuantity + restoreAmount;
+            
+            updateMedicineBoxQuantity(r.boxItemId, r.remainingQuantity + restoreAmount, '0');  // 传入当前值+要恢复的值，但用量传0避免重复计算
+            // 直接更新前端显示
+            setDrugList(prevList => prevList.map(drug => 
+              drug.boxItemId === r.boxItemId 
+                ? { ...drug, remaining: restoredRemaining } 
+                : drug
+            ));
           }
           
           return { ...r, taken: false };
