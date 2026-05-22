@@ -207,11 +207,14 @@ public class EmergencyController {
         contact.setRelationship(request.getRelationship());
         
         // 检查该用户是否已经有主要联系人
-        EmergencyContact existingPrimary = emergencyContactService.getContactByElderId(request.getElderId());
-        if (existingPrimary == null) {
+        List<EmergencyContact> allContacts = emergencyContactService.getContactsByElderId(request.getElderId());
+        boolean hasPrimaryContact = allContacts.stream()
+                .anyMatch(c -> c.getIsPrimary() != null && c.getIsPrimary() == 1);
+        
+        if (!hasPrimaryContact) {
             // 如果还没有主要联系人，则新添加的联系人自动成为主要联系人
             contact.setIsPrimary(1);
-            logger.info("这是第一个联系人，自动设置为主要联系人");
+            logger.info("当前没有主要联系人，新联系人自动设置为主要联系人");
         } else {
             // 如果已有主要联系人，新添加的不是主要联系人
             contact.setIsPrimary(0);
