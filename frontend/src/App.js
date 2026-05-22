@@ -55,6 +55,7 @@ function App() {
   const [toastMessage, setToastMessage] = useState(''); // 提示消息
   const [showDrugDetailModal, setShowDrugDetailModal] = useState(false); // 药品详情弹窗
   const [selectedDrug, setSelectedDrug] = useState(null); // 选中的药品
+  const [drugsWithPlan, setDrugsWithPlan] = useState(new Set()); // 已设置用药计划的药品ID集合
   const fileInputRef = useRef(null);
 
   const handleRegister = (registerData) => {
@@ -144,14 +145,19 @@ function App() {
         plans = mergeLocalMedicationStatus(plans);
         
         setCalendarPlans(plans);
+        // 更新已设置用药计划的药品ID集合
+        const drugIds = new Set(plans.map(p => p.drugId).filter(Boolean));
+        setDrugsWithPlan(drugIds);
         console.log('用药计划已更新，共', plans.length, '条记录');
       } else {
         console.error('获取用药计划失败:', data.message);
         setCalendarPlans([]);
+        setDrugsWithPlan(new Set());
       }
     } catch (err) {
       console.error('获取用药计划异常:', err);
       setCalendarPlans([]);
+      setDrugsWithPlan(new Set());
     } finally {
       setIsLoadingCalendar(false);
     }
@@ -269,15 +275,16 @@ function App() {
         // 关闭弹窗
         handleCloseAddToPlanModal();
         
+        // 更新已设置用药计划的药品集合
+        setDrugsWithPlan(prev => new Set([...prev, selectedDrugForPlan.drugId]));
+        
         // 显示成功提示
         setToastMessage('✅ 已添加到用药日历！');
         setShowSuccessToast(true);
         setTimeout(() => setShowSuccessToast(false), 2000);
 
-        // 刷新用药日历数据（如果当前在用药日历页面）
-        if (activeTab === 'calendar') {
-          loadCalendarPlans();
-        }
+        // 刷新用药日历数据
+        loadCalendarPlans();
       } else {
         alert(data.message || '添加失败，请重试');
       }
@@ -1123,14 +1130,16 @@ function App() {
   };
 
   // 更新药箱剩余数量
-  const updateMedicineBoxQuantity = async (boxItemId, currentRemaining, dosage) => {
+  const updateMedicineBoxQuantity = async (boxItemId, currentRemaining, dosage, isRestore = false) => {
     if (!boxItemId || !user || !user.userId) {
       console.warn('缺少必要参数，无法更新药箱库存');
       return false;
     }
 
-    const reduceAmount = parseDosageToNumber(dosage);
-    const newRemaining = Math.max(0, (currentRemaining || 0) - reduceAmount);
+    const amount = parseDosageToNumber(dosage);
+    const newRemaining = isRestore 
+      ? (currentRemaining || 0) + amount  // 恢复时增加数量
+      : Math.max(0, (currentRemaining || 0) - amount);  // 正常时减少数量
 
     try {
       const response = await fetch(`/api/v1/box/${boxItemId}?userId=${user.userId}`, {
@@ -1144,7 +1153,7 @@ function App() {
       });
 
       if (response.ok) {
-        console.log(`药箱库存更新成功: boxItemId=${boxItemId}, 减少${reduceAmount}, 剩余${newRemaining}`);
+        console.log(`药箱库存更新成功: boxItemId=${boxItemId}, ${isRestore ? '恢复' : '减少'}${amount}, 剩余${newRemaining}`);
         
         // 更新前端 drugList 中的剩余数量
         setDrugList(prevList => prevList.map(drug => 
@@ -1183,16 +1192,7 @@ function App() {
           
           // 恢复药箱剩余数量（如果有 boxItemId）
           if (r.boxItemId && r.remainingQuantity !== undefined) {
-            const restoreAmount = parseDosageToNumber(r.dosage);
-            const restoredRemaining = r.remainingQuantity + restoreAmount;
-            
-            updateMedicineBoxQuantity(r.boxItemId, r.remainingQuantity + restoreAmount, '0');  // 传入当前值+要恢复的值，但用量传0避免重复计算
-            // 直接更新前端显示
-            setDrugList(prevList => prevList.map(drug => 
-              drug.boxItemId === r.boxItemId 
-                ? { ...drug, remaining: restoredRemaining } 
-                : drug
-            ));
+            updateMedicineBoxQuantity(r.boxItemId, r.remainingQuantity, r.dosage, true);
           }
           
           return { ...r, taken: false };
@@ -2110,6 +2110,13 @@ function App() {
     // 否则显示完整列表
     const displayList = filteredDrugList.length > 0 && searchQuery.trim() ? filteredDrugList : drugList;
     
+    // 检查药品是否已设置用药计划
+    const hasPlan = (drug) => {
+      // 检查是否在已加载的计划中
+      const planExists = calendarPlans.some(p => p.boxItemId === drug.boxItemId);
+      return planExists || drugsWithPlan.has(drug.drugId);
+    };
+    
     return (
     <div className="card">
       <h2 className="card-title">
@@ -2143,6 +2150,7 @@ function App() {
         ) : (
           displayList.map((drug, index) => {
           const isExpiring = new Date(drug.expiryDate) - new Date() < 30 * 24 * 60 * 60 * 1000;
+          const hasDrugPlan = hasPlan(drug);
           // 使用真实总数量计算进度百分比
           const totalQty = drug.totalQuantity || 30; // 如果没有总数量，默认30
           const remainingQty = drug.remaining || totalQty;
@@ -2155,12 +2163,32 @@ function App() {
               style={{ cursor: 'pointer', position: 'relative' }}
             >
               {isExpiring && <span className="expiring-tag">即将过期</span>}
+              {/* 未设置用药时段的提示图标 */}
+              {!hasDrugPlan && (
+                <span 
+                  style={{
+                    position: 'absolute',
+                    top: '10px',
+                    left: '10px',
+                    background: '#fff3cd',
+                    color: '#856404',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    zIndex: 11
+                  }}
+                  title="请添加用药时段"
+                >
+                  ⚠️ 未设置
+                </span>
+              )}
               
               {/* 添加到用药日历按钮 */}
               <button
                 className="btn btn-primary add-to-calendar-btn"
                 onClick={(e) => handleOpenAddToPlanModal(drug, e)}
-                title="添加到用药日历"
+                title={hasDrugPlan ? "修改用药时段" : "添加到用药日历"}
                 style={{
                   position: 'absolute',
                   top: '10px',
@@ -2169,7 +2197,7 @@ function App() {
                   fontSize: '14px',
                   zIndex: 10,
                   borderRadius: '8px',
-                  background: 'var(--tech-blue)',
+                  background: hasDrugPlan ? '#28a745' : 'var(--tech-blue)',
                   color: 'white',
                   border: 'none',
                   cursor: 'pointer',

@@ -5,6 +5,7 @@ import lombok.Data;
 @Data
 public class TodayPlanItemDTO {
     private Long planId;
+    private Long drugId;
     private String drugName;
     private String dosageAtTime;
     private String timeSlot;

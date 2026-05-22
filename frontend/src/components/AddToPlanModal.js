@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 /**
  * 添加到用药日历弹窗组件
@@ -14,12 +14,36 @@ function AddToPlanModal({ drug, onClose, onSubmit }) {
     { value: 'before_bed', label: '睡前', time: '21:00', icon: '🌙' }
   ];
 
+  // 根据频率确定应该选择的时间段数量
+  const getRequiredSlotCount = () => {
+    if (!drug.frequency) return 1;
+    
+    const freq = drug.frequency.toLowerCase();
+    
+    if (freq.includes('四次') || freq.includes('4次')) {
+      return 4;
+    } else if (freq.includes('三次') || freq.includes('3次')) {
+      return 3;
+    } else if (freq.includes('两次') || freq.includes('2次') || freq.includes('一日二')) {
+      return 2;
+    } else {
+      return 1;
+    }
+  };
+
+  const requiredSlotCount = getRequiredSlotCount();
+
   // 切换时间段选择
   const toggleTimeSlot = (value) => {
     setSelectedTimeSlots(prev => {
       if (prev.includes(value)) {
         return prev.filter(slot => slot !== value);
       } else {
+        // 最多只能选择 requiredSlotCount 个时段
+        if (prev.length >= requiredSlotCount) {
+          alert(`根据您的用药频率，最多只能选择 ${requiredSlotCount} 个时段`);
+          return prev;
+        }
         return [...prev, value];
       }
     });
@@ -29,6 +53,10 @@ function AddToPlanModal({ drug, onClose, onSubmit }) {
   const handleSubmit = () => {
     if (selectedTimeSlots.length === 0) {
       alert('请至少选择一个服药时间段');
+      return;
+    }
+    if (selectedTimeSlots.length !== requiredSlotCount) {
+      alert(`根据您的用药频率，请选择恰好 ${requiredSlotCount} 个服药时间段`);
       return;
     }
     onSubmit(selectedTimeSlots);
@@ -58,6 +86,14 @@ function AddToPlanModal({ drug, onClose, onSubmit }) {
     
     return [];
   };
+
+  // 初始化推荐选择
+  useEffect(() => {
+    const recommendedSlots = getRecommendedSlots();
+    if (recommendedSlots.length > 0) {
+      setSelectedTimeSlots(recommendedSlots);
+    }
+  }, []);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -99,72 +135,81 @@ function AddToPlanModal({ drug, onClose, onSubmit }) {
               marginBottom: '12px',
               color: 'var(--text-dark)'
             }}>
-              选择服药时间段（可多选）：
+              选择服药时间段（请选择 {requiredSlotCount} 个时段）：
             </label>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {timeSlotOptions.map(option => (
-                <div
-                  key={option.value}
-                  onClick={() => toggleTimeSlot(option.value)}
-                  style={{
-                    border: `2px solid ${selectedTimeSlots.includes(option.value) ? 'var(--tech-blue)' : '#e0e0e0'}`,
-                    borderRadius: '12px',
-                    padding: '16px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    background: selectedTimeSlots.includes(option.value) ? '#e8f4fd' : 'white',
-                    textAlign: 'center',
-                    userSelect: 'none'
-                  }}
-                >
-                  <div style={{ fontSize: '24px', marginBottom: '4px' }}>{option.icon}</div>
-                  <div style={{ 
-                    fontSize: '16px', 
-                    fontWeight: selectedTimeSlots.includes(option.value) ? 'bold' : 'normal',
-                    color: selectedTimeSlots.includes(option.value) ? 'var(--tech-blue)' : 'var(--text-dark)'
-                  }}>
-                    {option.label}
+              {timeSlotOptions.map(option => {
+                const isSelected = selectedTimeSlots.includes(option.value);
+                const isDisabled = !isSelected && selectedTimeSlots.length >= requiredSlotCount;
+                
+                return (
+                  <div
+                    key={option.value}
+                    onClick={() => !isDisabled && toggleTimeSlot(option.value)}
+                    style={{
+                      border: `2px solid ${isSelected ? 'var(--tech-blue)' : (isDisabled ? '#f0f0f0' : '#e0e0e0')}`,
+                      borderRadius: '12px',
+                      padding: '16px',
+                      cursor: isDisabled ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s ease',
+                      background: isSelected ? '#e8f4fd' : (isDisabled ? '#fafafa' : 'white'),
+                      textAlign: 'center',
+                      userSelect: 'none',
+                      opacity: isDisabled ? 0.5 : 1,
+                      position: 'relative'
+                    }}
+                  >
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>{option.icon}</div>
+                    <div style={{ 
+                      fontSize: '16px', 
+                      fontWeight: isSelected ? 'bold' : 'normal',
+                      color: isSelected ? 'var(--tech-blue)' : 'var(--text-dark)'
+                    }}>
+                      {option.label}
+                    </div>
+                    <div style={{ fontSize: '14px', color: 'var(--text-light)', marginTop: '2px' }}>
+                      {option.time}
+                    </div>
+                    {isSelected && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '6px',
+                        right: '6px',
+                        width: '20px',
+                        height: '20px',
+                        background: 'var(--tech-blue)',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontSize: '12px'
+                      }}>✓</div>
+                    )}
                   </div>
-                  <div style={{ fontSize: '14px', color: 'var(--text-light)', marginTop: '2px' }}>
-                    {option.time}
-                  </div>
-                  {selectedTimeSlots.includes(option.value) && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '6px',
-                      right: '6px',
-                      width: '20px',
-                      height: '20px',
-                      background: 'var(--tech-blue)',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'white',
-                      fontSize: '12px'
-                    }}>✓</div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
           {/* 已选提示 */}
-          {selectedTimeSlots.length > 0 && (
-            <div style={{
-              marginTop: '16px',
-              padding: '12px',
-              background: '#e8f5e9',
-              borderRadius: '8px',
-              fontSize: '14px',
-              color: '#2e7d32'
-            }}>
-              ✓ 已选择 {selectedTimeSlots.length} 个时段：{selectedTimeSlots.map(slot => 
+          <div style={{
+            marginTop: '16px',
+            padding: '12px',
+            background: selectedTimeSlots.length === requiredSlotCount ? '#e8f5e9' : '#fff3e0',
+            borderRadius: '8px',
+            fontSize: '14px',
+            color: selectedTimeSlots.length === requiredSlotCount ? '#2e7d32' : '#e65100'
+          }}>
+            {selectedTimeSlots.length === requiredSlotCount ? (
+              <>✓ 已选择 {selectedTimeSlots.length} 个时段：{selectedTimeSlots.map(slot => 
                 timeSlotOptions.find(opt => opt.value === slot)?.label
-              ).join('、')}
-            </div>
-          )}
+              ).join('、')}</>
+            ) : (
+              <>⚠ 请选择恰好 {requiredSlotCount} 个时段（已选 {selectedTimeSlots.length}/{requiredSlotCount}）</>
+            )}
+          </div>
         </div>
 
         {/* 弹窗底部按钮 */}
@@ -179,10 +224,10 @@ function AddToPlanModal({ drug, onClose, onSubmit }) {
           <button
             className="btn btn-primary btn-large"
             onClick={handleSubmit}
-            disabled={selectedTimeSlots.length === 0}
+            disabled={selectedTimeSlots.length !== requiredSlotCount}
             style={{ flex: 1 }}
           >
-            确认添加 ({selectedTimeSlots.length})
+            确认添加 ({selectedTimeSlots.length}/{requiredSlotCount})
           </button>
         </div>
       </div>

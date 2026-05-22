@@ -248,29 +248,26 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         Map<Long, String> planStatusMap = logs.stream()
                 .collect(Collectors.toMap(MedicationLog::getPlanId, MedicationLog::getStatus));
 
-        // 5. 根据药箱中的药品生成用药计划
+        // 5. 根据药箱中的药品生成用药计划 - 只包含用户已选择过时间段的药品
         List<TodayPlanItemDTO> items = new ArrayList<>();
 
         for (UserMedicineBox boxItem : medicineBoxItems) {
             DrugBase drug = drugMap.get(boxItem.getDrugId());
             if (drug == null) continue;
 
+            // 关键修改：只有用户已经选择过时间段的药品才生成计划
+            if (!existingPlansByDrug.containsKey(boxItem.getDrugId())) {
+                continue; // 跳过未选择时间段的药品
+            }
+
             String drugName = drug.getCommonName();
             String dosage = boxItem.getDosage();
-            String frequency = boxItem.getFrequency();
 
-            // 优先使用用户已选择的时间段，如果没有则根据频率自动生成
-            List<String> timeSlots;
-            if (existingPlansByDrug.containsKey(boxItem.getDrugId())) {
-                // 用户已经选择过时间段，使用用户的选择
-                timeSlots = existingPlansByDrug.get(boxItem.getDrugId()).stream()
-                        .map(MedicationPlan::getTimeSlot)
-                        .distinct()
-                        .collect(Collectors.toList());
-            } else {
-                // 用户未选择过，根据频率解析出服药时间段
-                timeSlots = parseFrequencyToTimeSlots(frequency);
-            }
+            // 使用用户已选择的时间段
+            List<String> timeSlots = existingPlansByDrug.get(boxItem.getDrugId()).stream()
+                    .map(MedicationPlan::getTimeSlot)
+                    .distinct()
+                    .collect(Collectors.toList());
 
             for (String timeSlot : timeSlots) {
                 String key = boxItem.getDrugId() + "_" + timeSlot;
@@ -287,6 +284,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
                     item.setStatus("pending");
                 }
 
+                item.setDrugId(boxItem.getDrugId());
                 item.setDrugName(drugName);
                 item.setDosageAtTime(dosage);
                 item.setTimeSlot(timeSlot);
