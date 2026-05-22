@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.backend.mapper.MedicationPlanMapper">
+
+    <select id="selectUserDailyPlans" resultType="com.example.backend.model.entity.MedicationPlan">
+        SELECT * FROM elderly_medication.medication_plan
+        WHERE user_id = #{userId}
+          AND plan_date = #{planDate}
+          AND deleted = 0
+        ORDER BY
+            CASE time_slot
+                WHEN 'morning' THEN 1
+                WHEN 'afternoon' THEN 2
+                WHEN 'evening' THEN 3
+                WHEN 'night' THEN 4
+                ELSE 5
+                END
+    </select>
+
+</mapper>

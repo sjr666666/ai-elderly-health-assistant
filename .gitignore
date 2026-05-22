@@ -1,0 +1,67 @@
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Backend - Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.jar
+*.war
+*.ear
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Backend - Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Backend - Spring Boot
+*.log
+logs/
+backend/uploads/
+
+# Backend - Java
+*.class
+*.tmp
+*.bak
+*.orig
+
+# Frontend - Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+yarn.lock
+package-lock.json
+.pnpm-store/
+
+# Frontend - React
+build/
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Frontend - General
+dist/
+.cache/
+.parcel-cache/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+Thumbs.db
+Desktop.ini
+backend/uploads/

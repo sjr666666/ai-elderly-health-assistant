@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.backend.mapper.AiConversationLogMapper">
+
+    <resultMap id="BaseResultMap" type="com.example.backend.model.entity.AiConversationLog">
+        <id column="id" property="id" />
+        <result column="user_id" property="userId" />
+        <result column="query_type" property="queryType" />
+        <result column="user_input" property="userInput" />
+        <result column="ai_output" property="aiOutput" />
+        <result column="safety_check_passed" property="safetyCheckPassed" />
+        <result column="created_at" property="createdAt" />
+        <result column="deleted" property="deleted" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, user_id, query_type, user_input, ai_output, safety_check_passed, created_at, deleted
+    </sql>
+
+    <insert id="insert" parameterType="com.example.backend.model.entity.AiConversationLog">
+        INSERT INTO ai_conversation_log (
+            id, user_id, query_type, user_input, ai_output, safety_check_passed, created_at
+        ) VALUES (
+            #{id}, #{userId}, #{queryType}, #{userInput}, #{aiOutput}, #{safetyCheckPassed}, #{createdAt}
+        )
+    </insert>
+
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM ai_conversation_log
+        WHERE user_id = #{userId} AND deleted = 0
+        ORDER BY created_at DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM ai_conversation_log
+        WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <delete id="deleteById" parameterType="Long">
+        UPDATE ai_conversation_log SET deleted = 1 WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteByUserId" parameterType="Long">
+        UPDATE ai_conversation_log SET deleted = 1 WHERE user_id = #{userId}
+    </delete>
+
+    <select id="countByUserId" resultType="Integer">
+        SELECT COUNT(*) FROM ai_conversation_log WHERE user_id = #{userId} AND deleted = 0
+    </select>
+
+</mapper>

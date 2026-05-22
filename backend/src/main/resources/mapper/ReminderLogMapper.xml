@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.backend.mapper.ReminderLogMapper">
+
+    <select id="selectUnreadReminders" resultType="com.example.backend.model.entity.ReminderLog">
+        SELECT * FROM elderly_medication.reminder_log
+        WHERE user_id = #{userId}
+          AND status = 'sent'
+          AND deleted = 0
+        ORDER BY created_at DESC
+    </select>
+
+</mapper>
