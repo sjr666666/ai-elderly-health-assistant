@@ -154,6 +154,12 @@ aaagame/
 2. **数据库连接**：首次启动前需配置正确的数据库连接信息
 3. **代理配置**：前端使用代理转发API请求，确保 `setupProxy.js` 配置正确
 4. **依赖版本**：请勿修改 `http-proxy-middleware` 的版本号，否则可能导致代理失效
+5. **数据库更新**：从旧版本更新时，需要执行以下SQL清空旧数据：
+   ```sql
+   DELETE FROM medication_plan;
+   ```
+   或者调用API：`DELETE http://localhost:8080/api/v1/plan/clear-all`
+   **原因**：旧版本中的用药计划数据格式与新版本不兼容，清空后可重新添加正确的用药计划
 
 ## 开发规范
 
