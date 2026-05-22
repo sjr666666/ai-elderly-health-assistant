@@ -39,4 +39,9 @@ public interface PlanService extends IService<MedicationPlan> {
      * 将药箱中的药品添加到用药计划（保存到数据库）
      */
     void addBoxItemToMedicationPlan(Long userId, Long boxItemId, List<String> timeSlots);
+
+    /**
+     * 清空用户的所有用药计划（仅用于测试）
+     */
+    void clearAllPlans(Long userId);
 }
