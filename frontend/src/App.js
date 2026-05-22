@@ -2111,10 +2111,11 @@ function App() {
     const displayList = filteredDrugList.length > 0 && searchQuery.trim() ? filteredDrugList : drugList;
     
     // 检查药品是否已设置用药计划
+    // 只通过 boxItemId 匹配，确保精确匹配
     const hasPlan = (drug) => {
-      // 检查是否在已加载的计划中
+      // 检查是否在已加载的计划中（通过 boxItemId 精确匹配）
       const planExists = calendarPlans.some(p => p.boxItemId === drug.boxItemId);
-      return planExists || drugsWithPlan.has(drug.drugId);
+      return planExists;
     };
     
     return (
