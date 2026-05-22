@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.backend.mapper.MedicationLogMapper">
+
+    <select id="selectUserDailyLogs" resultType="com.example.backend.model.entity.MedicationLog">
+        SELECT ml.* FROM elderly_medication.medication_log ml
+                             JOIN elderly_medication.medication_plan mp ON ml.plan_id = mp.id
+        WHERE ml.user_id = #{userId}
+          AND mp.plan_date = #{planDate}
+          AND ml.deleted = 0
+          AND mp.deleted = 0
+    </select>
+
+</mapper>
