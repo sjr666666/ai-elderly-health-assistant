@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 @EqualsAndHashCode(callSuper = true)
 @TableName("reminder_log")
 public class ReminderLog extends BaseEntity {
+
     private static final long serialVersionUID = 1L;
 
     /**

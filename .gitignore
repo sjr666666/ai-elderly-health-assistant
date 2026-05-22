@@ -61,6 +61,11 @@ dist/
 *.sqlite
 *.sqlite3
 
+# Spring Boot Local Config
+backend/src/main/resources/application-local.properties
+backend/src/main/resources/application-local.yml
+
+
 # OS
 Thumbs.db
 Desktop.ini

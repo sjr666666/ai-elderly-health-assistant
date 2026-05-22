@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import ContactModal from './ContactModal';
 
 const EmergencyAssistant = ({ emergencyContacts }) => {
   const [messages, setMessages] = useState([]);
@@ -7,6 +8,7 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
   const [error, setError] = useState('');
   const [emergencyMode, setEmergencyMode] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showContactModal, setShowContactModal] = useState(false);
   
   const messagesEndRef = useRef(null);
 
@@ -73,6 +75,34 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
     };
   }, []);
 
+  // 锁定/解锁页面滚动
+  useEffect(() => {
+    if (showContactModal) {
+      // 保存原始滚动位置
+      const scrollY = window.scrollY;
+      // 保存原始样式
+      const originalStyle = window.getComputedStyle(document.body);
+      const originalOverflow = originalStyle.overflow;
+      
+      // 锁定滚动
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      
+      return () => {
+        // 恢复滚动
+        document.body.style.overflow = originalOverflow;
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [showContactModal]);
+
   // 发送消息
   const sendMessage = async () => {
     const question = inputValue.trim();
@@ -119,6 +149,11 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
               question,
               isEmergency: isEmergency || emergencyMode,
               category: category.id,
+              // 传递对话历史以实现记忆功能
+              history: messages.map(msg => ({
+                role: msg.type === 'user' ? 'user' : 'assistant',
+                content: msg.text
+              })),
             }),
             signal: controller.signal,
           });
@@ -193,14 +228,13 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
     setError('');
   };
 
-  // 处理一键呼叫家人
+  // 处理一键呼叫家人 - 展示联系人选择面板
   const handleCallFamily = () => {
-    const primaryContact = emergencyContacts?.find(c => c.isPrimary) || emergencyContacts?.[0];
-    if (primaryContact?.phone) {
-      window.location.href = `tel:${primaryContact.phone}`;
-    } else {
+    if (!emergencyContacts || emergencyContacts.length === 0) {
       setError('请先添加紧急联系人');
+      return;
     }
+    setShowContactModal(true);
   };
 
   // 格式化消息文本（老年友好优化版本）
@@ -425,6 +459,13 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
           </button>
         </div>
       </div>
+
+      {/* 全局联系人选择弹窗 */}
+      <ContactModal
+        isOpen={showContactModal}
+        onClose={() => setShowContactModal(false)}
+        contacts={emergencyContacts}
+      />
     </div>
   );
 };
