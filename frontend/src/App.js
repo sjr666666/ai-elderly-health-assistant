@@ -142,8 +142,9 @@ function App() {
           planId: item.planId,
           timeSlot: item.timeSlot,
           status: item.status,
-          boxItemId: item.boxItemId,       // 药箱条目ID（用于更新库存）
-          remainingQuantity: item.remainingQuantity  // 当前剩余数量
+          boxItemId: item.boxItemId,
+          remainingQuantity: item.remainingQuantity,
+          boxDrugName: item.boxDrugName
         }));
 
         // 合并 localStorage 中保存的本地服药状态
@@ -2073,7 +2074,7 @@ function App() {
                     <span className="timeline-period">（{reminder.period}）</span>
                   </div>
                 </div>
-                <p className="timeline-drug">💊 {reminder.drug}</p>
+                <p className="timeline-drug">💊 {reminder.drug}{reminder.boxDrugName ? `（${reminder.boxDrugName}）` : ''}</p>
                 {reminder.dosage && (
                   <p className="timeline-dosage" style={{ fontSize: '14px', color: 'var(--text-light)', marginLeft: '8px' }}>
                     用量：{reminder.dosage}
@@ -2181,7 +2182,7 @@ function App() {
                           <span style={{ fontSize: '12px', color: '#999', marginLeft: '8px' }}>（已删除）</span>
                         )}
                       </div>
-                      <p className="timeline-drug">💊 {item.drugName}</p>
+                      <p className="timeline-drug">💊 {item.drugName}{item.boxDrugName ? `（${item.boxDrugName}）` : ''}</p>
                       {item.dosageAtTime && (
                         <p className="timeline-dosage" style={{ fontSize: '14px', color: 'var(--text-light)', marginLeft: '8px' }}>
                           用量：{item.dosageAtTime}

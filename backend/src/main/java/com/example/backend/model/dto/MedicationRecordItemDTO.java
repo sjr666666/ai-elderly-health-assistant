@@ -12,4 +12,5 @@ public class MedicationRecordItemDTO {
     private String timeSlotLabel;
     private String status;
     private Boolean deleted;
+    private String boxDrugName;
 }
