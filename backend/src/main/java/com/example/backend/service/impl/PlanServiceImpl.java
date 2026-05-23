@@ -292,10 +292,20 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
                 item.setTimeSlot(timeSlot);
                 item.setTimeSlotLabel(getTimeSlotLabel(timeSlot));
                 item.setRemindBefore(15); // 默认提前15分钟提醒
-                
+
                 // 设置药箱条目ID和剩余数量（用于更新库存）
                 item.setBoxItemId(boxItem.getId());
                 item.setRemainingQuantity(boxItem.getRemainingQuantity() != null ? boxItem.getRemainingQuantity() : boxItem.getTotalQuantity());
+
+                // 设置药箱中的药品名称（与药箱列表保持一致，使用通用名）
+                String boxDrugName = drug.getGenericName();
+                if (boxDrugName == null || boxDrugName.isEmpty()) {
+                    boxDrugName = drug.getCommonName();
+                }
+                if (boxDrugName == null || boxDrugName.isEmpty()) {
+                    boxDrugName = drug.getTradeName();
+                }
+                item.setBoxDrugName(boxDrugName);
 
                 items.add(item);
             }
@@ -484,6 +494,16 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             drugBaseMapper.selectBatchIds(drugIds).forEach(drug -> drugMap.put(drug.getId(), drug));
         }
 
+        List<Long> boxItemIds = weeklyPlans.stream()
+                .map(MedicationPlan::getBoxItemId)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, UserMedicineBox> boxItemMap = new HashMap<>();
+        if (!boxItemIds.isEmpty()) {
+            userMedicineBoxMapper.selectBatchIds(boxItemIds).forEach(box -> boxItemMap.put(box.getId(), box));
+        }
+
         Map<LocalDate, List<MedicationRecordItemDTO>> dailyMap = new LinkedHashMap<>();
         for (LocalDate date = startDate; !date.isAfter(today); date = date.plusDays(1)) {
             dailyMap.put(date, new ArrayList<>());
@@ -500,6 +520,25 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             item.setTimeSlotLabel(getTimeSlotLabel(plan.getTimeSlot()));
             item.setStatus(plan.getStatus());
             item.setDeleted(plan.getDeleted() != null && plan.getDeleted() == 1);
+
+            if (plan.getBoxItemId() != null) {
+                UserMedicineBox boxItem = boxItemMap.get(plan.getBoxItemId());
+                if (boxItem != null) {
+                    DrugBase boxDrug = drugMap.get(boxItem.getDrugId());
+                    if (boxDrug != null) {
+                        String boxName = boxDrug.getGenericName();
+                        if (boxName == null || boxName.isEmpty()) {
+                            boxName = boxDrug.getCommonName();
+                        }
+                        if (boxName == null || boxName.isEmpty()) {
+                            boxName = boxDrug.getTradeName();
+                        }
+                        if (boxName != null && !boxName.isEmpty()) {
+                            item.setBoxDrugName(boxName);
+                        }
+                    }
+                }
+            }
 
             dailyMap.get(plan.getPlanDate()).add(item);
         }
