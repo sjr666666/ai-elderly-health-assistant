@@ -369,14 +369,19 @@ function AddDrugModal({ onClose, onAdd, userId }) {
               💉 每次用量 <span style={{ color: '#E74C3C' }}>*</span>
             </label>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-              {/* 剂量数值列 */}
+              {/* 剂量数值列 - 可输入 */}
               <div style={{ flex: 1, position: 'relative' }}>
-                <select
+                <input
+                  type="text"
                   value={dosageAmount}
                   onChange={(e) => {
-                    setDosageAmount(e.target.value);
-                    dosageRef.current.setCustomValidity('');
+                    const value = e.target.value;
+                    // 只允许输入数字和小数点
+                    if (/^[0-9]*\.?[0-9]*$/.test(value) || value === '') {
+                      setDosageAmount(value);
+                    }
                   }}
+                  placeholder="输入或选择剂量"
                   style={{
                     width: '100%',
                     padding: '20px 24px',
@@ -386,25 +391,25 @@ function AddDrugModal({ onClose, onAdd, userId }) {
                     outline: 'none',
                     background: '#FAF7F2',
                     fontFamily: 'inherit',
-                    cursor: 'pointer',
-                    appearance: 'none',
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%236B6B6B' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 16px center'
+                    appearance: 'none'
                   }}
                   onFocus={(e) => {
                     e.target.style.borderColor = '#4A90E2';
                     e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
+                    e.target.style.background = 'white';
                   }}
                   onBlur={(e) => {
                     e.target.style.borderColor = '#F0EBE3';
                     e.target.style.boxShadow = 'none';
+                    e.target.style.background = '#FAF7F2';
                   }}
-                >
+                  list="dosage-amount-suggestions"
+                />
+                <datalist id="dosage-amount-suggestions">
                   {dosageAmountOptions.map(amount => (
-                    <option key={amount} value={amount}>{amount}</option>
+                    <option key={amount} value={amount} />
                   ))}
-                </select>
+                </datalist>
               </div>
 
               {/* 连接符号 */}
@@ -416,7 +421,6 @@ function AddDrugModal({ onClose, onAdd, userId }) {
                   value={dosageUnit}
                   onChange={(e) => {
                     setDosageUnit(e.target.value);
-                    dosageRef.current.setCustomValidity('');
                   }}
                   style={{
                     width: '100%',
