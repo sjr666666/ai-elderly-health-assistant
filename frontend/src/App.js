@@ -11,6 +11,7 @@ import ConfirmDeleteModal from './components/ConfirmDeleteModal';
 import ManualDrugSearch from './components/ManualDrugSearch';
 import EmergencyAssistant from './components/EmergencyAssistant';
 import AddToPlanModal from './components/AddToPlanModal';
+import ConfirmDrugModal from './components/ConfirmDrugModal';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -34,6 +35,8 @@ function App() {
   ]);
   const [calendarPlans, setCalendarPlans] = useState([]); // 从后端获取的用药计划
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false); // 用药日历加载状态
+  const [calendarViewMode, setCalendarViewMode] = useState('today'); // 用药日历视图模式：today/week
+  const [weeklyMedicationData, setWeeklyMedicationData] = useState(null); // 一周用药数据
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false); // 添加到用药日历弹窗
   const [selectedDrugForPlan, setSelectedDrugForPlan] = useState(null); // 选中的要添加到计划的药品
   const [showCelebration, setShowCelebration] = useState(false);
@@ -51,6 +54,8 @@ function App() {
   const [showEditDrugModal, setShowEditDrugModal] = useState(false); // 编辑药品弹窗
   const [showConfirmDelete, setShowConfirmDelete] = useState(false); // 确认删除弹窗
   const [pendingDeleteDrug, setPendingDeleteDrug] = useState(null); // 待删除的药品
+  const [showConfirmDrugModal, setShowConfirmDrugModal] = useState(false); // 确认药品弹窗
+  const [pendingDrugInfo, setPendingDrugInfo] = useState(null); // 待确认的药品信息
   const [showSuccessToast, setShowSuccessToast] = useState(false); // 成功提示弹窗
   const [toastMessage, setToastMessage] = useState(''); // 提示消息
   const [showDrugDetailModal, setShowDrugDetailModal] = useState(false); // 药品详情弹窗
@@ -158,6 +163,39 @@ function App() {
       console.error('获取用药计划异常:', err);
       setCalendarPlans([]);
       setDrugsWithPlan(new Set());
+    } finally {
+      setIsLoadingCalendar(false);
+    }
+  };
+
+  // 从后端加载一周用药记录（包括已删除但在查询范围内的记录）
+  const loadWeeklyMedication = async () => {
+    if (!user || !user.userId) {
+      console.warn('用户未登录，无法加载用药记录');
+      setWeeklyMedicationData(null);
+      return;
+    }
+
+    setIsLoadingCalendar(true);
+
+    try {
+      const response = await fetch(`/api/v1/plan/weekly?userId=${user.userId}`);
+      const data = await response.json();
+
+      console.log('=== 一周用药记录响应 ===');
+      console.log('状态码:', response.status);
+      console.log('响应数据:', data);
+      console.log('==================');
+
+      if (response.ok && data.code === 200 && data.data) {
+        setWeeklyMedicationData(data.data);
+      } else {
+        console.error('获取一周用药记录失败:', data.message);
+        setWeeklyMedicationData(null);
+      }
+    } catch (err) {
+      console.error('获取一周用药记录异常:', err);
+      setWeeklyMedicationData(null);
     } finally {
       setIsLoadingCalendar(false);
     }
@@ -675,9 +713,13 @@ function App() {
 
     // 切换到用药日历时，自动加载最新的用药计划
     if (activeTab === 'calendar' && isLoggedIn) {
-      loadCalendarPlans();
+      if (calendarViewMode === 'today') {
+        loadCalendarPlans();
+      } else {
+        loadWeeklyMedication();
+      }
     }
-  }, [activeTab]);
+  }, [activeTab, calendarViewMode]);
 
   const [ocrTaskId, setOcrTaskId] = useState(null);
   const [ocrPolling, setOcrPolling] = useState(false);
@@ -995,13 +1037,15 @@ function App() {
     }
 
     try {
-      // 先查询药品基础库，获取药品ID
+      // 先查询药品基础库，获取药品ID和详细信息
       const searchResponse = await fetch(`/api/v1/drug/list?keyword=${encodeURIComponent(drug.name)}`);
       const searchData = await searchResponse.json();
       
       let drugId = null;
+      let drugDetail = null;
       if (searchData.code === 200 && searchData.data && searchData.data.length > 0) {
         drugId = searchData.data[0].id;
+        drugDetail = searchData.data[0];
       }
 
       // 如果找不到药品ID，使用默认值或提示用户
@@ -1011,24 +1055,36 @@ function App() {
         return;
       }
 
-      // 构造添加药品请求
-      const today = new Date();
-      const oneYearLater = new Date();
-      oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+      // 准备药品信息，用于预填充弹窗
+      const drugInfo = {
+        drugId: drugId,
+        name: drug.name || drugDetail.drugName,
+        genericName: drugDetail.drugName,
+        specification: drugDetail.specification,
+        frequency: drug.frequency || drugDetail.frequency,
+        dosage: drug.dosage || drugDetail.dosage,
+        usage: drug.usage || drugDetail.usage,
+        totalQuantity: drug.totalQuantity || 30
+      };
 
+      // 弹出确认弹窗
+      setPendingDrugInfo(drugInfo);
+      setShowConfirmDrugModal(true);
+    } catch (error) {
+      console.error('查询药品信息失败:', error);
+      alert('查询失败，请稍后重试');
+    }
+  };
+
+  // 确认添加药品到药箱
+  const confirmAddToMedicineBox = async (drugData) => {
+    try {
       const addResponse = await fetch(`/api/v1/box?userId=${user.userId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          drugId: drugId,
-          dosage: '每日两次，每次一片',
-          frequency: '每日两次',
-          startDate: today.toISOString().split('T')[0],
-          expiryDate: oneYearLater.toISOString().split('T')[0],
-          totalQuantity: 30
-        })
+        body: JSON.stringify(drugData)
       });
 
       const addData = await addResponse.json();
@@ -1955,11 +2011,33 @@ function App() {
 
   const renderCalendarTab = () => (
     <div className="card">
-      <h2 className="card-title">
-        <span className="card-title-icon">📅</span>
-        今日用药时间轴
-      </h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h2 className="card-title" style={{ marginBottom: 0 }}>
+          <span className="card-title-icon">📅</span>
+          {calendarViewMode === 'today' ? '今日用药时间轴' : '一周用药记录'}
+        </h2>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            className={`btn ${calendarViewMode === 'today' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setCalendarViewMode('today')}
+          >
+            今日
+          </button>
+          <button
+            className={`btn ${calendarViewMode === 'week' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setCalendarViewMode('week')}
+          >
+            一周
+          </button>
+        </div>
+      </div>
 
+      {calendarViewMode === 'today' ? renderTodayCalendar() : renderWeekCalendar()}
+    </div>
+  );
+
+  const renderTodayCalendar = () => (
+    <>
       {isLoadingCalendar ? (
         <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-light)' }}>
           <div className="loading-spinner-container" style={{ margin: '0 auto 20px' }}>
@@ -1972,8 +2050,8 @@ function App() {
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
           <p style={{ fontSize: '22px', marginBottom: '12px' }}>今日暂无用药计划</p>
           <p style={{ fontSize: '16px', marginTop: '12px' }}>请先在"药箱管理"中添加需要服用的药品</p>
-          <button 
-            className="btn btn-primary btn-large" 
+          <button
+            className="btn btn-primary btn-large"
             style={{ marginTop: '24px' }}
             onClick={() => setActiveTab('drugs')}
           >
@@ -2051,8 +2129,101 @@ function App() {
           )}
         </>
       )}
-    </div>
+    </>
   );
+
+  const renderWeekCalendar = () => (
+    <>
+      {isLoadingCalendar ? (
+        <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-light)' }}>
+          <div className="loading-spinner-container" style={{ margin: '0 auto 20px' }}>
+            <div className="loading-spinner"></div>
+          </div>
+          <p style={{ fontSize: '18px' }}>正在加载一周用药记录...</p>
+        </div>
+      ) : !weeklyMedicationData || weeklyMedicationData.dailyRecords.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-light)' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+          <p style={{ fontSize: '22px', marginBottom: '12px' }}>一周内暂无用药记录</p>
+          <p style={{ fontSize: '16px', marginTop: '12px' }}>请先在"药箱管理"中添加需要服用的药品</p>
+          <button
+            className="btn btn-primary btn-large"
+            style={{ marginTop: '24px' }}
+            onClick={() => setActiveTab('drugs')}
+          >
+            🏠 去添加药品
+          </button>
+        </div>
+      ) : (
+        <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+          {weeklyMedicationData.dailyRecords.map((day) => (
+            <div key={day.date} style={{ marginBottom: '24px' }}>
+              <h3 style={{ fontSize: '16px', color: 'var(--text-primary)', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--border-color)' }}>
+                {formatDate(day.date)}
+              </h3>
+              {day.items.length === 0 ? (
+                <p style={{ color: 'var(--text-light)', fontSize: '14px', textAlign: 'center', padding: '12px' }}>无用药记录</p>
+              ) : (
+                <div className="timeline-container">
+                  <div className="timeline-line"></div>
+                  {day.items.map((item, index) => (
+                    <div
+                      key={`${item.planId}_${index}`}
+                      className={`timeline-item ${item.status === 'taken' ? 'taken' : item.status === 'missed' || item.deleted ? 'missed' : 'pending'}`}
+                      style={item.deleted ? { opacity: 0.7 } : {}}
+                    >
+                      <div className="timeline-header">
+                        <div className="timeline-time">
+                          {getTimeBySlot(item.timeSlot)}
+                          <span className="timeline-period">（{item.timeSlotLabel}）</span>
+                        </div>
+                        {item.deleted && (
+                          <span style={{ fontSize: '12px', color: '#999', marginLeft: '8px' }}>（已删除）</span>
+                        )}
+                      </div>
+                      <p className="timeline-drug">💊 {item.drugName}</p>
+                      {item.dosageAtTime && (
+                        <p className="timeline-dosage" style={{ fontSize: '14px', color: 'var(--text-light)', marginLeft: '8px' }}>
+                          用量：{item.dosageAtTime}
+                        </p>
+                      )}
+                      <div className="timeline-status">
+                        {item.status === 'taken' ? (
+                          <span className="status-taken">✓ 已吃</span>
+                        ) : item.status === 'missed' ? (
+                          <span className="status-missed">⏰ 漏服</span>
+                        ) : item.status === 'skipped' ? (
+                          <span className="status-missed">➖ 已跳过</span>
+                        ) : (
+                          <span className="status-pending">🔔 待吃</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return '今天';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return '昨天';
+    } else {
+      return `${date.getMonth() + 1}月${date.getDate()}日 ${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]}`;
+    }
+  };
 
   const handleSearchDrugs = async (keyword) => {
     setSearchQuery(keyword);
@@ -2405,6 +2576,15 @@ function App() {
         <AddDrugModal
           onClose={() => setShowAddDrugModal(false)}
           onAdd={handleAddDrug}
+          userId={user?.userId}
+        />
+      )}
+
+      {showConfirmDrugModal && pendingDrugInfo && (
+        <ConfirmDrugModal
+          onClose={() => setShowConfirmDrugModal(false)}
+          onConfirm={confirmAddToMedicineBox}
+          drugInfo={pendingDrugInfo}
           userId={user?.userId}
         />
       )}

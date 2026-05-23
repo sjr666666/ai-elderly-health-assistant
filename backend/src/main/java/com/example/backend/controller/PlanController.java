@@ -2,6 +2,7 @@ package com.example.backend.controller;
 
 import com.example.backend.model.dto.ConfirmMedicationResponseDTO;
 import com.example.backend.model.dto.TodayPlanResponseDTO;
+import com.example.backend.model.dto.WeeklyMedicationResponseDTO;
 import com.example.backend.model.dto.ReminderResponseDTO;
 import com.example.backend.model.dto.AddToPlanRequest;
 import com.example.backend.service.PlanService;
@@ -76,5 +77,13 @@ public class PlanController {
     public ResponseResult<Void> clearAllPlans(@RequestParam(required = false) Long userId) {
         planService.clearAllPlans(userId);
         return ResponseResult.success("已清空所有用药计划", null);
+    }
+
+    /**
+     * 7.8 获取一周内的用药记录（包括已删除但在查询范围内的记录）
+     */
+    @GetMapping("/weekly")
+    public ResponseResult<WeeklyMedicationResponseDTO> getWeeklyMedicationRecords(@RequestParam(required = false) Long userId) {
+        return ResponseResult.success(planService.getWeeklyMedicationRecords(userId));
     }
 }

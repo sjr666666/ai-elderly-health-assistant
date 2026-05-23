@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.example.backend.model.entity.MedicationPlan;
 import com.example.backend.model.dto.ConfirmMedicationResponseDTO;
 import com.example.backend.model.dto.TodayPlanResponseDTO;
+import com.example.backend.model.dto.WeeklyMedicationResponseDTO;
 import com.example.backend.model.dto.ReminderResponseDTO;
 import java.util.List;
 
@@ -44,4 +45,9 @@ public interface PlanService extends IService<MedicationPlan> {
      * 清空用户的所有用药计划（仅用于测试）
      */
     void clearAllPlans(Long userId);
+
+    /**
+     * 获取用户一周内的用药记录（包括已删除但在查询范围内的记录）
+     */
+    WeeklyMedicationResponseDTO getWeeklyMedicationRecords(Long userId);
 }
