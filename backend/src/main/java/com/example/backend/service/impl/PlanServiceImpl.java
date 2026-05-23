@@ -44,8 +44,10 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
     private String getTimeSlotLabel(String timeSlot) {
         return switch (timeSlot) {
             case "morning" -> "早上";
+            case "noon" -> "中午";
             case "afternoon" -> "下午";
             case "evening" -> "晚上";
+            case "before_bed" -> "睡前";
             case "night" -> "睡前";
             default -> "其他";
         };
@@ -454,5 +456,66 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             deletedCount = medicationPlanMapper.delete(queryWrapper);
             logger.info("已清空用户 {} 的所有用药计划，共删除 {} 条记录", userId, deletedCount);
         }
+    }
+
+    @Override
+    public WeeklyMedicationResponseDTO getWeeklyMedicationRecords(Long userId) {
+        Long actualUserId;
+        if (userId != null) {
+            LambdaQueryWrapper<SysUser> userQueryWrapper = new LambdaQueryWrapper<>();
+            userQueryWrapper.eq(SysUser::getUserId, userId);
+            SysUser user = userMapper.selectOne(userQueryWrapper);
+            if (user == null) {
+                throw new BusinessException(ResponseCode.PARAM_ERROR, "用户不存在");
+            }
+            actualUserId = user.getId();
+        } else {
+            actualUserId = getCurrentUserId();
+        }
+
+        LocalDate today = LocalDate.now();
+        LocalDate startDate = today.minusDays(6);
+
+        List<MedicationPlan> weeklyPlans = medicationPlanMapper.selectUserWeeklyPlans(actualUserId, startDate, today);
+
+        List<Long> drugIds = weeklyPlans.stream().map(MedicationPlan::getDrugId).collect(Collectors.toList());
+        Map<Long, DrugBase> drugMap = new HashMap<>();
+        if (!drugIds.isEmpty()) {
+            drugBaseMapper.selectBatchIds(drugIds).forEach(drug -> drugMap.put(drug.getId(), drug));
+        }
+
+        Map<LocalDate, List<MedicationRecordItemDTO>> dailyMap = new LinkedHashMap<>();
+        for (LocalDate date = startDate; !date.isAfter(today); date = date.plusDays(1)) {
+            dailyMap.put(date, new ArrayList<>());
+        }
+
+        for (MedicationPlan plan : weeklyPlans) {
+            MedicationRecordItemDTO item = new MedicationRecordItemDTO();
+            item.setPlanId(plan.getId());
+            item.setDrugId(plan.getDrugId());
+            DrugBase drug = drugMap.get(plan.getDrugId());
+            item.setDrugName(drug != null ? drug.getCommonName() : "未知药品");
+            item.setDosageAtTime(plan.getDosageAtTime());
+            item.setTimeSlot(plan.getTimeSlot());
+            item.setTimeSlotLabel(getTimeSlotLabel(plan.getTimeSlot()));
+            item.setStatus(plan.getStatus());
+            item.setDeleted(plan.getDeleted() != null && plan.getDeleted() == 1);
+
+            dailyMap.get(plan.getPlanDate()).add(item);
+        }
+
+        List<DailyMedicationDTO> dailyRecords = new ArrayList<>();
+        for (Map.Entry<LocalDate, List<MedicationRecordItemDTO>> entry : dailyMap.entrySet()) {
+            DailyMedicationDTO daily = new DailyMedicationDTO();
+            daily.setDate(entry.getKey());
+            daily.setItems(entry.getValue());
+            dailyRecords.add(daily);
+        }
+
+        WeeklyMedicationResponseDTO response = new WeeklyMedicationResponseDTO();
+        response.setStartDate(startDate);
+        response.setEndDate(today);
+        response.setDailyRecords(dailyRecords);
+        return response;
     }
 }
