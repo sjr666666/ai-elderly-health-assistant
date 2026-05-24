@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import './App.css';
 import Login from './components/Login';
 import Register from './components/Register';
@@ -63,6 +63,41 @@ function App() {
   const [drugsWithPlan, setDrugsWithPlan] = useState(new Set()); // 已设置用药计划的药品ID集合
   const [showExpiringDrugsModal, setShowExpiringDrugsModal] = useState(false); // 过期药品弹窗
   const fileInputRef = useRef(null);
+
+  const expiringDrugsResult = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiringDrugs = [];
+    const expiredDrugs = [];
+
+    drugList.forEach(drug => {
+      if (drug.expiryDate) {
+        const expiryDate = new Date(drug.expiryDate);
+        expiryDate.setHours(0, 0, 0, 0);
+
+        const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+
+        if (daysUntilExpiry < 0) {
+          expiredDrugs.push({
+            ...drug,
+            daysUntilExpiry,
+            isExpired: true
+          });
+        } else if (daysUntilExpiry <= 30) {
+          expiringDrugs.push({
+            ...drug,
+            daysUntilExpiry,
+            isExpired: false
+          });
+        }
+      }
+    });
+
+    expiringDrugs.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
+    expiredDrugs.sort((a, b) => b.daysUntilExpiry - a.daysUntilExpiry);
+
+    return { expiredDrugs, expiringDrugs };
+  }, [drugList]);
 
   const handleRegister = (registerData) => {
     if (registerData) {
@@ -526,43 +561,6 @@ function App() {
     
     // 清除 localStorage 中的登录状态
     localStorage.removeItem('user');
-  };
-
-  // 计算即将过期和已过期的药品
-  const getExpiringDrugs = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expiringDrugs = [];
-    const expiredDrugs = [];
-
-    drugList.forEach(drug => {
-      if (drug.expiryDate) {
-        const expiryDate = new Date(drug.expiryDate);
-        expiryDate.setHours(0, 0, 0, 0);
-
-        const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-
-        if (daysUntilExpiry < 0) {
-          expiredDrugs.push({
-            ...drug,
-            daysUntilExpiry,
-            isExpired: true
-          });
-        } else if (daysUntilExpiry <= 30) {
-          expiringDrugs.push({
-            ...drug,
-            daysUntilExpiry,
-            isExpired: false
-          });
-        }
-      }
-    });
-
-    // 按过期时间排序（最紧急的在前）
-    expiringDrugs.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
-    expiredDrugs.sort((a, b) => b.daysUntilExpiry - a.daysUntilExpiry);
-
-    return { expiredDrugs, expiringDrugs };
   };
 
   // 打开过期药品弹窗
@@ -1436,7 +1434,7 @@ function App() {
               <div className="medicine-box-unit">种药品</div>
             </div>
             {(() => {
-              const { expiredDrugs, expiringDrugs } = getExpiringDrugs();
+              const { expiredDrugs, expiringDrugs } = expiringDrugsResult;
               const totalExpiring = expiredDrugs.length + expiringDrugs.length;
               const isAllExpired = totalExpiring === expiredDrugs.length;
               if (totalExpiring > 0) {
@@ -1476,7 +1474,7 @@ function App() {
       </div>
 
       {(() => {
-        const { expiredDrugs, expiringDrugs } = getExpiringDrugs();
+        const { expiredDrugs, expiringDrugs } = expiringDrugsResult;
         const totalExpiring = expiredDrugs.length + expiringDrugs.length;
         const isAllExpired = totalExpiring === expiredDrugs.length;
         if (totalExpiring > 0) {
@@ -2780,7 +2778,7 @@ function App() {
             </div>
             <div className="modal-body">
               {(() => {
-                const { expiredDrugs, expiringDrugs } = getExpiringDrugs();
+                const { expiredDrugs, expiringDrugs } = expiringDrugsResult;
                 return (
                   <div>
                     {expiredDrugs.length > 0 && (

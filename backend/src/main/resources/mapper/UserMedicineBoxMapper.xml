@@ -7,7 +7,7 @@
         SELECT
             umb.id AS boxItemId,
             umb.drug_id AS drugId,
-            db.generic_name AS drugName,
+            COALESCE(db.common_name, db.generic_name) AS drugName,
             db.generic_name AS genericName,
             db.trade_name AS tradeName,
             db.common_name AS commonName,
@@ -36,7 +36,7 @@
         SELECT
             umb.id AS boxItemId,
             umb.drug_id AS drugId,
-            db.generic_name AS drugName,
+            COALESCE(db.common_name, db.generic_name) AS drugName,
             db.generic_name AS genericName,
             db.trade_name AS tradeName,
             db.common_name AS commonName,

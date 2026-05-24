@@ -25,7 +25,7 @@ public class MedicineBoxResponse {
     private Long drugId;
 
     /**
-     * 药品名称（通用名）
+     * 药品显示名称（优先显示俗名，俗名为空时显示通用名）
      */
     private String drugName;
 
