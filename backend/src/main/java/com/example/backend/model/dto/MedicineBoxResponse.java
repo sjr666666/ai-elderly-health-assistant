@@ -25,9 +25,24 @@ public class MedicineBoxResponse {
     private Long drugId;
 
     /**
-     * 药品名称
+     * 药品名称（通用名）
      */
     private String drugName;
+
+    /**
+     * 通用名（化学名）
+     */
+    private String genericName;
+
+    /**
+     * 商品名
+     */
+    private String tradeName;
+
+    /**
+     * 俗名/别名
+     */
+    private String commonName;
 
     /**
      * 药品规格

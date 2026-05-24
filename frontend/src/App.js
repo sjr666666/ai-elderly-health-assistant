@@ -61,6 +61,7 @@ function App() {
   const [showDrugDetailModal, setShowDrugDetailModal] = useState(false); // 药品详情弹窗
   const [selectedDrug, setSelectedDrug] = useState(null); // 选中的药品
   const [drugsWithPlan, setDrugsWithPlan] = useState(new Set()); // 已设置用药计划的药品ID集合
+  const [showExpiringDrugsModal, setShowExpiringDrugsModal] = useState(false); // 过期药品弹窗
   const fileInputRef = useRef(null);
 
   const handleRegister = (registerData) => {
@@ -89,6 +90,9 @@ function App() {
           boxItemId: item.boxItemId,
           drugId: item.drugId,
           name: item.drugName,
+          genericName: item.genericName,
+          tradeName: item.tradeName,
+          commonName: item.commonName,
           spec: item.specification,
           dosage: item.dosage,
           frequency: item.frequency,
@@ -340,6 +344,12 @@ function App() {
     });
     setIsLoggedIn(true);
     
+    // 保存登录状态到 localStorage
+    localStorage.setItem('user', JSON.stringify({
+      username: loginData.username,
+      ...loginData
+    }));
+    
     // 登录成功后加载药箱列表
     if (loginData.userId) {
       loadMedicineBoxList(loginData.userId);
@@ -513,6 +523,63 @@ function App() {
     setUser(null);
     setShowProfileModal(false);
     setActiveTab('home');
+    
+    // 清除 localStorage 中的登录状态
+    localStorage.removeItem('user');
+  };
+
+  // 计算即将过期和已过期的药品
+  const getExpiringDrugs = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiringDrugs = [];
+    const expiredDrugs = [];
+
+    drugList.forEach(drug => {
+      if (drug.expiryDate) {
+        const expiryDate = new Date(drug.expiryDate);
+        expiryDate.setHours(0, 0, 0, 0);
+
+        const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+
+        if (daysUntilExpiry < 0) {
+          expiredDrugs.push({
+            ...drug,
+            daysUntilExpiry,
+            isExpired: true
+          });
+        } else if (daysUntilExpiry <= 30) {
+          expiringDrugs.push({
+            ...drug,
+            daysUntilExpiry,
+            isExpired: false
+          });
+        }
+      }
+    });
+
+    // 按过期时间排序（最紧急的在前）
+    expiringDrugs.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
+    expiredDrugs.sort((a, b) => b.daysUntilExpiry - a.daysUntilExpiry);
+
+    return { expiredDrugs, expiringDrugs };
+  };
+
+  // 打开过期药品弹窗
+  const handleOpenExpiringDrugsModal = () => {
+    setShowExpiringDrugsModal(true);
+  };
+
+  // 关闭过期药品弹窗
+  const handleCloseExpiringDrugsModal = () => {
+    setShowExpiringDrugsModal(false);
+  };
+
+  // 点击过期药品查看详情
+  const handleExpiringDrugClick = (drug) => {
+    setSelectedDrug(drug);
+    setShowExpiringDrugsModal(false);
+    setShowDrugDetailModal(true);
   };
 
   const handleFileUpload = (e) => {
@@ -588,6 +655,25 @@ function App() {
     e.stopPropagation();
     setIsDragging(true);
   };
+
+  // 应用初始化时检查 localStorage 中的登录状态
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      try {
+        const userData = JSON.parse(savedUser);
+        if (userData && userData.userId) {
+          setUser(userData);
+          setIsLoggedIn(true);
+          // 自动加载药箱列表
+          loadMedicineBoxList(userData.userId);
+        }
+      } catch (e) {
+        console.error('解析用户数据失败:', e);
+        localStorage.removeItem('user');
+      }
+    }
+  }, []);
 
   // 全局阻止拖拽默认行为，防止文件被浏览器打开
   useEffect(() => {
@@ -1349,18 +1435,84 @@ function App() {
               <div className="medicine-box-count">{drugList.length}</div>
               <div className="medicine-box-unit">种药品</div>
             </div>
-            <div className="notification-bar" style={{ marginTop: '20px', padding: '14px 20px' }}>
-              <span className="notification-icon">⚠️</span>
-              <span className="notification-text">1盒药还有7天过期</span>
-            </div>
+            {(() => {
+              const { expiredDrugs, expiringDrugs } = getExpiringDrugs();
+              const totalExpiring = expiredDrugs.length + expiringDrugs.length;
+              const isAllExpired = totalExpiring === expiredDrugs.length;
+              if (totalExpiring > 0) {
+                return (
+                  <button
+                    className="btn"
+                    style={{
+                      marginTop: '20px',
+                      width: '100%',
+                      padding: '14px 16px',
+                      fontSize: '15px',
+                      fontWeight: 'bold',
+                      background: isAllExpired
+                        ? 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)'
+                        : 'linear-gradient(135deg, #f39c12 0%, #e67e22 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '10px',
+                      boxShadow: isAllExpired
+                        ? '0 4px 15px rgba(231, 76, 60, 0.4)'
+                        : '0 4px 15px rgba(243, 156, 18, 0.4)',
+                      animation: 'pulse 2s infinite'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenExpiringDrugsModal();
+                    }}
+                  >
+                    ⚠️ {totalExpiring}盒药品{isAllExpired ? '已过期' : '即将过期'}，点击处理
+                  </button>
+                );
+              }
+              return null;
+            })()}
           </div>
         </div>
       </div>
 
-      <div className="notification-bar">
-        <span className="notification-icon">🔔</span>
-        <span className="notification-text">您有1盒药还有7天过期</span>
-      </div>
+      {(() => {
+        const { expiredDrugs, expiringDrugs } = getExpiringDrugs();
+        const totalExpiring = expiredDrugs.length + expiringDrugs.length;
+        const isAllExpired = totalExpiring === expiredDrugs.length;
+        if (totalExpiring > 0) {
+          return (
+            <div
+              onClick={handleOpenExpiringDrugsModal}
+              style={{
+                cursor: 'pointer',
+                background: isAllExpired
+                  ? 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)'
+                  : 'linear-gradient(135deg, #f39c12 0%, #e67e22 100%)',
+                color: 'white',
+                padding: '16px 20px',
+                borderRadius: '12px',
+                marginTop: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                boxShadow: isAllExpired
+                  ? '0 4px 20px rgba(231, 76, 60, 0.5)'
+                  : '0 4px 20px rgba(243, 156, 18, 0.5)',
+                animation: 'pulse 2s infinite',
+                fontWeight: 'bold',
+                fontSize: '15px'
+              }}
+            >
+              <span style={{ fontSize: '20px' }}>🔔</span>
+              <span>
+                您有{totalExpiring}盒药品{isAllExpired ? '已过期' : '即将过期'}，点击查看详情
+              </span>
+            </div>
+          );
+        }
+        return null;
+      })()}
     </div>
   );
 
@@ -2618,6 +2770,93 @@ function App() {
         </div>
       )}
 
+      {/* 过期药品弹窗 */}
+      {showExpiringDrugsModal && (
+        <div className="modal-overlay" onClick={handleCloseExpiringDrugsModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">⚠️ 药品过期提醒</h3>
+              <button className="modal-close-btn" onClick={handleCloseExpiringDrugsModal}>✕</button>
+            </div>
+            <div className="modal-body">
+              {(() => {
+                const { expiredDrugs, expiringDrugs } = getExpiringDrugs();
+                return (
+                  <div>
+                    {expiredDrugs.length > 0 && (
+                      <div style={{ marginBottom: '20px' }}>
+                        <h4 style={{ color: '#e74c3c', marginBottom: '12px', fontSize: '16px' }}>
+                          🔴 已过期药品（{expiredDrugs.length}种）
+                        </h4>
+                        {expiredDrugs.map((drug, index) => (
+                          <div
+                            key={index}
+                            className="drug-item"
+                            onClick={() => handleExpiringDrugClick(drug)}
+                            style={{
+                              padding: '12px',
+                              borderBottom: '1px solid #eee',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <div>
+                              <span style={{ fontWeight: 'bold', color: '#333' }}>
+                                {drug.name}
+                                {drug.tradeName || drug.commonName ? `（${drug.tradeName || drug.commonName}）` : ''}
+                              </span>
+                              <span style={{ color: '#e74c3c', fontSize: '14px', marginLeft: '8px' }}>
+                                已过期{Math.abs(drug.daysUntilExpiry)}天
+                              </span>
+                            </div>
+                            <span style={{ color: '#999', fontSize: '12px' }}>点击查看详情 →</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {expiringDrugs.length > 0 && (
+                      <div>
+                        <h4 style={{ color: '#f39c12', marginBottom: '12px', fontSize: '16px' }}>
+                          🟡 即将过期药品（{expiringDrugs.length}种）
+                        </h4>
+                        {expiringDrugs.map((drug, index) => (
+                          <div
+                            key={index}
+                            className="drug-item"
+                            onClick={() => handleExpiringDrugClick(drug)}
+                            style={{
+                              padding: '12px',
+                              borderBottom: '1px solid #eee',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <div>
+                              <span style={{ fontWeight: 'bold', color: '#333' }}>
+                                {drug.name}
+                                {drug.tradeName || drug.commonName ? `（${drug.tradeName || drug.commonName}）` : ''}
+                              </span>
+                              <span style={{ color: '#f39c12', fontSize: '14px', marginLeft: '8px' }}>
+                                {drug.daysUntilExpiry === 0 ? '今天过期' : `还有${drug.daysUntilExpiry}天过期`}
+                              </span>
+                            </div>
+                            <span style={{ color: '#999', fontSize: '12px' }}>点击查看详情 →</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 药品详情弹窗 */}
       {showDrugDetailModal && selectedDrug && (
         <div className="modal-overlay" onClick={handleCloseDrugDetail}>
@@ -2631,7 +2870,15 @@ function App() {
               <div className="drug-detail-info">
                 <div className="detail-item">
                   <label className="detail-label">药品名称</label>
-                  <p className="detail-value">{selectedDrug.name}</p>
+                  <p className="detail-value">
+                    {selectedDrug.name}
+                    {(() => {
+                      const otherNames = [];
+                      if (selectedDrug.tradeName) otherNames.push(selectedDrug.tradeName);
+                      if (selectedDrug.commonName) otherNames.push(selectedDrug.commonName);
+                      return otherNames.length > 0 ? `（${otherNames.join('，')}）` : '';
+                    })()}
+                  </p>
                 </div>
                 <div className="detail-item">
                   <label className="detail-label">规格</label>
