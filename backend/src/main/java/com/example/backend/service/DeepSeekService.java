@@ -1,6 +1,10 @@
 package com.example.backend.service;
 
+import com.example.backend.model.dto.DrugConflictRequest;
+import com.example.backend.model.dto.DrugConflictResponse;
 import com.example.backend.model.dto.DrugDetailResponse;
+
+import java.util.List;
 
 /**
  * DeepSeek AI服务接口
@@ -32,4 +36,21 @@ public interface DeepSeekService {
      * @return 老年友好的用药指导文本
      */
     String generateElderlyFriendlyGuide(DrugDetailResponse drugDetail);
+
+    /**
+     * 使用DeepSeek AI检测药品之间的冲突
+     *
+     * @param drugNames 药品名称列表
+     * @return 冲突检测结果列表
+     */
+    DrugConflictResponse checkDrugConflicts(List<String> drugNames);
+
+    /**
+     * 使用DeepSeek AI进行全面的药品冲突检测
+     * 支持检测药品与食物、饮料、保健品之间的相互作用
+     *
+     * @param request 冲突检测请求
+     * @return 完整的冲突检测报告
+     */
+    DrugConflictResponse analyzeDrugConflicts(DrugConflictRequest request);
 }

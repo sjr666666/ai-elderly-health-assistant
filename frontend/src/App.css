@@ -2563,6 +2563,78 @@ body {
   }
 }
 
+/* ============ MODAL OVERLAY ============ */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5000;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.3s ease;
+}
+
+.modal-content {
+  background: white;
+  border-radius: var(--radius-xl);
+  max-width: 800px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-strong);
+  animation: popIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  position: relative;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32px 40px 20px;
+  border-bottom: 3px solid var(--cream-dark);
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10;
+}
+
+.modal-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+.modal-close-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: var(--cream-dark);
+  font-size: 24px;
+  cursor: pointer;
+  transition: var(--transition-medium);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dark);
+}
+
+.modal-close-btn:hover {
+  background: var(--danger-red);
+  color: white;
+  transform: scale(1.1);
+}
+
+.modal-body {
+  padding: 32px 40px;
+}
+
 /* ============ WATER RIPPLE EFFECT ============ */
 .btn-ripple {
   position: relative;
