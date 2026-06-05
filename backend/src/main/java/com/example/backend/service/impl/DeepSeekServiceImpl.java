@@ -584,7 +584,9 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         prompt.append("- DRUG_DRUG：药品与药品之间的冲突\n");
         prompt.append("- DRUG_FOOD：药品与食物之间的冲突\n");
         prompt.append("- DRUG_BEVERAGE：药品与饮料（如酒精、咖啡、茶等）之间的冲突\n");
-        prompt.append("- DRUG_SUPPLEMENT：药品与保健品之间的冲突\n\n");
+        prompt.append("- DRUG_SUPPLEMENT：药品与保健品之间的冲突\n");
+        prompt.append("- DRUG_ALLERGY：药品与用户过敏史之间的冲突（如用户对青霉素过敏，检测药品是否含青霉素）\n");
+        prompt.append("- DRUG_DISEASE：药品与用户慢性病史之间的冲突（如用户有高血压，检测药品是否禁忌用于高血压患者）\n\n");
         
         if (detailed) {
             prompt.append("请提供详细的冲突原理和解释，包括药理机制。\n");
@@ -633,11 +635,23 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             }
         }
         
+        if (request.getAllergyHistory() != null && !request.getAllergyHistory().trim().isEmpty()) {
+            prompt.append("\n【用户过敏史】\n");
+            prompt.append(request.getAllergyHistory()).append("\n");
+        }
+        
+        if (request.getChronicDiseases() != null && !request.getChronicDiseases().trim().isEmpty()) {
+            prompt.append("\n【用户慢性病史】\n");
+            prompt.append(request.getChronicDiseases()).append("\n");
+        }
+        
         prompt.append("\n请检测所有可能的组合，包括：\n");
         prompt.append("1. 药品与药品之间的相互作用\n");
         prompt.append("2. 药品与保健品之间的相互作用\n");
         prompt.append("3. 药品与饮料之间的相互作用\n");
         prompt.append("4. 药品与食物之间的相互作用\n");
+        prompt.append("5. 药品与用户过敏史之间的冲突（检测药品是否含过敏原或与过敏原相关）\n");
+        prompt.append("6. 药品与用户慢性病史之间的冲突（检测药品是否禁忌用于该基础疾病患者）\n");
         prompt.append("\n请提供详细的冲突分析和专业建议。");
         
         return prompt.toString();
@@ -796,6 +810,8 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                 .supplementsChecked(request.getSupplements())
                 .beveragesChecked(request.getBeverages())
                 .foodsChecked(request.getFoods())
+                .allergyHistory(request.getAllergyHistory())
+                .chronicDiseases(request.getChronicDiseases())
                 .conflicts(conflicts)
                 .hasSevereConflict(severeCount > 0)
                 .statistics(statistics)
@@ -879,6 +895,26 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                     if (conflict != null) {
                         conflicts.add(conflict);
                     }
+                }
+            }
+        }
+        
+        // 检测药品-过敏史冲突
+        if (request.getAllergyHistory() != null && !request.getAllergyHistory().trim().isEmpty()) {
+            for (String drug : drugNames) {
+                DrugConflictResult conflict = checkDrugAllergyConflict(drug, request.getAllergyHistory());
+                if (conflict != null) {
+                    conflicts.add(conflict);
+                }
+            }
+        }
+        
+        // 检测药品-慢性病史冲突
+        if (request.getChronicDiseases() != null && !request.getChronicDiseases().trim().isEmpty()) {
+            for (String drug : drugNames) {
+                DrugConflictResult conflict = checkDrugDiseaseConflict(drug, request.getChronicDiseases());
+                if (conflict != null) {
+                    conflicts.add(conflict);
                 }
             }
         }
@@ -1288,5 +1324,177 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                 .moderateCount(moderateCount)
                 .mildCount(mildCount)
                 .build();
+    }
+
+    /**
+     * 检测药品-过敏史冲突（本地规则）
+     */
+    private DrugConflictResult checkDrugAllergyConflict(String drug, String allergyHistory) {
+        String drugLower = drug.toLowerCase();
+        String allergyLower = allergyHistory.toLowerCase();
+        
+        if (allergyLower.contains("青霉素") && 
+            (drugLower.contains("青霉素") || drugLower.contains("阿莫西林") || drugLower.contains("氨苄西林"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("青霉素过敏史")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_ALLERGY)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("用户对青霉素类药物过敏，使用该药品可能引发过敏反应，包括皮疹、呼吸困难甚至过敏性休克。")
+                    .conflictExplanation("您对青霉素过敏，这个药属于青霉素类，吃了可能会引起过敏反应，非常危险。")
+                    .riskWarning("严重过敏风险，禁止使用！")
+                    .alternatives(java.util.Arrays.asList("立即停止使用该药品", "咨询医生更换其他类型抗生素", "告知医生您的过敏史"))
+                    .build();
+        }
+        
+        if (allergyLower.contains("头孢") && drugLower.contains("头孢")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("头孢类过敏史")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_ALLERGY)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("用户对头孢类药物过敏，使用该药品可能引发过敏反应，严重时危及生命。")
+                    .conflictExplanation("您对头孢过敏，这个药是头孢类，吃了可能会引起过敏反应，非常危险。")
+                    .riskWarning("严重过敏风险，禁止使用！")
+                    .alternatives(java.util.Arrays.asList("立即停止使用该药品", "咨询医生更换其他类型抗生素", "告知医生您的过敏史"))
+                    .build();
+        }
+        
+        if (allergyLower.contains("磺胺") && 
+            (drugLower.contains("磺胺") || drugLower.contains("磺胺嘧啶") || drugLower.contains("磺胺甲恶唑"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("磺胺类过敏史")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_ALLERGY)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("用户对磺胺类药物过敏，使用该药品可能引发过敏反应。")
+                    .conflictExplanation("您对磺胺类药物过敏，这个药属于磺胺类，吃了可能会引起过敏反应。")
+                    .riskWarning("严重过敏风险，禁止使用！")
+                    .alternatives(java.util.Arrays.asList("立即停止使用该药品", "咨询医生更换其他药物", "告知医生您的过敏史"))
+                    .build();
+        }
+        
+        if (allergyLower.contains("阿司匹林") && 
+            (drugLower.contains("阿司匹林") || drugLower.contains("乙酰水杨酸"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("阿司匹林过敏史")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_ALLERGY)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("用户对阿司匹林过敏，使用该药品可能引发过敏反应。")
+                    .conflictExplanation("您对阿司匹林过敏，这个药含有阿司匹林成分，吃了可能会引起过敏反应。")
+                    .riskWarning("严重过敏风险，禁止使用！")
+                    .alternatives(java.util.Arrays.asList("立即停止使用该药品", "咨询医生更换其他止痛药", "告知医生您的过敏史"))
+                    .build();
+        }
+        
+        if (allergyLower.contains("酒精") && drugLower.contains("乙醇")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("酒精过敏史")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_ALLERGY)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("用户对酒精过敏，该药品含有乙醇成分，使用可能引发过敏反应。")
+                    .conflictExplanation("您对酒精过敏，这个药含有酒精成分，使用可能会引起过敏反应。")
+                    .riskWarning("严重过敏风险，禁止使用！")
+                    .alternatives(java.util.Arrays.asList("立即停止使用该药品", "咨询医生更换不含酒精的药品", "告知医生您的过敏史"))
+                    .build();
+        }
+        
+        return null;
+    }
+
+    /**
+     * 检测药品-慢性病史冲突（本地规则）
+     */
+    private DrugConflictResult checkDrugDiseaseConflict(String drug, String chronicDiseases) {
+        String drugLower = drug.toLowerCase();
+        String diseaseLower = chronicDiseases.toLowerCase();
+        
+        if (diseaseLower.contains("高血压") && 
+            (drugLower.contains("麻黄") || drugLower.contains("伪麻黄碱") || drugLower.contains("肾上腺素"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("高血压病史")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_DISEASE)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("麻黄碱类药物具有收缩血管、升高血压的作用，高血压患者使用可能导致血压急剧升高，增加心脑血管事件风险。")
+                    .conflictExplanation("您有高血压，这个药含有麻黄碱，会让血压升高，非常危险。")
+                    .riskWarning("可能导致血压急剧升高，引发心脑血管事件！")
+                    .alternatives(java.util.Arrays.asList("立即停止使用该药品", "咨询医生更换不含麻黄碱的药物", "告知医生您的高血压病史"))
+                    .build();
+        }
+        
+        if (diseaseLower.contains("糖尿病") && 
+            (drugLower.contains("激素") || drugLower.contains("强的松") || drugLower.contains("泼尼松") || drugLower.contains("地塞米松"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("糖尿病病史")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_DISEASE)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("糖皮质激素会升高血糖，糖尿病患者使用可能导致血糖控制不佳，增加并发症风险。")
+                    .conflictExplanation("您有糖尿病，这个药是激素类药物，会让血糖升高，影响血糖控制。")
+                    .riskWarning("可能导致血糖波动，增加糖尿病并发症风险。")
+                    .alternatives(java.util.Arrays.asList("密切监测血糖变化", "咨询医生调整降糖药剂量", "尽量缩短激素使用时间"))
+                    .build();
+        }
+        
+        if (diseaseLower.contains("心脏病") && 
+            (drugLower.contains("麻黄") || drugLower.contains("伪麻黄碱") || drugLower.contains("肾上腺素"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("心脏病病史")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_DISEASE)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("麻黄碱类药物会加快心率、升高血压，心脏病患者使用可能加重心脏负担，诱发心律失常或心肌缺血。")
+                    .conflictExplanation("您有心脏病，这个药含有麻黄碱，会加重心脏负担，非常危险。")
+                    .riskWarning("可能诱发心律失常或心肌缺血，禁止使用！")
+                    .alternatives(java.util.Arrays.asList("立即停止使用该药品", "咨询医生更换安全的药物", "告知医生您的心脏病史"))
+                    .build();
+        }
+        
+        if (diseaseLower.contains("肝") && 
+            (drugLower.contains("对乙酰氨基酚") || drugLower.contains("扑热息痛"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("肝功能不全病史")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_DISEASE)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("对乙酰氨基酚主要在肝脏代谢，肝功能不全患者使用可能加重肝脏负担，增加肝损伤风险。")
+                    .conflictExplanation("您有肝病，这个药主要在肝脏代谢，可能会加重肝脏负担。")
+                    .riskWarning("可能加重肝脏损伤，需谨慎使用。")
+                    .alternatives(java.util.Arrays.asList("避免过量使用", "咨询医生选择对肝脏影响较小的药物", "定期检查肝功能"))
+                    .build();
+        }
+        
+        if (diseaseLower.contains("肾") && 
+            (drugLower.contains("布洛芬") || drugLower.contains("双氯芬酸") || drugLower.contains("消炎痛"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("肾功能不全病史")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_DISEASE)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("非甾体抗炎药会影响肾脏的前列腺素合成，肾功能不全患者使用可能进一步损害肾功能。")
+                    .conflictExplanation("您有肾病，这个药可能会损害肾功能，需要谨慎使用。")
+                    .riskWarning("可能加重肾脏损伤，需谨慎使用。")
+                    .alternatives(java.util.Arrays.asList("咨询医生选择对肾脏影响较小的药物", "定期检查肾功能", "避免长期使用"))
+                    .build();
+        }
+        
+        if (diseaseLower.contains("胃溃疡") && 
+            (drugLower.contains("阿司匹林") || drugLower.contains("布洛芬") || drugLower.contains("双氯芬酸"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("胃溃疡病史")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_DISEASE)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("非甾体抗炎药会抑制胃黏膜前列腺素的合成，破坏胃黏膜屏障，胃溃疡患者使用可能导致溃疡加重或出血。")
+                    .conflictExplanation("您有胃溃疡，这个药会刺激胃黏膜，可能导致溃疡加重或出血。")
+                    .riskWarning("可能导致胃出血或穿孔，禁止使用！")
+                    .alternatives(java.util.Arrays.asList("立即停止使用该药品", "咨询医生更换对胃刺激较小的药物", "告知医生您的胃溃疡病史"))
+                    .build();
+        }
+        
+        return null;
     }
 }

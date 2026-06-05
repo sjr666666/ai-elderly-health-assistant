@@ -3,7 +3,11 @@ package com.example.backend.controller;
 import com.example.backend.common.ResponseResult;
 import com.example.backend.model.dto.DrugConflictRequest;
 import com.example.backend.model.dto.DrugConflictResponse;
+import com.example.backend.model.entity.SysUser;
 import com.example.backend.service.DeepSeekService;
+import com.example.backend.service.UserService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.backend.mapper.UserMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +28,9 @@ public class DrugConflictController {
 
     @Autowired
     private DeepSeekService deepSeekService;
+
+    @Autowired
+    private UserMapper userMapper;
 
     /**
      * 检测多种药品之间的冲突
@@ -98,6 +105,57 @@ public class DrugConflictController {
         } catch (Exception e) {
             logger.error("快速冲突检测失败: ", e);
             return ResponseResult.fail("快速检测失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 结合用户健康档案进行全面冲突检测
+     * 根据用户ID自动获取过敏史和慢性病史，进行药品冲突检测
+     *
+     * @param userId 用户ID
+     * @param drugNames 药品名称列表
+     * @return 冲突检测报告
+     */
+    @PostMapping("/check-with-profile")
+    public ResponseResult<DrugConflictResponse> checkWithUserProfile(
+            @RequestParam String userId,
+            @RequestBody List<String> drugNames) {
+        try {
+            logger.info("收到结合健康档案的冲突检测请求 - 用户ID: {}, 药品列表: {}", userId, drugNames);
+            
+            if (userId == null || userId.trim().isEmpty()) {
+                return ResponseResult.fail("用户ID不能为空");
+            }
+            
+            if (drugNames == null || drugNames.isEmpty()) {
+                return ResponseResult.fail("药品列表不能为空");
+            }
+
+            Long uid = Long.parseLong(userId);
+            LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
+            queryWrapper.eq(SysUser::getUserId, uid);
+            SysUser user = userMapper.selectOne(queryWrapper);
+            
+            if (user == null) {
+                return ResponseResult.fail("用户不存在");
+            }
+
+            DrugConflictRequest request = DrugConflictRequest.builder()
+                    .drugNames(drugNames)
+                    .allergyHistory(user.getAllergyHistory())
+                    .chronicDiseases(user.getChronicDiseases())
+                    .detailed(true)
+                    .includeAlternatives(true)
+                    .build();
+
+            DrugConflictResponse result = deepSeekService.analyzeDrugConflicts(request);
+            return ResponseResult.success("冲突检测完成", result);
+        } catch (NumberFormatException e) {
+            logger.error("用户ID格式错误: ", e);
+            return ResponseResult.fail("用户ID格式错误");
+        } catch (Exception e) {
+            logger.error("结合健康档案的冲突检测失败: ", e);
+            return ResponseResult.fail("冲突检测失败: " + e.getMessage());
         }
     }
 }

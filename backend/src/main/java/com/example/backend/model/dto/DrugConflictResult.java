@@ -71,7 +71,9 @@ public class DrugConflictResult {
         DRUG_DRUG("药品-药品冲突"),
         DRUG_FOOD("药品-食物冲突"),
         DRUG_BEVERAGE("药品-饮料冲突"),
-        DRUG_SUPPLEMENT("药品-保健品冲突");
+        DRUG_SUPPLEMENT("药品-保健品冲突"),
+        DRUG_ALLERGY("药品-过敏史冲突"),
+        DRUG_DISEASE("药品-慢性病史冲突");
 
         private final String description;
 
