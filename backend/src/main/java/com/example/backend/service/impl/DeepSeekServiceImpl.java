@@ -515,6 +515,29 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                 if (result != null) {
                     logger.info("DeepSeek AI冲突检测成功 - 检测到 {} 个冲突", 
                         result.getConflicts() != null ? result.getConflicts().size() : 0);
+                    
+                    // 在AI检测结果基础上，补充检测药品与酒精的冲突（重要安全提示）
+                    List<DrugConflictResult> alcoholConflicts = detectAlcoholConflicts(request.getDrugNames());
+                    if (!alcoholConflicts.isEmpty()) {
+                        logger.info("补充检测到 {} 个药品-酒精冲突", alcoholConflicts.size());
+                        // 将酒精冲突合并到结果中
+                        if (result.getConflicts() == null) {
+                            result.setConflicts(new java.util.ArrayList<>());
+                        }
+                        for (DrugConflictResult alcoholConflict : alcoholConflicts) {
+                            boolean exists = result.getConflicts().stream()
+                                .anyMatch(c -> c.getDrugA().equals(alcoholConflict.getDrugA()) 
+                                    && c.getDrugB().equals(alcoholConflict.getDrugB()));
+                            if (!exists) {
+                                result.getConflicts().add(alcoholConflict);
+                            }
+                        }
+                        // 更新统计信息
+                        result.setHasSevereConflict(result.getConflicts().stream()
+                            .anyMatch(c -> c.getSeverity() == DrugConflictResult.SeverityLevel.SEVERE));
+                        result.setStatistics(buildStatistics(result.getConflicts()));
+                    }
+                    
                     return result;
                 } else {
                     logger.info("DeepSeek AI未能检测到有效冲突信息，使用本地规则检测");
@@ -827,17 +850,12 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             }
         }
         
-        // 检测药品-酒精冲突
-        if (request.getBeverages() != null) {
-            for (String beverage : request.getBeverages()) {
-                if (beverage.toLowerCase().contains("酒") || beverage.toLowerCase().contains("酒精")) {
-                    for (String drug : drugNames) {
-                        DrugConflictResult conflict = checkAlcoholConflict(drug);
-                        if (conflict != null) {
-                            conflicts.add(conflict);
-                        }
-                    }
-                }
+        // 检测药品-酒精冲突（自动检测，不依赖前端传递酒精信息）
+        // 用户添加药品后，系统应主动提醒服药期间不能饮酒的禁忌
+        for (String drug : drugNames) {
+            DrugConflictResult conflict = checkAlcoholConflict(drug);
+            if (conflict != null) {
+                conflicts.add(conflict);
             }
         }
         
@@ -1112,15 +1130,19 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                     .build();
         }
         
-        // 解热镇痛药与酒精
-        if (drugLower.contains("布洛芬") || drugLower.contains("阿司匹林") || drugLower.contains("对乙酰氨基酚")) {
+        // 解热镇痛药与酒精（包括常见感冒药，如感冒灵颗粒、感康等，它们含有对乙酰氨基酚成分）
+        if (drugLower.contains("布洛芬") || drugLower.contains("阿司匹林") || drugLower.contains("对乙酰氨基酚") ||
+            drugLower.contains("扑热息痛") || drugLower.contains("泰诺") || drugLower.contains("芬必得") ||
+            drugLower.contains("感冒灵") || drugLower.contains("感康") || drugLower.contains("白加黑") ||
+            drugLower.contains("复方氨酚") || drugLower.contains("氨酚烷胺") || drugLower.contains("氨咖") ||
+            drugLower.contains("去痛片") || drugLower.contains("止痛") || drugLower.contains("退烧")) {
             return DrugConflictResult.builder()
                     .drugA(drug)
                     .drugB("酒精")
                     .conflictType(DrugConflictResult.ConflictType.DRUG_BEVERAGE)
                     .severity(DrugConflictResult.SeverityLevel.MODERATE)
                     .conflictMechanism("酒精会加重解热镇痛药对胃黏膜的刺激，增加胃溃疡和出血的风险。")
-                    .conflictExplanation("喝酒时吃止痛药会刺激胃，容易引起胃痛、胃出血。")
+                    .conflictExplanation("喝酒时吃感冒药或止痛药会刺激胃，容易引起胃痛、胃出血。")
                     .riskWarning("增加胃部不适和出血风险。")
                     .alternatives(java.util.Arrays.asList("服药期间避免饮酒", "饭后服药以减少胃刺激"))
                     .build();
@@ -1222,5 +1244,49 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         }
         
         return null;
+    }
+
+    /**
+     * 检测药品与酒精的冲突（独立方法，用于AI检测后的补充检测）
+     */
+    private List<DrugConflictResult> detectAlcoholConflicts(List<String> drugNames) {
+        List<DrugConflictResult> conflicts = new java.util.ArrayList<>();
+        for (String drug : drugNames) {
+            DrugConflictResult conflict = checkAlcoholConflict(drug);
+            if (conflict != null) {
+                conflicts.add(conflict);
+            }
+        }
+        return conflicts;
+    }
+
+    /**
+     * 构建冲突统计信息
+     */
+    private DrugConflictResponse.ConflictStatistics buildStatistics(List<DrugConflictResult> conflicts) {
+        int severeCount = 0;
+        int moderateCount = 0;
+        int mildCount = 0;
+        
+        for (DrugConflictResult conflict : conflicts) {
+            switch (conflict.getSeverity()) {
+                case SEVERE:
+                    severeCount++;
+                    break;
+                case MODERATE:
+                    moderateCount++;
+                    break;
+                case MILD:
+                    mildCount++;
+                    break;
+            }
+        }
+        
+        return DrugConflictResponse.ConflictStatistics.builder()
+                .totalConflicts(conflicts.size())
+                .severeCount(severeCount)
+                .moderateCount(moderateCount)
+                .mildCount(mildCount)
+                .build();
     }
 }

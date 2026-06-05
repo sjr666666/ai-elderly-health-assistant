@@ -45,10 +45,7 @@ function App() {
   const [recognizedDrugs, setRecognizedDrugs] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
-  const [emergencyContacts, setEmergencyContacts] = useState([
-    { id: 1, name: '张小明', phone: '13800138000', relationship: '儿子', isPrimary: true },
-    { id: 2, name: '张小红', phone: '13900139000', relationship: '女儿', isPrimary: false }
-  ]);
+  const [emergencyContacts, setEmergencyContacts] = useState([]);
   const [showAddContact, setShowAddContact] = useState(false);
   const [showAddDrugModal, setShowAddDrugModal] = useState(false);
   const [showEditDrugModal, setShowEditDrugModal] = useState(false); // 编辑药品弹窗
@@ -153,6 +150,29 @@ function App() {
       }
     } catch (err) {
       console.error('获取药箱列表异常:', err);
+    }
+  };
+
+  // 从数据库加载紧急联系人列表
+  const loadEmergencyContacts = async (elderId) => {
+    if (!elderId) return;
+    
+    try {
+      const response = await fetch(`/api/emergency/v1/contacts?elderId=${elderId}`);
+      const data = await response.json();
+      
+      console.log('=== 紧急联系人列表响应 ===');
+      console.log('状态码:', response.status);
+      console.log('响应数据:', data);
+      console.log('==================');
+      
+      if (response.ok && data.code === 200) {
+        setEmergencyContacts(data.data);
+      } else {
+        console.error('获取紧急联系人列表失败:', data.message);
+      }
+    } catch (err) {
+      console.error('获取紧急联系人列表异常:', err);
     }
   };
 
@@ -392,9 +412,12 @@ function App() {
       ...loginData
     }));
     
-    // 登录成功后加载药箱列表
+    // 登录成功后加载药箱列表和紧急联系人
     if (loginData.userId) {
       loadMedicineBoxList(loginData.userId);
+    }
+    if (loginData.id) {
+      loadEmergencyContacts(loginData.id);
     }
     
     if (loginData.needProfile) {
@@ -423,14 +446,45 @@ function App() {
     setTimeout(() => setShowSuccessToast(false), 2000);
   };
 
-  const handleAddContact = (contact) => {
-    setEmergencyContacts([...emergencyContacts, contact]);
-    alert('✅ 紧急联系人已添加！');
+  const handleAddContact = async () => {
+    if (user && user.id) {
+      await loadEmergencyContacts(user.id);
+      setToastMessage('紧急联系人已添加！');
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 2000);
+    } else {
+      console.error('用户ID为空，无法刷新联系人列表');
+    }
   };
 
-  const handleDeleteContact = (id) => {
-    setEmergencyContacts(emergencyContacts.filter(c => c.id !== id));
-    alert('✅ 联系人已删除！');
+  const handleDeleteContact = async (contactId) => {
+    if (user && user.id) {
+      try {
+        const response = await fetch(`/api/emergency/v1/contacts/${contactId}`, {
+          method: 'DELETE'
+        });
+        const result = await response.json();
+        
+        if (result.code === 200) {
+          await loadEmergencyContacts(user.id);
+          setToastMessage('联系人已删除！');
+          setShowSuccessToast(true);
+          setTimeout(() => setShowSuccessToast(false), 2000);
+        } else {
+          console.error('删除联系人失败:', result.message);
+          setToastMessage('删除失败：' + (result.message || '未知错误'));
+          setShowSuccessToast(false);
+          setTimeout(() => setShowSuccessToast(false), 2000);
+        }
+      } catch (error) {
+        console.error('删除联系人失败:', error);
+        setToastMessage('删除失败，请检查网络连接');
+        setShowSuccessToast(false);
+        setTimeout(() => setShowSuccessToast(false), 2000);
+      }
+    } else {
+      console.error('用户ID为空，无法删除联系人');
+    }
   };
 
   // 打开药品详情弹窗
@@ -670,8 +724,11 @@ function App() {
         if (userData && userData.userId) {
           setUser(userData);
           setIsLoggedIn(true);
-          // 自动加载药箱列表
+          // 自动加载药箱列表和紧急联系人
           loadMedicineBoxList(userData.userId);
+          if (userData.id) {
+            loadEmergencyContacts(userData.id);
+          }
         }
       } catch (e) {
         console.error('解析用户数据失败:', e);
@@ -1356,9 +1413,10 @@ function App() {
     }
   };
 
-  const takenCount = calendarPlans.length > 0 ? calendarPlans.filter(r => r.taken).length : reminders.filter(r => r.taken).length;
-  const totalCount = calendarPlans.length > 0 ? calendarPlans.length : reminders.length;
-  const progressPercent = (takenCount / totalCount) * 440;
+  const takenCount = calendarPlans.filter(r => r.taken).length;
+  const totalCount = calendarPlans.length;
+  const progressPercent = totalCount > 0 ? (takenCount / totalCount) * 440 : 0;
+  const isFullProgress = takenCount === totalCount && totalCount > 0;
 
   const renderHeader = () => (
     <header className="header">
@@ -1410,26 +1468,41 @@ function App() {
         <div className="dashboard-card" onClick={() => setActiveTab('calendar')}>
           <h3 className="dashboard-card-title">今日用药</h3>
           <div className="dashboard-card-desc">
-            <div className="progress-ring-container">
-              <svg className="progress-ring" viewBox="0 0 180 180">
-                <defs>
-                  <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#4A90E2" />
-                    <stop offset="100%" stopColor="#98D4BB" />
-                  </linearGradient>
-                </defs>
-                <circle className="progress-ring-circle-bg" cx="90" cy="90" r="80" />
-                <circle
-                  className="progress-ring-circle"
-                  cx="90" cy="90" r="80"
-                  strokeDasharray={`${progressPercent} 440`}
-                />
-              </svg>
-              <div className="progress-ring-text">
-                <div className="progress-ring-value">{takenCount}/{totalCount}</div>
-                <div className="progress-ring-label">已完成</div>
+            {totalCount > 0 ? (
+              <div className="progress-ring-container">
+                <svg className="progress-ring" viewBox="0 0 180 180">
+                  <defs>
+                    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#4A90E2" />
+                      <stop offset="100%" stopColor="#98D4BB" />
+                    </linearGradient>
+                  </defs>
+                  <circle className="progress-ring-circle-bg" cx="90" cy="90" r="80" />
+                  {isFullProgress ? (
+                    <circle
+                      className="progress-ring-circle full"
+                      cx="90" cy="90" r="80"
+                    />
+                  ) : (
+                    <circle
+                      className="progress-ring-circle"
+                      cx="90" cy="90" r="80"
+                      strokeDasharray={`${progressPercent} 440`}
+                    />
+                  )}
+                </svg>
+                <div className="progress-ring-text">
+                  <div className="progress-ring-value">{takenCount}/{totalCount}</div>
+                  <div className="progress-ring-label">已完成</div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="empty-plan-hint">
+                <div className="empty-plan-icon">💊</div>
+                <div className="empty-plan-text">暂无用药计划</div>
+                <div className="empty-plan-subtext">请先添加药品到药箱</div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -2934,6 +3007,12 @@ function App() {
           onAdd={handleAddContact}
           onDelete={handleDeleteContact}
           onClose={() => setShowAddContact(false)}
+          onShowToast={(message) => {
+            setToastMessage(message);
+            setShowSuccessToast(true);
+            setTimeout(() => setShowSuccessToast(false), 2000);
+          }}
+          userId={user?.id}
         />
       )}
 

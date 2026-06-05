@@ -48,6 +48,23 @@ cd backend
 mysql -u root -p ai_emergency_assistant < src/main/resources/data/init_data.sql
 ```
 
+#### 本地配置文件
+
+首次运行前，需要创建本地配置文件配置数据库密码：
+
+```bash
+# 创建 application-local.properties 文件
+touch backend/src/main/resources/application-local.properties
+```
+
+添加以下内容（将 `YOUR_PASSWORD` 替换为你的数据库密码）：
+
+```properties
+spring.datasource.password=YOUR_PASSWORD
+```
+
+> 注意：`application-local.properties` 已被 gitignore 忽略，不会提交到仓库。
+
 #### 启动后端
 
 ```bash

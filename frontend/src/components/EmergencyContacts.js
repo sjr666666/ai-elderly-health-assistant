@@ -22,13 +22,14 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
     }
 
     if (!userId) {
-      alert('用户ID不能为空');
+      alert('用户ID不能为空，请重新登录');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
+      console.log('添加联系人请求 - name:', newContact.name, 'phone:', newContact.phone, 'elderId:', userId);
       const response = await fetch('/api/emergency/v1/contacts', {
         method: 'POST',
         headers: {
@@ -36,22 +37,24 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
         },
         body: JSON.stringify({
           name: newContact.name,
-          elderId: userId,  // 直接使用数据库主键ID（Long类型）
+          elderId: userId,
           phone: newContact.phone,
           email: newContact.email || '',
           relationship: newContact.relationship || ''
         })
       });
 
+      console.log('添加联系人响应状态:', response.status);
       const result = await response.json();
+      console.log('添加联系人响应数据:', result);
 
       if (result.code === 200) {
-        // 调用父组件的回调，刷新联系人列表
         onAdd && onAdd();
         setNewContact({ name: '', phone: '', email: '', relationship: '' });
         setShowAddForm(false);
         onShowToast && onShowToast('添加成功');
       } else {
+        console.error('添加联系人失败，响应码:', result.code, '消息:', result.message);
         alert(result.message || '添加失败');
       }
     } catch (error) {
@@ -71,31 +74,23 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
     setIsClosingDialog(true);
     
     try {
-      console.log('开始删除联系人，ID:', deleteId);
       const response = await fetch(`/api/emergency/v1/contacts/${deleteId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       });
-
-      console.log('删除响应状态:', response.status);
+      
       const result = await response.json();
-      console.log('删除响应数据:', result);
-
+      
       if (result.code === 200) {
-        // 调用父组件的回调，刷新联系人列表
         onDelete(deleteId);
-        setShowConfirmDialog(false);
-        setIsClosingDialog(false);
-        setDeleteId(null);
-        setTimeout(() => {
-          onShowToast && onShowToast('删除成功');
-        }, 300);
+        onShowToast && onShowToast('删除成功');
       } else {
-        console.error('删除失败，响应码:', result.code, '消息:', result.message);
+        console.error('删除联系人失败，响应码:', result.code, '消息:', result.message);
         alert(result.message || '删除失败');
-        setShowConfirmDialog(false);
-        setIsClosingDialog(false);
-        setDeleteId(null);
       }
+      
+      setShowConfirmDialog(false);
+      setIsClosingDialog(false);
+      setDeleteId(null);
     } catch (error) {
       console.error('删除联系人失败:', error);
       alert('删除失败，请检查网络连接');
