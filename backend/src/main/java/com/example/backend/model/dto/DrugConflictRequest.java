@@ -38,6 +38,18 @@ public class DrugConflictRequest {
     private List<String> foods;
 
     /**
+     * 用户过敏史（可选）
+     * 如"青霉素过敏、海鲜过敏"，用于检测药品与过敏原的冲突
+     */
+    private String allergyHistory;
+
+    /**
+     * 用户慢性病史（可选）
+     * 如"高血压、糖尿病、心脏病"，用于检测药品与基础疾病的禁忌
+     */
+    private String chronicDiseases;
+
+    /**
      * 是否需要详细解释
      */
     @Builder.Default

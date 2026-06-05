@@ -49,6 +49,16 @@ public class DrugConflictResponse {
     private List<String> foodsChecked;
 
     /**
+     * 用户过敏史
+     */
+    private String allergyHistory;
+
+    /**
+     * 用户慢性病史
+     */
+    private String chronicDiseases;
+
+    /**
      * 检测到的冲突列表
      */
     private List<DrugConflictResult> conflicts;
