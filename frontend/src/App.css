@@ -756,6 +756,10 @@ body {
   background: linear-gradient(135deg, var(--mint-green-light) 0%, var(--mint-green) 100%);
 }
 
+.btn-success.confirmed {
+  background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%);
+}
+
 .btn-danger {
   background: linear-gradient(135deg, var(--danger-red) 0%, #C0392B 100%);
   color: white;
@@ -2050,7 +2054,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  z-index: 99999999;
   animation: fadeIn 0.3s ease;
 }
 
@@ -2090,6 +2094,52 @@ body {
   font-size: 48px;
   font-weight: 800;
   color: var(--success-green);
+}
+
+.undo-modal {
+  max-width: 480px;
+  width: 90%;
+}
+
+.undo-modal .modal-header {
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: linear-gradient(135deg, var(--danger-red) 0%, #991B1B 100%);
+  border-bottom: none;
+  padding: 24px 32px;
+}
+
+.undo-modal .modal-title {
+  color: white;
+  font-size: 22px;
+}
+
+.undo-modal .modal-close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.undo-modal .modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.undo-modal .modal-body {
+  padding: 32px;
+}
+
+.undo-modal .modal-footer {
+  display: flex;
+  gap: 16px;
+  padding: 24px 32px;
+  border-top: 2px solid var(--cream-dark);
+  background: var(--cream-white);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+
+.undo-modal .modal-footer .btn {
+  flex: 1;
+  min-height: 52px;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 /* ============ SEARCH BOX ============ */
