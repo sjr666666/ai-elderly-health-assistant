@@ -59,6 +59,8 @@ function App() {
   const [selectedDrug, setSelectedDrug] = useState(null); // 选中的药品
   const [drugsWithPlan, setDrugsWithPlan] = useState(new Set()); // 已设置用药计划的药品ID集合
   const [showExpiringDrugsModal, setShowExpiringDrugsModal] = useState(false); // 过期药品弹窗
+  const [showUndoConfirmModal, setShowUndoConfirmModal] = useState(false); // 撤销确认弹窗
+  const [pendingUndoId, setPendingUndoId] = useState(null); // 待撤销的计划ID
   
   // 药品冲突检测相关状态
   const [conflictReport, setConflictReport] = useState(null); // 冲突检测报告
@@ -1253,6 +1255,17 @@ function App() {
     }
   };
 
+  const parseDosageToNumber = (dosageStr) => {
+    if (!dosageStr) return 1;
+    
+    const match = dosageStr.match(/(\d+\.?\d*)/);
+    if (match) {
+      return parseInt(match[1], 10) || 1;
+    }
+    
+    return 1;
+  };
+
   const markAsTaken = (id, event) => {
     if (event) {
       const rect = event.target.getBoundingClientRect();
@@ -1292,11 +1305,25 @@ function App() {
         
         // 更新药箱剩余数量（如果有 boxItemId）
         if (r.boxItemId && r.remainingQuantity !== undefined) {
+          const amount = parseDosageToNumber(r.dosage);
+          const newRemaining = Math.max(0, (r.remainingQuantity || 0) - amount);
           updateMedicineBoxQuantity(r.boxItemId, r.remainingQuantity, r.dosage);
+          return { ...r, taken: true, missed: false, remainingQuantity: newRemaining };
         }
         
         return { ...r, taken: true, missed: false };
       }
+      
+      // 如果是同一种药品的其他时间段，同步更新剩余数量
+      if (r.boxItemId && r.boxItemId === calendarPlans.find(p => p.id === id)?.boxItemId) {
+        const targetPlan = calendarPlans.find(p => p.id === id);
+        if (targetPlan && targetPlan.boxItemId && targetPlan.remainingQuantity !== undefined) {
+          const amount = parseDosageToNumber(targetPlan.dosage);
+          const newRemaining = Math.max(0, (targetPlan.remainingQuantity || 0) - amount);
+          return { ...r, remainingQuantity: newRemaining };
+        }
+      }
+      
       return r;
     }));
 
@@ -1319,19 +1346,6 @@ function App() {
     } catch (err) {
       console.error('调用后端API异常，但本地状态已保存:', err);
     }
-  };
-
-  // 解析用量字符串为数字（如 "1片" -> 1, "5ml" -> 5, "2粒" -> 2）
-  const parseDosageToNumber = (dosageStr) => {
-    if (!dosageStr) return 1; // 默认1
-    
-    // 匹配数字（支持整数和小数）
-    const match = dosageStr.match(/(\d+\.?\d*)/);
-    if (match) {
-      return parseInt(match[1], 10) || 1;
-    }
-    
-    return 1; // 默认减少1
   };
 
   // 更新药箱剩余数量
@@ -1379,38 +1393,60 @@ function App() {
   };
 
   const undoMarkAsTaken = (id) => {
-    const shouldUndo = window.confirm('确定要撤销吗？这将标记为未服药状态。');
-    if (shouldUndo) {
-      // 更新 reminders 状态
-      setReminders(reminders.map(r =>
-        r.id === id ? { ...r, taken: false } : r
-      ));
+    setPendingUndoId(id);
+    setShowUndoConfirmModal(true);
+  };
 
-      // 更新 calendarPlans 状态（修复用药日历不更新的问题）
-      setCalendarPlans(calendarPlans.map(r => {
-        if (r.id === id) {
-          // 从 localStorage 中移除该记录（撤销标记）
-          saveLocalMedicationStatus(id, null);
-          if (r.planId) {
-            saveLocalMedicationStatus(r.planId, null);
-          }
-          
-          // 恢复药箱剩余数量（如果有 boxItemId）
-          if (r.boxItemId && r.remainingQuantity !== undefined) {
-            updateMedicineBoxQuantity(r.boxItemId, r.remainingQuantity, r.dosage, true);
-          }
-          
-          return { ...r, taken: false };
+  const confirmUndo = () => {
+    const id = pendingUndoId;
+    if (!id) return;
+    
+    setShowUndoConfirmModal(false);
+    setPendingUndoId(null);
+
+    // 更新 reminders 状态
+    setReminders(reminders.map(r =>
+      r.id === id ? { ...r, taken: false } : r
+    ));
+
+    // 更新 calendarPlans 状态（修复用药日历不更新的问题）
+    setCalendarPlans(calendarPlans.map(r => {
+      if (r.id === id) {
+        // 从 localStorage 中移除该记录（撤销标记）
+        saveLocalMedicationStatus(id, null);
+        if (r.planId) {
+          saveLocalMedicationStatus(r.planId, null);
         }
-        return r;
-      }));
+        
+        // 恢复药箱剩余数量（如果有 boxItemId）
+        if (r.boxItemId && r.remainingQuantity !== undefined) {
+          const amount = parseDosageToNumber(r.dosage);
+          const newRemaining = (r.remainingQuantity || 0) + amount;
+          updateMedicineBoxQuantity(r.boxItemId, r.remainingQuantity, r.dosage, true);
+          return { ...r, taken: false, remainingQuantity: newRemaining };
+        }
+        
+        return { ...r, taken: false };
+      }
+      
+      // 如果是同一种药品的其他时间段，同步更新剩余数量
+      if (r.boxItemId && r.boxItemId === calendarPlans.find(p => p.id === id)?.boxItemId) {
+        const targetPlan = calendarPlans.find(p => p.id === id);
+        if (targetPlan && targetPlan.boxItemId && targetPlan.remainingQuantity !== undefined) {
+          const amount = parseDosageToNumber(targetPlan.dosage);
+          const newRemaining = (targetPlan.remainingQuantity || 0) + amount;
+          return { ...r, remainingQuantity: newRemaining };
+        }
+      }
+      
+      return r;
+    }));
 
-      setTakenButtons(prev => {
-        const newState = { ...prev };
-        delete newState[id];
-        return newState;
-      });
-    }
+    setTakenButtons(prev => {
+      const newState = { ...prev };
+      delete newState[id];
+      return newState;
+    });
   };
 
   const takenCount = calendarPlans.filter(r => r.taken).length;
@@ -2557,15 +2593,7 @@ function App() {
             ))}
           </div>
 
-          {showCelebration && (
-            <div className="celebration-overlay">
-              <div className="celebration-card">
-                <span className="celebration-icon">🎉</span>
-                <p className="celebration-text">真棒！</p>
-              </div>
-            </div>
-          )}
-        </>
+          </>
       )}
     </>
   );
@@ -2917,6 +2945,42 @@ function App() {
           onClose={() => setShowProfileModal(false)}
           userId={user?.userId}
         />
+      )}
+
+      {showCelebration && (
+        <div className="celebration-overlay">
+          <div className="celebration-card">
+            <span className="celebration-icon">🎉</span>
+            <p className="celebration-text">真棒！</p>
+          </div>
+        </div>
+      )}
+
+      {/* 撤销确认弹窗 */}
+      {showUndoConfirmModal && (
+        <div className="modal-overlay" onClick={() => setShowUndoConfirmModal(false)}>
+          <div className="modal-content undo-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">⚠️ 确认撤销</h3>
+              <button className="modal-close-btn" onClick={() => setShowUndoConfirmModal(false)}>
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <p style={{ textAlign: 'center', fontSize: '16px', color: 'var(--text-primary)', lineHeight: '1.8' }}>
+                确定要撤销吗？这将标记为未服药状态，并恢复药箱中的剩余数量。
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowUndoConfirmModal(false)}>
+                取消
+              </button>
+              <button className="btn btn-danger" onClick={confirmUndo}>
+                确定撤销
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 药品选择弹窗 */}
