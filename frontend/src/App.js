@@ -12,6 +12,7 @@ import ManualDrugSearch from './components/ManualDrugSearch';
 import EmergencyAssistant from './components/EmergencyAssistant';
 import AddToPlanModal from './components/AddToPlanModal';
 import ConfirmDrugModal from './components/ConfirmDrugModal';
+import MedicationReminderModal from './components/MedicationReminderModal';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -61,6 +62,10 @@ function App() {
   const [showExpiringDrugsModal, setShowExpiringDrugsModal] = useState(false); // 过期药品弹窗
   const [showUndoConfirmModal, setShowUndoConfirmModal] = useState(false); // 撤销确认弹窗
   const [pendingUndoId, setPendingUndoId] = useState(null); // 待撤销的计划ID
+  const [showMedicationReminder, setShowMedicationReminder] = useState(false); // 用药提醒弹窗
+  const [missedReminders, setMissedReminders] = useState([]); // 超时未服用的用药计划
+  const lastCheckedTimeRef = useRef(null); // 上次检查的时间，避免重复提醒
+  const lastReminderTimeRef = useRef(null); // 上次弹窗提醒的时间，避免频繁提醒
   
   // 药品冲突检测相关状态
   const [conflictReport, setConflictReport] = useState(null); // 冲突检测报告
@@ -342,6 +347,17 @@ function App() {
     setSelectedDrugForPlan(null);
   };
 
+  // 切换用药日历视图（今日/本周）
+  const handleCalendarViewChange = (viewMode) => {
+    setCalendarViewMode(viewMode);
+    
+    // 只在没有对应数据时才加载，避免重复请求
+    if (viewMode === 'week' && !weeklyMedicationData) {
+      loadWeeklyMedication();
+    }
+    // 今日视图的数据已经在登录时预加载了，不需要再次加载
+  };
+
   // 提交添加到用药日历
   const handleSubmitAddToPlan = async (selectedTimeSlots) => {
     if (!selectedDrugForPlan || !selectedDrugForPlan.boxItemId) {
@@ -417,6 +433,8 @@ function App() {
     // 登录成功后加载药箱列表和紧急联系人
     if (loginData.userId) {
       loadMedicineBoxList(loginData.userId);
+      // 不在登录时预加载日历，避免阻塞其他页面
+      // 只有当用户真正切换到日历页面时才加载
     }
     if (loginData.id) {
       loadEmergencyContacts(loginData.id);
@@ -616,6 +634,23 @@ function App() {
     }
   };
 
+  // 关闭用药提醒弹窗
+  const handleCloseMedicationReminder = () => {
+    setShowMedicationReminder(false);
+    setMissedReminders([]);
+    // 不重置 lastReminderTimeRef，确保下次提醒要等3分钟后
+  };
+
+  // 从提醒弹窗中标记为已服用
+  const handleMarkAsTakenFromReminder = async (reminderId) => {
+    // 调用现有的标记已服用逻辑（不传递event参数）
+    markAsTaken(reminderId, null);
+    // 关闭提醒弹窗
+    handleCloseMedicationReminder();
+    // 重置提醒时间，允许其他药物立即提醒
+    lastReminderTimeRef.current = null;
+  };
+
   const handleLogout = () => {
     setIsLoggedIn(false);
     setUser(null);
@@ -759,6 +794,66 @@ function App() {
     };
   }, []);
 
+  // 用药提醒：每3分钟检查一次是否有超时需要服用的药
+  useEffect(() => {
+    // 只要用户登录就启用提醒（不再限制在用药日历页面）
+    if (!isLoggedIn) {
+      return;
+    }
+
+    // 检查是否有超时需要服用的用药计划
+    const checkMissedReminders = () => {
+      if (!calendarPlans || calendarPlans.length === 0) {
+        return;
+      }
+
+      const now = new Date();
+      const currentHours = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+
+      // 找出所有超时需要服用但还未服用的用药计划
+      const missed = calendarPlans.filter(reminder => {
+        // 跳过已经服用或标记为漏服的
+        if (reminder.taken || reminder.missed) {
+          return false;
+        }
+
+        // 解析用药时间
+        const [hours, minutes] = reminder.time.split(':').map(Number);
+        const reminderTimeInMinutes = hours * 60 + minutes;
+
+        // 如果当前时间超过用药时间，视为超时
+        const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
+        return timeDiff >= 0;
+      });
+
+      // 如果有超时药物，且距离上次提醒已经超过3分钟，才再次提醒
+      if (missed.length > 0) {
+        const now = Date.now();
+        const shouldRemind = !lastReminderTimeRef.current || 
+                            (now - lastReminderTimeRef.current) >= 3 * 60 * 1000; // 3分钟间隔
+        
+        if (shouldRemind) {
+          setMissedReminders(missed);
+          setShowMedicationReminder(true);
+          lastReminderTimeRef.current = now; // 记录本次提醒时间
+          console.log('触发用药提醒:', missed);
+        }
+      }
+    };
+
+    // 立即检查一次
+    checkMissedReminders();
+
+    // 每3分钟检查一次并触发提醒（从60秒改为180秒）
+    const intervalId = setInterval(checkMissedReminders, 3 * 60 * 1000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [isLoggedIn, calendarPlans]);
+
   const audioRef = useRef(null);
 
   const speak = async (text, rate = speechRate) => {
@@ -862,15 +957,16 @@ function App() {
       }
     }
 
-    // 切换到用药日历时，自动加载最新的用药计划
+    // 切换到用药日历时，只在数据为空时才加载（避免每次切换都重新加载）
     if (activeTab === 'calendar' && isLoggedIn) {
-      if (calendarViewMode === 'today') {
+      // 如果已经有数据，不重新加载，提升用户体验
+      if (calendarViewMode === 'today' && calendarPlans.length === 0) {
         loadCalendarPlans();
-      } else {
+      } else if (calendarViewMode === 'week' && !weeklyMedicationData) {
         loadWeeklyMedication();
       }
     }
-  }, [activeTab, calendarViewMode]);
+  }, [activeTab, isLoggedIn]); // 移除calendarViewMode依赖，避免切换视图时重复触发
 
   const [ocrTaskId, setOcrTaskId] = useState(null);
   const [ocrPolling, setOcrPolling] = useState(false);
@@ -2493,13 +2589,13 @@ function App() {
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             className={`btn ${calendarViewMode === 'today' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setCalendarViewMode('today')}
+            onClick={() => handleCalendarViewChange('today')}
           >
             今日
           </button>
           <button
             className={`btn ${calendarViewMode === 'week' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setCalendarViewMode('week')}
+            onClick={() => handleCalendarViewChange('week')}
           >
             一周
           </button>
@@ -2512,7 +2608,8 @@ function App() {
 
   const renderTodayCalendar = () => (
     <>
-      {isLoadingCalendar ? (
+      {/* 只在首次加载且没有数据时显示加载动画 */}
+      {isLoadingCalendar && calendarPlans.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-light)' }}>
           <div className="loading-spinner-container" style={{ margin: '0 auto 20px' }}>
             <div className="loading-spinner"></div>
@@ -2600,7 +2697,8 @@ function App() {
 
   const renderWeekCalendar = () => (
     <>
-      {isLoadingCalendar ? (
+      {/* 只在首次加载且没有数据时显示加载动画 */}
+      {isLoadingCalendar && (!weeklyMedicationData || weeklyMedicationData.dailyRecords.length === 0) ? (
         <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-light)' }}>
           <div className="loading-spinner-container" style={{ margin: '0 auto 20px' }}>
             <div className="loading-spinner"></div>
@@ -3428,6 +3526,15 @@ function App() {
           drug={selectedDrugForPlan}
           onClose={handleCloseAddToPlanModal}
           onSubmit={handleSubmitAddToPlan}
+        />
+      )}
+
+      {/* 用药提醒弹窗 */}
+      {showMedicationReminder && missedReminders.length > 0 && (
+        <MedicationReminderModal
+          reminders={missedReminders}
+          onClose={handleCloseMedicationReminder}
+          onMarkAsTaken={handleMarkAsTakenFromReminder}
         />
       )}
     </>
