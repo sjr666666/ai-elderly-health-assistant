@@ -237,16 +237,16 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
     setShowContactModal(true);
   };
 
-  // 格式化消息文本（老年友好优化版本）
+  // 格式化消息文本（移动端优化版本）
   const formatMessageText = (text) => {
     // 处理AI回复，使用更好的格式
-    if (text.includes('【') || text.includes('1.') || text.includes('2.')) {
+    if (text.includes('【') || text.includes('1.') || text.includes('2.') || text.includes('\n')) {
       // 分割段落
       const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
       
       return paragraphs.map((paragraph, pIndex) => {
         // 检查是否是紧急提醒
-        const isEmergencySection = paragraph.includes('【') || paragraph.includes('紧急');
+        const isEmergencySection = paragraph.includes('【') || paragraph.includes('紧急') || paragraph.includes('⚠️');
         
         // 处理列表项
         if (paragraph.match(/^\d+[.、]\s/m) || paragraph.match(/^[•\-*]\s/m)) {
@@ -256,10 +256,10 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
             const cleanItem = item.replace(/^\d+[.、]\s*/, '').replace(/^[•\-*]\s*/, '');
             return (
               <li key={iIndex} style={{ 
-                marginBottom: '12px', 
-                fontSize: '18px',
-                lineHeight: '1.8',
-                color: '#1a1a1a'
+                marginBottom: '8px', 
+                fontSize: '14px',
+                lineHeight: '1.6',
+                color: 'inherit'
               }}>
                 {cleanItem}
               </li>
@@ -268,10 +268,10 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
           
           return (
             <ul key={pIndex} style={{ 
-              margin: '16px 0', 
-              paddingLeft: '32px',
-              backgroundColor: isEmergencySection ? '#FFF3E0' : 'transparent',
-              padding: isEmergencySection ? '16px' : '0 0 0 32px',
+              margin: '10px 0', 
+              paddingLeft: '20px',
+              backgroundColor: isEmergencySection ? 'rgba(255, 243, 224, 0.5)' : 'transparent',
+              padding: isEmergencySection ? '12px 12px 12px 28px' : '0 0 0 20px',
               borderRadius: isEmergencySection ? '8px' : '0'
             }}>
               {listItems}
@@ -282,12 +282,12 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
         // 普通段落
         return (
           <p key={pIndex} style={{ 
-            margin: '0 0 16px 0', 
-            fontSize: '18px',
-            lineHeight: '2',
-            color: '#1a1a1a',
-            backgroundColor: isEmergencySection ? '#FFF3E0' : 'transparent',
-            padding: isEmergencySection ? '16px' : '0',
+            margin: '0 0 10px 0', 
+            fontSize: '14px',
+            lineHeight: '1.6',
+            color: 'inherit',
+            backgroundColor: isEmergencySection ? 'rgba(255, 243, 224, 0.5)' : 'transparent',
+            padding: isEmergencySection ? '10px 12px' : '0',
             borderRadius: isEmergencySection ? '8px' : '0',
             fontWeight: isEmergencySection ? '600' : '400'
           }}>
@@ -360,12 +360,33 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
       {/* 分类标签 */}
       <div className="category-section">
         <div className="category-title">快速选择紧急情况：</div>
-        <div className="category-tags">
+        <div className="category-tags" style={{
+          display: 'flex',
+          overflowX: 'auto',
+          gap: '8px',
+          padding: '8px 0',
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none'
+        }}>
           {categories.map((category) => (
             <button
               key={category.id}
               className="category-tag"
               onClick={() => handleCategoryClick(category)}
+              style={{
+                flexShrink: 0,
+                padding: '8px 12px',
+                borderRadius: '16px',
+                border: '1px solid #e0e0e0',
+                background: 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '13px',
+                transition: 'all 0.2s ease'
+              }}
             >
               <span className="tag-icon">{category.icon}</span>
               <span className="tag-name">{category.name}</span>

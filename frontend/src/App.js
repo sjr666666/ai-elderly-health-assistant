@@ -1395,8 +1395,8 @@ function App() {
         }
         
         // 如果有 planId，尝试调用后端 API 保存到数据库
-        if (r.planId) {
-          confirmMedicationWithAPI(r.planId);
+        if (r.planId && user?.userId) {
+          confirmMedicationWithAPI(r.planId, user.userId);
         }
         
         // 更新药箱剩余数量（如果有 boxItemId）
@@ -1428,19 +1428,20 @@ function App() {
   };
 
   // 调用后端确认服药 API
-  const confirmMedicationWithAPI = async (planId) => {
+  const confirmMedicationWithAPI = async (planId, userId) => {
+    if (!userId) {
+      return;
+    }
     try {
-      const response = await fetch(`/api/v1/plan/${planId}/confirm`, {
+      const response = await fetch(`/api/v1/plan/${planId}/confirm?userId=${userId}`, {
         method: 'PUT'
       });
       
-      if (response.ok) {
-        console.log('已成功调用后端API保存服药记录:', planId);
-      } else {
-        console.warn('后端API调用失败，但本地状态已保存:', planId);
+      if (!response.ok) {
+        // 静默处理API调用失败，本地状态已保存
       }
     } catch (err) {
-      console.error('调用后端API异常，但本地状态已保存:', err);
+      // 静默处理异常，本地状态已保存
     }
   };
 
@@ -1500,6 +1501,9 @@ function App() {
     setShowUndoConfirmModal(false);
     setPendingUndoId(null);
 
+    // 找到对应的plan
+    const targetPlan = calendarPlans.find(r => r.id === id);
+    
     // 更新 reminders 状态
     setReminders(reminders.map(r =>
       r.id === id ? { ...r, taken: false } : r
@@ -1538,11 +1542,34 @@ function App() {
       return r;
     }));
 
+    // 调用后端API撤销服药记录
+    if (targetPlan?.planId && user?.userId) {
+      undoMedicationWithAPI(targetPlan.planId, user.userId);
+    }
+
     setTakenButtons(prev => {
       const newState = { ...prev };
       delete newState[id];
       return newState;
     });
+  };
+
+  // 调用后端撤销服药 API
+  const undoMedicationWithAPI = async (planId, userId) => {
+    if (!userId) {
+      return;
+    }
+    try {
+      const response = await fetch(`/api/v1/plan/${planId}/undo?userId=${userId}`, {
+        method: 'PUT'
+      });
+      
+      if (!response.ok) {
+        // 静默处理API调用失败，本地状态已撤销
+      }
+    } catch (err) {
+      // 静默处理异常，本地状态已撤销
+    }
   };
 
   const takenCount = calendarPlans.filter(r => r.taken).length;
