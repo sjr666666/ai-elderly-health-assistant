@@ -498,6 +498,42 @@ function ManualDrugSearch({ onSelectDrug }) {
       
       {/* CSS 动画样式 */}
       <style>{`
+        .manual-search-drawer-override {
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+          background: rgba(0, 0, 0, 0.5);
+          z-index: 99999 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: flex-end !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+        .manual-search-drawer-content {
+          width: 100% !important;
+          max-height: 80vh !important;
+          background: white !important;
+          border-radius: 20px 20px 0 0 !important;
+          box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.15) !important;
+          overflow: hidden !important;
+          display: flex !important;
+          flex-direction: column !important;
+          animation: slideUp 0.3s ease !important;
+          align-self: flex-end !important;
+        }
+        @keyframes slideUp {
+          0% {
+            transform: translateY(100%);
+          }
+          100% {
+            transform: translateY(0);
+          }
+        }
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
@@ -643,137 +679,143 @@ function ManualDrugSearch({ onSelectDrug }) {
       )}
 
       {showResults && searchResults.length > 0 && (
-        <div className="manual-search-results" style={{
-          position: 'absolute',
-          top: 'calc(100% + 8px)',
-          left: 0,
-          right: 0,
-          background: 'white',
-          borderRadius: '16px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
-          zIndex: 100,
-          maxHeight: '400px',
-          overflowY: 'auto',
-          border: '2px solid #4A90E2'
-        }}>
-          <div style={{
-            padding: '16px 20px',
-            background: 'linear-gradient(135deg, #E3F2FD 0%, #F1F8E9 100%)',
-            borderBottom: '2px solid #4A90E2',
-            borderRadius: '14px 14px 0 0'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <p style={{
-                  fontSize: '16px',
-                  color: '#4A90E2',
-                  fontWeight: '600',
-                  margin: 0
-                }}>
-                  ✅ 智能搜索成功
-                </p>
-                <p style={{
-                  fontSize: '14px',
-                  color: '#1976D2',
-                  margin: '4px 0 0 0'
-                }}>
-                  为您找到 {searchResults.length} 个"【{searchQuery}】"相关药品
-                  {searchResults[0]?.category && <span style={{ marginLeft: '8px', fontWeight: '600' }}>
-                    • 类别：{searchResults[0].category}
-                  </span>}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowResults(false);
-                  setSearchQuery('');
-                }}
-                style={{
-                  padding: '8px 16px',
-                  fontSize: '14px',
-                  border: '2px solid #F0EBE3',
-                  borderRadius: '12px',
-                  background: 'white',
-                  color: '#6B6B6B',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.borderColor = '#E53935';
-                  e.target.style.color = '#E53935';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.borderColor = '#F0EBE3';
-                  e.target.style.color = '#6B6B6B';
-                }}
-              >
-                清空
-              </button>
+        <div className="manual-search-drawer-override" onClick={() => setShowResults(false)}>
+          <div 
+            className="manual-search-drawer-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 拖拽指示器 */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              padding: '16px 0',
+              background: '#F5F5F5'
+            }}>
+              <div style={{
+                width: '48px',
+                height: '5px',
+                background: '#D0D0D0',
+                borderRadius: '3px'
+              }} />
             </div>
-          </div>
-
-          {searchResults.map((drug, index) => (
-            <div
-              key={drug.id}
-              onClick={() => handleSelectDrug(drug)}
-              style={{
-                padding: '16px 20px',
-                cursor: 'pointer',
-                borderBottom: index < searchResults.length - 1 ? '1px solid #F0F0F0' : 'none',
-                backgroundColor: selectedIndex === index ? '#E3F2FD' : 'white',
-                transition: 'background-color 0.2s ease'
-              }}
-              onMouseEnter={() => setSelectedIndex(index)}
-              onMouseLeave={() => setSelectedIndex(-1)}
-            >
+            
+            <div style={{
+              padding: '16px 20px',
+              background: 'linear-gradient(135deg, #E3F2FD 0%, #F1F8E9 100%)',
+              borderBottom: '2px solid #4A90E2'
+            }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <p style={{
-                    fontSize: '18px',
+                    fontSize: '16px',
+                    color: '#4A90E2',
                     fontWeight: '600',
-                    color: '#3D3D3D',
-                    margin: '0 0 4px 0'
+                    margin: 0
                   }}>
-                    {drug.drugName || drug.genericName}
+                    ✅ 智能搜索成功
                   </p>
                   <p style={{
                     fontSize: '14px',
-                    color: '#6B6B6B',
-                    margin: 0
+                    color: '#1976D2',
+                    margin: '4px 0 0 0'
                   }}>
-                    {drug.specification || drug.spec} - {drug.manufacturer}
-                    {drug.category && <span style={{ marginLeft: '8px', color: '#4A90E2' }}>• {drug.category}</span>}
+                    为您找到 {searchResults.length} 个"【{searchQuery}】"相关药品
+                    {searchResults[0]?.category && <span style={{ marginLeft: '8px', fontWeight: '600' }}>
+                      • 类别：{searchResults[0].category}
+                    </span>}
                   </p>
                 </div>
-                {drug.matchScore && drug.matchScore > 0 && (
-                  <div style={{
-                    padding: '6px 12px',
-                    background: drug.matchScore >= 0.8 ? '#E8F5E9' : drug.matchScore >= 0.5 ? '#FFF3E0' : '#FFEBEE',
-                    borderRadius: '20px',
+                <button
+                  onClick={() => {
+                    setShowResults(false);
+                    setSearchQuery('');
+                  }}
+                  style={{
+                    padding: '8px 16px',
                     fontSize: '14px',
-                    fontWeight: '600',
-                    color: drug.matchScore >= 0.8 ? '#2E7D32' : drug.matchScore >= 0.5 ? '#E65100' : '#C62828'
-                  }}>
-                    {Math.round(drug.matchScore * 100)}%
-                  </div>
-                )}
+                    border: '2px solid #F0EBE3',
+                    borderRadius: '12px',
+                    background: 'white',
+                    color: '#6B6B6B',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.borderColor = '#E53935';
+                    e.target.style.color = '#E53935';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.borderColor = '#F0EBE3';
+                    e.target.style.color = '#6B6B6B';
+                  }}
+                >
+                  关闭
+                </button>
               </div>
             </div>
-          ))}
 
-          <div style={{
-            padding: '12px 20px',
-            background: '#FAFAFA',
-            borderRadius: '0 0 14px 14px',
-            textAlign: 'center'
-          }}>
-            <p style={{
-              fontSize: '14px',
-              color: '#9E9E9E',
-              margin: 0
+            {searchResults.map((drug, index) => (
+              <div
+                key={drug.id}
+                onClick={() => handleSelectDrug(drug)}
+                style={{
+                  padding: '16px 20px',
+                  cursor: 'pointer',
+                  borderBottom: index < searchResults.length - 1 ? '1px solid #F0F0F0' : 'none',
+                  backgroundColor: selectedIndex === index ? '#E3F2FD' : 'white',
+                  transition: 'background-color 0.2s ease'
+                }}
+                onMouseEnter={() => setSelectedIndex(index)}
+                onMouseLeave={() => setSelectedIndex(-1)}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <p style={{
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      color: '#3D3D3D',
+                      margin: '0 0 4px 0'
+                    }}>
+                      {drug.drugName || drug.genericName}
+                    </p>
+                    <p style={{
+                      fontSize: '14px',
+                      color: '#6B6B6B',
+                      margin: 0
+                    }}>
+                      {drug.specification || drug.spec} - {drug.manufacturer}
+                      {drug.category && <span style={{ marginLeft: '8px', color: '#4A90E2' }}>• {drug.category}</span>}
+                    </p>
+                  </div>
+                  {drug.matchScore && drug.matchScore > 0 && (
+                    <div style={{
+                      padding: '6px 12px',
+                      background: drug.matchScore >= 0.8 ? '#E8F5E9' : drug.matchScore >= 0.5 ? '#FFF3E0' : '#FFEBEE',
+                      borderRadius: '20px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: drug.matchScore >= 0.8 ? '#2E7D32' : drug.matchScore >= 0.5 ? '#E65100' : '#C62828'
+                    }}>
+                      {Math.round(drug.matchScore * 100)}%
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <div style={{
+              padding: '12px 20px',
+              background: '#FAFAFA',
+              textAlign: 'center'
             }}>
-              使用 ↑↓ 键导航，Enter 键确认选择
-            </p>
+              <p style={{
+                fontSize: '14px',
+                color: '#9E9E9E',
+                margin: 0
+              }}>
+                点击药品查看详情
+              </p>
+            </div>
           </div>
         </div>
       )}
