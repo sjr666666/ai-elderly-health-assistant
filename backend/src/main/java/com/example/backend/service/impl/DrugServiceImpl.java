@@ -394,10 +394,28 @@ public class DrugServiceImpl implements DrugService {
 
         // 2. 检查是否为别名
         String canonicalName = resolveAlias(normalizedKeyword);
-        String searchKeyword = canonicalName != null ? canonicalName : keyword;
-
-        // 3. 数据库模糊搜索
-        List<DrugSearchResponse> dbResults = searchFromDatabase(searchKeyword, normalizedKeyword);
+        
+        // 3. 数据库模糊搜索 - 同时使用原始关键词和标准名称进行搜索
+        List<DrugSearchResponse> dbResults = new ArrayList<>();
+        
+        // 先使用原始关键词搜索
+        List<DrugSearchResponse> originalResults = searchFromDatabase(keyword, normalizedKeyword);
+        logger.info("使用原始关键词'{}'搜索到 {} 条结果", keyword, originalResults.size());
+        if (!originalResults.isEmpty()) {
+            originalResults.forEach(r -> logger.info("  - {}: 匹配度={}", r.getDrugName(), r.getMatchScore()));
+        }
+        dbResults.addAll(originalResults);
+        
+        // 如果有标准名称且与原始关键词不同，也使用标准名称搜索
+        if (canonicalName != null && !canonicalName.equals(keyword)) {
+            List<DrugSearchResponse> canonicalResults = searchFromDatabase(canonicalName, canonicalName.toLowerCase());
+            // 合并结果，去重
+            canonicalResults.forEach(result -> {
+                if (!dbResults.stream().anyMatch(r -> r.getDrugName().equals(result.getDrugName()))) {
+                    dbResults.add(result);
+                }
+            });
+        }
         dbResults.forEach(result -> {
             if (!seenDrugs.contains(result.getDrugName())) {
                 seenDrugs.add(result.getDrugName());
@@ -406,9 +424,11 @@ public class DrugServiceImpl implements DrugService {
         });
 
         // 4. 过滤掉匹配度太低的结果（只保留匹配度>=0.3的结果）
+        logger.info("过滤前结果数量: {}", results.size());
         List<DrugSearchResponse> filteredResults = results.stream()
                 .filter(r -> r.getMatchScore() == null || r.getMatchScore() >= 0.3)
                 .collect(Collectors.toList());
+        logger.info("过滤后结果数量: {}", filteredResults.size());
 
         // 5. 如果数据库没有结果，使用AI搜索作为补充
         if (filteredResults.isEmpty()) {
@@ -433,45 +453,54 @@ public class DrugServiceImpl implements DrugService {
             return Collections.emptyList();
         }
 
-        // 最小搜索长度限制
+        // 最小搜索长度限制：单字搜索优先使用数据库
         String trimmedKeyword = keyword.trim();
-        if (trimmedKeyword.length() < 2) {
-            logger.info("AI搜索关键词太短（少于2个字符），返回空结果");
+        if (trimmedKeyword.length() < 1) {
+            logger.info("AI搜索关键词为空，返回空结果");
             return Collections.emptyList();
         }
 
-        // 先尝试AI识别
-        DrugDetailResponse aiResponse = deepSeekService.queryDrugInfoWithAI(keyword);
-        
-        if (aiResponse != null && aiResponse.getGenericName() != null && !aiResponse.getGenericName().isEmpty()) {
-            logger.info("AI识别成功: {}", aiResponse.getGenericName());
-            
-            List<DrugSearchResponse> results = new ArrayList<>();
-            
-            // 创建AI识别结果
-            DrugSearchResponse aiResult = DrugSearchResponse.builder()
-                    .drugName(aiResponse.getGenericName())
-                    .tradeName(aiResponse.getTradeName())
-                    .specification(aiResponse.getSpecification())
-                    .manufacturer(aiResponse.getManufacturer())
-                    .category(aiResponse.getCategory())
-                    .matchScore(0.75) // AI识别匹配度
-                    .matchType("ai")
-                    .build();
-            results.add(aiResult);
-            
-            // 同时在数据库中搜索相关药品
-            List<DrugSearchResponse> dbResults = searchFromDatabase(aiResponse.getGenericName(), keyword.toLowerCase());
-            dbResults.forEach(result -> {
-                if (!result.getDrugName().equals(aiResponse.getGenericName())) {
-                    results.add(result);
-                }
-            });
-            
-            return results;
+        // 单字搜索：优先使用数据库，不调用AI（避免偏差大）
+        if (trimmedKeyword.length() == 1) {
+            logger.info("单字搜索，优先使用数据库匹配 - keyword: {}", keyword);
+            List<DrugSearchResponse> dbResults = searchFromDatabase(keyword, keyword.toLowerCase());
+            if (!dbResults.isEmpty()) {
+                logger.info("数据库搜索成功，找到 {} 个相关药品", dbResults.size());
+                return dbResults;
+            }
+            // 数据库没结果才调用AI
+            logger.info("数据库无结果，尝试AI搜索单字");
         }
 
-        logger.info("AI识别失败，返回空结果");
+        // 使用AI搜索多个相关药品
+        List<DrugSearchResponse> aiResults = deepSeekService.searchMultipleDrugsWithAI(keyword);
+        
+        if (aiResults != null && !aiResults.isEmpty()) {
+            logger.info("AI搜索成功，找到 {} 个相关药品", aiResults.size());
+            
+            // 合并数据库中的结果
+            List<DrugSearchResponse> allResults = new ArrayList<>(aiResults);
+            
+            // 在数据库中搜索每个AI返回的药品，补充完整信息
+            for (DrugSearchResponse aiResult : aiResults) {
+                List<DrugSearchResponse> dbResults = searchFromDatabase(aiResult.getDrugName(), keyword.toLowerCase());
+                dbResults.forEach(result -> {
+                    // 如果数据库中已有该药品，更新AI结果的信息
+                    if (result.getDrugName().equals(aiResult.getDrugName())) {
+                        aiResult.setId(result.getId());
+                        aiResult.setSpecification(result.getSpecification() != null ? result.getSpecification() : aiResult.getSpecification());
+                        aiResult.setManufacturer(result.getManufacturer() != null ? result.getManufacturer() : aiResult.getManufacturer());
+                        aiResult.setCategory(result.getCategory() != null ? result.getCategory() : aiResult.getCategory());
+                        aiResult.setMatchScore(Math.max(result.getMatchScore(), aiResult.getMatchScore()));
+                        aiResult.setMatchType("ai+db");
+                    }
+                });
+            }
+            
+            return allResults;
+        }
+
+        logger.info("AI搜索失败，返回空结果");
         return Collections.emptyList();
     }
 
@@ -536,6 +565,8 @@ public class DrugServiceImpl implements DrugService {
      * 从数据库搜索药品
      */
     private List<DrugSearchResponse> searchFromDatabase(String keyword, String normalizedKeyword) {
+        logger.info("执行数据库搜索 - keyword: {}, normalizedKeyword: {}", keyword, normalizedKeyword);
+        
         LambdaQueryWrapper<DrugBase> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.and(wrapper -> wrapper
                 .like(DrugBase::getGenericName, keyword)
@@ -547,7 +578,16 @@ public class DrugServiceImpl implements DrugService {
                 .like(DrugBase::getManufacturer, keyword));
         queryWrapper.orderByDesc(DrugBase::getCreatedAt);
 
+        // 打印生成的SQL（用于调试）
+        logger.info("查询条件 - generic_name LIKE '%{}%' OR trade_name LIKE '%{}%' OR common_name LIKE '%{}%' OR manufacturer LIKE '%{}%'",
+                keyword, keyword, keyword, keyword);
+        
         List<DrugBase> drugList = drugBaseMapper.selectList(queryWrapper);
+        logger.info("数据库返回结果数量: {}", drugList.size());
+        if (!drugList.isEmpty()) {
+            drugList.forEach(drug -> logger.info("  - {}: genericName={}, tradeName={}, commonName={}",
+                    drug.getId(), drug.getGenericName(), drug.getTradeName(), drug.getCommonName()));
+        }
         
         return drugList.stream()
                 .map(drug -> {
