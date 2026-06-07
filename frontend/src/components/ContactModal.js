@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Toast from './Toast';
+import ConfirmDialog from './ConfirmDialog';
 
 const ContactModal = ({ isOpen, onClose, contacts }) => {
   const overlayRef = useRef(null);
   const [showToast, setShowToast] = useState(false);
+  const [confirmState, setConfirmState] = useState({ isOpen: false, phone: '', title: '', message: '' });
 
   useEffect(() => {
     const handleEscape = (e) => {
@@ -47,6 +49,23 @@ const ContactModal = ({ isOpen, onClose, contacts }) => {
     }
   };
 
+  const handleCallPhone = (phone) => {
+    const isEmergency = phone === '120' || phone === '110';
+    setConfirmState({
+      isOpen: true,
+      phone,
+      title: isEmergency ? `呼叫${phone}` : '拨打电话',
+      message: isEmergency
+        ? `确定要拨打${phone}吗？`
+        : `确定要拨打 ${phone} 吗？`
+    });
+  };
+
+  const handleConfirm = () => {
+    window.location.href = `tel:${confirmState.phone}`;
+    setConfirmState({ ...confirmState, isOpen: false });
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -68,6 +87,24 @@ const ContactModal = ({ isOpen, onClose, contacts }) => {
               <button className="global-modal-close" onClick={onClose}>✕</button>
             </div>
             <div className="global-modal-body">
+              {/* 紧急快捷呼叫 */}
+              <div className="emergency-quick-call">
+                <button
+                  className="emergency-quick-btn emergency-120"
+                  onClick={() => handleCallPhone('120')}
+                >
+                  <span className="quick-call-icon">🚑</span>
+                  <span className="quick-call-text">呼叫120</span>
+                </button>
+                <button
+                  className="emergency-quick-btn emergency-110"
+                  onClick={() => handleCallPhone('110')}
+                >
+                  <span className="quick-call-icon">🚔</span>
+                  <span className="quick-call-text">呼叫110</span>
+                </button>
+              </div>
+
               <p className="global-modal-tip">请选择要联系的人：</p>
               {contacts.map((contact) => (
                 <div key={contact.id} className="global-contact-card">
@@ -81,10 +118,16 @@ const ContactModal = ({ isOpen, onClose, contacts }) => {
                   </div>
                   <div className="global-contact-actions">
                     <button
+                      className="global-call-btn"
+                      onClick={() => handleCallPhone(contact.phone)}
+                    >
+                      📞 拨打电话
+                    </button>
+                    <button
                       className="global-copy-btn"
                       onClick={() => copyToClipboard(contact.phone)}
                     >
-                       复制电话号码
+                       复制号码
                     </button>
                   </div>
                 </div>
@@ -94,6 +137,16 @@ const ContactModal = ({ isOpen, onClose, contacts }) => {
         </div>,
         document.body
       )}
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmText="拨打"
+        cancelText="取消"
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirmState({ ...confirmState, isOpen: false })}
+        confirmStyle={confirmState.phone === '120' || confirmState.phone === '110' ? 'danger' : ''}
+      />
     </>
   );
 };

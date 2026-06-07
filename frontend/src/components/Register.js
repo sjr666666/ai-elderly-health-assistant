@@ -10,7 +10,6 @@ function Register({ onRegister }) {
   const [age, setAge] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [successData, setSuccessData] = useState(null);
 
   // 创建输入框引用
   const usernameRef = useRef(null);
@@ -92,13 +91,34 @@ function Register({ onRegister }) {
       const data = await response.json();
 
       if (response.ok && data.code === 200) {
-        const userData = {
-          ...data.data,
-          realName: realName.trim(),
-          age: parseInt(age)
-        };
-        localStorage.setItem('registeredUser', JSON.stringify(userData));
-        setSuccessData(userData);
+        // 注册成功后自动调用登录接口
+        const loginResponse = await fetch('/api/v1/user/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json;charset=UTF-8',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            username: username.trim(),
+            password: password,
+          }),
+        });
+
+        const loginData = await loginResponse.json();
+
+        if (loginResponse.ok && loginData.code === 200) {
+          // 登录成功，保存用户信息并跳转到首页
+          const userData = {
+            ...loginData.data,
+            realName: realName.trim(),
+            age: parseInt(age)
+          };
+          localStorage.setItem('user', JSON.stringify(userData));
+          onRegister(userData);
+        } else {
+          // 登录失败，但注册成功，提示用户手动登录
+          setError('注册成功，请手动登录');
+        }
       } else {
         setError(data.message || '注册失败，请重试');
       }
@@ -110,7 +130,6 @@ function Register({ onRegister }) {
   };
 
   const handleLogin = () => {
-    setSuccessData(null);
     setUsername('');
     setPassword('');
     setConfirmPassword('');
@@ -118,89 +137,6 @@ function Register({ onRegister }) {
     setAge('');
     onRegister(null);
   };
-
-  if (successData) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #F5C6A5 0%, #98D4BB 50%, #FAF7F2 100%)',
-        padding: '20px'
-      }}>
-        <div style={{
-          background: 'white',
-          padding: '50px 60px',
-          borderRadius: '36px',
-          boxShadow: '0 16px 64px rgba(0, 0, 0, 0.15)',
-          width: '100%',
-          maxWidth: '580px',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '80px', marginBottom: '20px' }}>🎉</div>
-          <h1 style={{ fontSize: '36px', fontWeight: '800', color: '#4CAF50', marginBottom: '16px' }}>注册成功！</h1>
-          <p style={{ fontSize: '20px', color: '#6B6B6B', marginBottom: '32px' }}>请记住您的账号密码，用于登录</p>
-
-          <div style={{
-            background: 'linear-gradient(135deg, #E3F2FD 0%, #F1F8E9 100%)',
-            padding: '32px',
-            borderRadius: '20px',
-            marginBottom: '32px',
-            textAlign: 'left'
-          }}>
-            <div style={{ marginBottom: '20px' }}>
-              <p style={{ fontSize: '16px', color: '#6B6B6B', marginBottom: '8px' }}>用户名</p>
-              <p style={{ fontSize: '28px', fontWeight: '700', color: '#1976D2', wordBreak: 'break-all' }}>{successData.username}</p>
-            </div>
-            <div>
-              <p style={{ fontSize: '16px', color: '#6B6B6B', marginBottom: '8px' }}>密码</p>
-              <p style={{ fontSize: '28px', fontWeight: '700', color: '#388E3C', wordBreak: 'break-all' }}>{successData.password}</p>
-            </div>
-          </div>
-
-          <div style={{
-            background: '#FFF3E0',
-            padding: '20px',
-            borderRadius: '12px',
-            marginBottom: '32px',
-            border: '2px solid #FFB74D'
-          }}>
-            <p style={{ fontSize: '16px', color: '#E65100', fontWeight: '600' }}>
-              ⚠️ 请妥善保管您的账号密码！
-            </p>
-          </div>
-
-          <button
-            onClick={handleLogin}
-            style={{
-              width: '100%',
-              padding: '22px',
-              fontSize: '22px',
-              fontWeight: '700',
-              background: 'linear-gradient(135deg, #4CAF50 0%, #81C784 100%)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '20px',
-              cursor: 'pointer',
-              boxShadow: '0 8px 32px rgba(76, 175, 80, 0.3)',
-              transition: 'all 0.3s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.transform = 'translateY(-4px) scale(1.02)';
-              e.target.style.boxShadow = '0 12px 40px rgba(76, 175, 80, 0.4)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.transform = 'translateY(0) scale(1)';
-              e.target.style.boxShadow = '0 8px 32px rgba(76, 175, 80, 0.3)';
-            }}
-          >
-            🔐 前往登录
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={{
