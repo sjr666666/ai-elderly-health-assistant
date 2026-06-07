@@ -60,6 +60,21 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         Long actualUserId = user.getId();
         logger.info("用户 ID 映射 - 雪花算法ID: {}, 自增主键ID: {}", userId, actualUserId);
 
+        // 检查是否已存在相同的药品（同名药品在active状态）
+        String drugNameToCheck = request.getDrugName();
+        if (drugNameToCheck != null && !drugNameToCheck.isEmpty()) {
+            // 检查AI药品重复
+            LambdaQueryWrapper<UserMedicineBox> existWrapper = new LambdaQueryWrapper<>();
+            existWrapper.eq(UserMedicineBox::getUserId, actualUserId);
+            existWrapper.eq(UserMedicineBox::getStatus, "active");
+            existWrapper.like(UserMedicineBox::getNote, "{AI药品:" + drugNameToCheck + "}");
+            Long existCount = userMedicineBoxMapper.selectCount(existWrapper);
+            if (existCount > 0) {
+                logger.error("药品已存在 - userId: {}, drugName: {}", userId, drugNameToCheck);
+                throw new RuntimeException("该药品已在药箱中，请勿重复添加");
+            }
+        }
+
         UserMedicineBox medicineBox = new UserMedicineBox();
         medicineBox.setUserId(actualUserId);  // 使用自增主键 ID
         medicineBox.setDrugId(request.getDrugId());
@@ -88,7 +103,13 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         }
 
         // 处理备注
-        medicineBox.setNote(request.getNote());
+        String note = request.getNote();
+        // 如果药品ID为空但有药品名称，说明是AI搜索或手动输入的药品，存储药品名称到备注
+        if ((request.getDrugId() == null || request.getDrugId() == 0) 
+                && request.getDrugName() != null && !request.getDrugName().isEmpty()) {
+            note = "{AI药品:" + request.getDrugName() + "}" + (note != null ? note : "");
+        }
+        medicineBox.setNote(note);
 
         // 处理状态，默认为 active
         if (request.getStatus() != null && !request.getStatus().isEmpty()) {

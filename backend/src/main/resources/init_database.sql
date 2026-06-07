@@ -60,7 +60,7 @@ DROP TABLE IF EXISTS `user_medicine_box`;
 CREATE TABLE `user_medicine_box` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
   `user_id` bigint NOT NULL COMMENT '所属老人',
-  `drug_id` bigint NOT NULL COMMENT '药品',
+  `drug_id` bigint NULL COMMENT '药品',
   `dosage` varchar(50) NOT NULL COMMENT '每次用量',
   `frequency` varchar(50) NOT NULL COMMENT '频率',
   `start_date` date NULL COMMENT '开始服用日期',

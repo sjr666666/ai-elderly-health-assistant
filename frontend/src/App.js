@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import html2canvas from 'html2canvas';
 import './App.css';
 import Login from './components/Login';
 import Register from './components/Register';
@@ -73,7 +74,13 @@ function App() {
   const [conflictError, setConflictError] = useState(null); // 冲突检测错误
   const [showConflictReport, setShowConflictReport] = useState(false); // 是否显示冲突报告卡片
   
+  // 新药入箱冲突检测弹窗相关状态
+  const [showConflictAlert, setShowConflictAlert] = useState(false); // 新药入箱冲突检测结果弹窗
+  const [conflictAlertResult, setConflictAlertResult] = useState(null); // 新药入箱冲突检测结果
+  const [conflictNeedsRecheck, setConflictNeedsRecheck] = useState(false); // 冲突检测页面是否需要重新检测
+  
   const fileInputRef = useRef(null);
+  const conflictReportRef = useRef(null); // 冲突报告卡片引用
 
   const expiringDrugsResult = useMemo(() => {
     const today = new Date();
@@ -595,6 +602,53 @@ function App() {
     setPendingDeleteDrug(null);
   };
 
+  // 新药入箱后自动检测冲突（只检测与新药相关的冲突）
+  const checkConflictsForNewDrug = async (newDrugName, currentDrugList) => {
+    if (!currentDrugList || currentDrugList.length === 0) return { noConflict: true, reason: 'empty' };
+    
+    try {
+      // 获取药箱中除新药外的其他药品进行冲突检测
+      const otherDrugs = currentDrugList.filter(drug => drug.name !== newDrugName);
+      if (otherDrugs.length === 0) return { noConflict: true, reason: 'firstDrug' };
+      
+      // 只检测新药与药箱中其他药品的冲突
+      const drugNames = [newDrugName, ...otherDrugs.map(drug => drug.name)];
+      const response = await fetch('/api/conflict/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(drugNames)
+      });
+      const data = await response.json();
+      if (data.code === 200 && data.data) {
+        // 过滤出只与新药相关的冲突
+        const newDrugConflicts = data.data.conflicts?.filter(
+          conflict => conflict.drugA === newDrugName || conflict.drugB === newDrugName
+        ) || [];
+        
+        // 如果没有冲突，返回标记
+        if (newDrugConflicts.length === 0) {
+          return { noConflict: true, reason: 'noConflictFound' };
+        }
+        
+        // 返回只包含新药相关冲突的结果
+        return {
+          noConflict: false,
+          conflicts: newDrugConflicts,
+          statistics: {
+            ...data.data.statistics,
+            totalConflicts: newDrugConflicts.length,
+            severeCount: newDrugConflicts.filter(c => c.severity === 'SEVERE').length,
+            moderateCount: newDrugConflicts.filter(c => c.severity === 'MODERATE').length,
+            mildCount: newDrugConflicts.filter(c => c.severity === 'MILD').length
+          }
+        };
+      }
+    } catch (error) {
+      console.error('新药冲突检测失败:', error);
+    }
+    return null;
+  };
+
   const handleAddDrug = async (drugData) => {
     // 构造新药数据
     const newDrug = {
@@ -613,7 +667,6 @@ function App() {
       note: drugData.note
     };
     
-    setDrugList([...drugList, newDrug]);
     setShowAddDrugModal(false);
     
     // 显示自定义成功提示
@@ -628,6 +681,21 @@ function App() {
       if (activeTab === 'calendar') {
         loadCalendarPlans();
       }
+      
+      // 新药入箱后自动触发冲突检测（传入当前药箱列表）
+      const conflictResult = await checkConflictsForNewDrug(newDrug.name, drugList);
+      if (conflictResult) {
+        if (conflictResult.noConflict) {
+          // 没有冲突，不显示弹窗
+        } else {
+          // 检测到冲突，显示弹窗
+          setConflictAlertResult(conflictResult);
+          setShowConflictAlert(true);
+        }
+      }
+      // 标记冲突检测页面需要重新检测
+      setConflictNeedsRecheck(true);
+      setConflictReport(null); // 清除之前的检测结果
     }
   };
 
@@ -1292,23 +1360,18 @@ function App() {
         drugDetail = searchData.data[0];
       }
 
-      // 如果找不到药品ID，使用默认值或提示用户
-      if (!drugId) {
-        alert('未找到匹配的药品，请手动添加');
-        setActiveTab('drugs');
-        return;
-      }
-
       // 准备药品信息，用于预填充弹窗
+      // 优先使用数据库中的信息，如果数据库没有则使用AI搜索或手动输入的信息
       const drugInfo = {
-        drugId: drugId,
-        name: drug.name || drugDetail.drugName,
-        genericName: drugDetail.drugName,
-        specification: drugDetail.specification,
-        frequency: drug.frequency || drugDetail.frequency,
-        dosage: drug.dosage || drugDetail.dosage,
-        usage: drug.usage || drugDetail.usage,
-        totalQuantity: drug.totalQuantity || 30
+        drugId: drugId,  // 如果为null，后端需要处理
+        name: drug.name || drugDetail?.drugName,
+        genericName: drugDetail?.drugName || drug.genericName || drug.name,
+        specification: drugDetail?.specification || drug.spec || '',
+        frequency: drug.frequency || drugDetail?.frequency || '',
+        dosage: drug.dosage || drugDetail?.dosage || '',
+        usage: drug.usage || drugDetail?.usage || '',
+        totalQuantity: drug.totalQuantity || 30,
+        manufacturer: drug.manufacturer || drugDetail?.manufacturer || ''
       };
 
       // 弹出确认弹窗
@@ -1316,12 +1379,19 @@ function App() {
       setShowConfirmDrugModal(true);
     } catch (error) {
       console.error('查询药品信息失败:', error);
-      alert('查询失败，请稍后重试');
+      alert('添加失败，请稍后重试');
     }
   };
 
   // 确认添加药品到药箱
   const confirmAddToMedicineBox = async (drugData) => {
+    // 关闭确认弹窗
+    setShowConfirmDrugModal(false);
+    
+    // 显示正在添加的反馈
+    setToastMessage('正在添加药品...');
+    setShowSuccessToast(true);
+    
     try {
       const addResponse = await fetch(`/api/v1/box?userId=${user.userId}`, {
         method: 'POST',
@@ -1336,13 +1406,45 @@ function App() {
       if (addResponse.ok && addData.code === 200) {
         // 添加成功后重新加载药箱列表
         await loadMedicineBoxList(user.userId);
-        setToastMessage('✅ 药品已加入药箱！');
+        setToastMessage('✅ 药品已加入药箱！正在检测冲突...');
         setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 2000);
+
+        // 等待状态更新后获取最新药箱列表
+        // 使用 setTimeout 确保状态已更新
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // 新药入箱后自动触发冲突检测（传入当前药箱列表）
+        const conflictResult = await checkConflictsForNewDrug(drugData.name, drugList);
+        
+        if (conflictResult) {
+          if (conflictResult.noConflict) {
+            // 没有冲突，根据原因显示不同提示
+            if (conflictResult.reason === 'empty' || conflictResult.reason === 'firstDrug') {
+              setToastMessage('✅ 药品已加入药箱！药箱中暂无其他药品');
+            } else {
+              setToastMessage('✅ 药品已加入药箱！未检测到冲突');
+            }
+            setShowSuccessToast(true);
+            setTimeout(() => setShowSuccessToast(false), 3000);
+          } else {
+            // 检测到冲突
+            setToastMessage('⚠️ 检测到冲突！');
+            setShowSuccessToast(true);
+            setTimeout(() => setShowSuccessToast(false), 2000);
+            setConflictAlertResult(conflictResult);
+            setShowConflictAlert(true);
+          }
+        }
+        
+        // 标记冲突检测页面需要重新检测
+        setConflictNeedsRecheck(true);
+        setConflictReport(null); // 清除之前的检测结果
       } else {
+        setShowSuccessToast(false);
         alert(addData.message || '添加失败，请重试');
       }
     } catch (error) {
+      setShowSuccessToast(false);
       console.error('添加药品失败:', error);
       alert('添加失败，请稍后重试');
     }
@@ -2373,11 +2475,58 @@ function App() {
     };
 
     // 生成冲突报告卡片
-    const handleGenerateReport = () => {
-      if (conflictReport && conflictReport.conflicts && conflictReport.conflicts.length > 0) {
-        setShowConflictReport(true);
-      } else {
-        alert('暂无冲突报告可生成');
+    const handleGenerateReport = async (action) => {
+      if (!conflictReport || !conflictReport.conflicts || conflictReport.conflicts.length === 0) {
+        return;
+      }
+      setShowConflictReport(true);
+      // 等待弹窗渲染完成
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      if (action === 'screenshot') {
+        // 截图/图片合成
+        if (conflictReportRef.current) {
+          try {
+            const canvas = await html2canvas(conflictReportRef.current, {
+              backgroundColor: '#ffffff',
+              scale: 2,
+              useCORS: true
+            });
+            const link = document.createElement('a');
+            link.download = `用药冲突报告_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+          } catch (error) {
+            console.error('截图失败:', error);
+          }
+        }
+      } else if (action === 'copy') {
+        // 复制文本
+        const textContent = [
+          `📋 用药冲突检测报告`,
+          `检测时间: ${new Date(conflictReport.checkTime).toLocaleString('zh-CN')}`,
+          `检测药品数: ${conflictReport.drugsChecked?.length || 0} 种`,
+          '',
+          `🔴 严重: ${conflictReport.statistics.severeCount} | 🟡 中度: ${conflictReport.statistics.moderateCount} | 🔵 轻微: ${conflictReport.statistics.mildCount}`,
+          '',
+          '冲突详情:',
+          ...conflictReport.conflicts.map((c, i) => {
+            let level = c.severity === 'SEVERE' ? '🔴 严重冲突' : c.severity === 'MODERATE' ? '🟡 中等冲突' : '🔵 轻微注意';
+            let text = `${i + 1}. ${level}: ${c.drugA} ⚡ ${c.drugB}`;
+            if (c.conflictExplanation) text += `\n   说明: ${c.conflictExplanation}`;
+            if (c.riskWarning) text += `\n   ⚠️ ${c.riskWarning}`;
+            return text;
+          }),
+          '',
+          conflictReport.generalAdvice ? `💊 总体建议: ${conflictReport.generalAdvice}` : ''
+        ].join('\n');
+
+        try {
+          await navigator.clipboard.writeText(textContent);
+          // 可以添加一个轻提示
+        } catch (error) {
+          console.error('复制失败:', error);
+        }
       }
     };
 
@@ -2548,13 +2697,24 @@ function App() {
               >
                 🔄 重新检测
               </button>
-              <button 
-                className="btn btn-primary btn-large" 
-                style={{ flex: 1 }}
-                onClick={handleGenerateReport}
-              >
-                📄 生成冲突报告卡片
-              </button>
+              {conflictReport && conflictReport.conflicts && conflictReport.conflicts.length > 0 && (
+                <>
+                  <button 
+                    className="btn btn-primary btn-large" 
+                    style={{ flex: 1 }}
+                    onClick={() => handleGenerateReport('screenshot')}
+                  >
+                    📷 截图报告
+                  </button>
+                  <button 
+                    className="btn btn-primary btn-large" 
+                    style={{ flex: 1 }}
+                    onClick={() => handleGenerateReport('copy')}
+                  >
+                    📋 复制文本
+                  </button>
+                </>
+              )}
             </div>
           </div>
         ) : (
@@ -2580,22 +2740,43 @@ function App() {
         {/* 初始状态 - 显示检测按钮 */}
         {!conflictReport && !isCheckingConflicts && !conflictError && drugList.length > 0 && (
           <div className="conflict-section">
-            <div style={{ textAlign: 'center', padding: '32px' }}>
-              <div style={{ fontSize: '64px', marginBottom: '16px' }}>🔍</div>
-              <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>
-                AI智能冲突检测
-              </h3>
-              <p style={{ fontSize: '14px', color: '#666', marginBottom: '24px' }}>
-                基于DeepSeek大模型，分析您的 {drugList.length} 种药品之间可能存在的相互作用
-              </p>
-              <button 
-                className="btn btn-primary btn-large"
-                onClick={handleCheckConflicts}
-                style={{ minHeight: '56px', fontSize: '18px' }}
-              >
-                🔬 开始智能检测
-              </button>
-            </div>
+            {conflictNeedsRecheck ? (
+              // 新药加入后，提示需要重新检测
+              <div style={{ textAlign: 'center', padding: '32px' }}>
+                <div style={{ fontSize: '64px', marginBottom: '16px' }}>⚠️</div>
+                <h3 style={{ fontSize: '20px', marginBottom: '12px', color: '#e65100' }}>
+                  药品已更新，建议重新检测
+                </h3>
+                <p style={{ fontSize: '14px', color: '#666', marginBottom: '24px' }}>
+                  您最近添加了新药品，药箱中共有 {drugList.length} 种药品
+                </p>
+                <button 
+                  className="btn btn-primary btn-large"
+                  onClick={handleCheckConflicts}
+                  style={{ minHeight: '56px', fontSize: '18px' }}
+                >
+                  🔬 重新检测冲突
+                </button>
+              </div>
+            ) : (
+              // 正常初始状态
+              <div style={{ textAlign: 'center', padding: '32px' }}>
+                <div style={{ fontSize: '64px', marginBottom: '16px' }}>🔍</div>
+                <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>
+                  AI智能冲突检测
+                </h3>
+                <p style={{ fontSize: '14px', color: '#666', marginBottom: '24px' }}>
+                  基于DeepSeek大模型，分析您的 {drugList.length} 种药品之间可能存在的相互作用
+                </p>
+                <button 
+                  className="btn btn-primary btn-large"
+                  onClick={handleCheckConflicts}
+                  style={{ minHeight: '56px', fontSize: '18px' }}
+                >
+                  🔬 开始智能检测
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -3222,7 +3403,7 @@ function App() {
       {/* 冲突报告卡片弹窗 - 放在顶层确保居中显示 */}
       {showConflictReport && conflictReport && (
         <div className="modal-overlay" onClick={() => setShowConflictReport(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto' }}>
+          <div className="modal-content" ref={conflictReportRef} onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto' }}>
             <div className="modal-header">
               <h3 className="modal-title">📋 用药冲突检测报告</h3>
               <button className="modal-close-btn" onClick={() => setShowConflictReport(false)}>✕</button>
@@ -3353,6 +3534,166 @@ function App() {
           <div className="success-toast-content">
             <div className="success-toast-icon">✓</div>
             <p className="success-toast-message">{toastMessage}</p>
+          </div>
+        </div>
+      )}
+
+      {/* 新药入箱冲突检测结果弹窗 - 高危动作强制提示 */}
+      {showConflictAlert && conflictAlertResult && (
+        <div className="modal-overlay" onClick={() => setShowConflictAlert(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            <div className="modal-header" style={{ background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)', borderRadius: '24px 24px 0 0' }}>
+              <div style={{ textAlign: 'center', width: '100%', padding: '20px 0 10px' }}>
+                <div style={{ fontSize: '56px', marginBottom: '8px' }}>⚠️</div>
+                <h3 className="modal-title" style={{ color: '#e65100', fontSize: '24px' }}>
+                  已为您检测冲突
+                </h3>
+              </div>
+              <button className="modal-close-btn" onClick={() => setShowConflictAlert(false)} style={{ position: 'absolute', top: '16px', right: '16px' }}>✕</button>
+            </div>
+            <div className="modal-body" style={{ padding: '24px' }}>
+              {/* 冲突统计 */}
+              <div style={{ 
+                background: 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)',
+                borderRadius: '16px',
+                padding: '20px',
+                marginBottom: '20px',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#c62828' }}>
+                  {conflictAlertResult.conflicts?.length || 0}
+                </div>
+                <div style={{ fontSize: '16px', color: '#c62828', fontWeight: '600' }}>
+                  条警告
+                </div>
+              </div>
+              
+              {/* 统计信息 */}
+              <div style={{ 
+                display: 'flex', 
+                gap: '10px', 
+                marginBottom: '20px',
+                flexWrap: 'wrap'
+              }}>
+                <div style={{
+                  flex: 1,
+                  minWidth: '80px',
+                  padding: '10px 12px',
+                  background: '#ffcdd2',
+                  borderRadius: '10px',
+                  color: '#b71c1c',
+                  fontSize: '13px',
+                  textAlign: 'center'
+                }}>
+                  🔴 严重: {conflictAlertResult.statistics?.severeCount || 0}
+                </div>
+                <div style={{
+                  flex: 1,
+                  minWidth: '80px',
+                  padding: '10px 12px',
+                  background: '#ffe0b2',
+                  borderRadius: '10px',
+                  color: '#e65100',
+                  fontSize: '13px',
+                  textAlign: 'center'
+                }}>
+                  🟡 中度: {conflictAlertResult.statistics?.moderateCount || 0}
+                </div>
+                <div style={{
+                  flex: 1,
+                  minWidth: '80px',
+                  padding: '10px 12px',
+                  background: '#fff9c4',
+                  borderRadius: '10px',
+                  color: '#f9a825',
+                  fontSize: '13px',
+                  textAlign: 'center'
+                }}>
+                  🔵 轻微: {conflictAlertResult.statistics?.mildCount || 0}
+                </div>
+              </div>
+
+              {/* 冲突列表预览（只显示前2条） */}
+              {conflictAlertResult.conflicts && conflictAlertResult.conflicts.length > 0 && (
+                <div style={{ marginBottom: '20px' }}>
+                  <h4 style={{ fontSize: '15px', color: '#333', marginBottom: '12px' }}>冲突详情：</h4>
+                  {conflictAlertResult.conflicts.slice(0, 2).map((conflict, index) => (
+                    <div key={index} style={{
+                      padding: '14px',
+                      background: conflict.severity === 'SEVERE' ? '#ffebee' :
+                                 conflict.severity === 'MODERATE' ? '#fff3e0' : '#fffde7',
+                      borderRadius: '12px',
+                      marginBottom: '10px',
+                      borderLeft: `4px solid ${
+                        conflict.severity === 'SEVERE' ? '#f44336' :
+                        conflict.severity === 'MODERATE' ? '#ff9800' : '#ffc107'
+                      }`
+                    }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '6px' }}>
+                        {conflict.drugA} ⚡ {conflict.drugB}
+                      </div>
+                      {conflict.conflictExplanation && (
+                        <p style={{ fontSize: '13px', color: '#666', margin: 0, lineHeight: '1.5' }}>
+                          {conflict.conflictExplanation}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  {conflictAlertResult.conflicts.length > 2 && (
+                    <p style={{ fontSize: '13px', color: '#999', textAlign: 'center', margin: '8px 0 0' }}>
+                      还有 {conflictAlertResult.conflicts.length - 2} 条冲突未显示...
+                    </p>
+                  )}
+                </div>
+              )}
+              
+              {/* 操作按钮 */}
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={() => {
+                    setShowConflictAlert(false);
+                    // 用户已知晓，清除弹窗结果，但保留重新检测标记
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '14px 20px',
+                    fontSize: '15px',
+                    fontWeight: '600',
+                    border: '2px solid #e0e0e0',
+                    borderRadius: '12px',
+                    background: 'white',
+                    color: '#666',
+                    cursor: 'pointer'
+                  }}
+                >
+                  我已知晓
+                </button>
+                <button
+                  onClick={() => {
+                    // 将冲突结果传递给冲突检测页面显示
+                    if (conflictAlertResult) {
+                      setConflictReport(conflictAlertResult);
+                    }
+                    setShowConflictAlert(false);
+                    setConflictNeedsRecheck(false); // 清除重新检测标记
+                    setActiveTab('conflict');
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '14px 20px',
+                    fontSize: '15px',
+                    fontWeight: '600',
+                    border: 'none',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
+                    color: 'white',
+                    cursor: 'pointer'
+                  }}
+                >
+                  查看全部
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

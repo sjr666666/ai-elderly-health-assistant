@@ -90,6 +90,11 @@ public class MedicineBoxResponse {
     private String note;
 
     /**
+     * 药品名称（用于AI搜索或手动输入的药品，当drugId为空时使用）
+     */
+    private String aiDrugName;
+
+    /**
      * 状态
      */
     private String status;

@@ -5,13 +5,20 @@ import React, { useState, useEffect } from 'react';
  * 用于在用药说明页面添加药品时，让用户确认或修改药品信息
  */
 function ConfirmDrugModal({ onClose, onConfirm, drugInfo, userId }) {
+  // 计算默认有效期（1年后）
+  const getDefaultExpiryDate = () => {
+    const oneYearLater = new Date();
+    oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+    return oneYearLater.toISOString().split('T')[0];
+  };
+
   // 表单状态
   const [dosageAmount, setDosageAmount] = useState('1');
   const [dosageUnit, setDosageUnit] = useState('片');
   const [frequency, setFrequency] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [expiryDate, setExpiryDate] = useState('');
+  const [expiryDate, setExpiryDate] = useState(getDefaultExpiryDate());
   const [totalQuantity, setTotalQuantity] = useState('30');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -116,6 +123,7 @@ function ConfirmDrugModal({ onClose, onConfirm, drugInfo, userId }) {
       // 构造药品数据
       const drugData = {
         drugId: drugInfo.drugId,
+        drugName: (!drugInfo.drugId && drugInfo.name) ? drugInfo.name : null,
         dosage: `每次${dosageAmount}${dosageUnit}`,
         frequency: frequency,
         startDate: startDate,
