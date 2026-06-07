@@ -12,9 +12,8 @@ import javax.validation.constraints.NotNull;
 public class AddMedicineRequest {
 
     /**
-     * 药品基础库ID
+     * 药品基础库ID（AI搜索到的药品可能为空）
      */
-    @NotNull(message = "药品ID不能为空")
     private Long drugId;
 
     /**
@@ -55,6 +54,11 @@ public class AddMedicineRequest {
      * 备注说明（最长500字符）
      */
     private String note;
+
+    /**
+     * 药品名称（AI搜索或手动输入的药品名称，用于在药品ID为空时显示）
+     */
+    private String drugName;
 
     /**
      * 状态，默认 active

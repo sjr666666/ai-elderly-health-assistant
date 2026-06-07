@@ -7,7 +7,8 @@
         SELECT
             umb.id AS boxItemId,
             umb.drug_id AS drugId,
-            COALESCE(db.common_name, db.generic_name) AS drugName,
+            COALESCE(db.common_name, db.generic_name,
+                CASE WHEN INSTR(umb.note, '{AI药品:') > 0 THEN SUBSTRING(umb.note, LOCATE('{AI药品:', umb.note) + 6, LOCATE('}', umb.note) - LOCATE('{AI药品:', umb.note) - 6) ELSE NULL END) AS drugName,
             db.generic_name AS genericName,
             db.trade_name AS tradeName,
             db.common_name AS commonName,
@@ -20,6 +21,7 @@
             umb.total_quantity AS totalQuantity,
             umb.remaining_quantity AS remainingQuantity,
             umb.note,
+            CASE WHEN INSTR(umb.note, '{AI药品:') > 0 THEN SUBSTRING(umb.note, LOCATE('{AI药品:', umb.note) + 6, LOCATE('}', umb.note) - LOCATE('{AI药品:', umb.note) - 6) ELSE NULL END AS aiDrugName,
             umb.status,
             DATE_FORMAT(umb.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM user_medicine_box umb
@@ -36,7 +38,8 @@
         SELECT
             umb.id AS boxItemId,
             umb.drug_id AS drugId,
-            COALESCE(db.common_name, db.generic_name) AS drugName,
+            COALESCE(db.common_name, db.generic_name,
+                CASE WHEN INSTR(umb.note, '{AI药品:') > 0 THEN SUBSTRING(umb.note, LOCATE('{AI药品:', umb.note) + 6, LOCATE('}', umb.note) - LOCATE('{AI药品:', umb.note) - 6) ELSE NULL END) AS drugName,
             db.generic_name AS genericName,
             db.trade_name AS tradeName,
             db.common_name AS commonName,
@@ -49,6 +52,7 @@
             umb.total_quantity AS totalQuantity,
             umb.remaining_quantity AS remainingQuantity,
             umb.note,
+            CASE WHEN INSTR(umb.note, '{AI药品:') > 0 THEN SUBSTRING(umb.note, LOCATE('{AI药品:', umb.note) + 6, LOCATE('}', umb.note) - LOCATE('{AI药品:', umb.note) - 6) ELSE NULL END AS aiDrugName,
             umb.status,
             DATE_FORMAT(umb.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM user_medicine_box umb
@@ -63,6 +67,7 @@
                 OR db.specification LIKE CONCAT('%', #{keyword}, '%')
                 OR umb.dosage LIKE CONCAT('%', #{keyword}, '%')
                 OR umb.note LIKE CONCAT('%', #{keyword}, '%')
+                OR (INSTR(umb.note, '{AI药品:') > 0 AND SUBSTRING(umb.note, LOCATE('{AI药品:', umb.note) + 6, LOCATE('}', umb.note) - LOCATE('{AI药品:', umb.note) - 6) LIKE CONCAT('%', #{keyword}, '%'))
             )
         </if>
         ORDER BY umb.created_at DESC
