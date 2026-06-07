@@ -3,6 +3,7 @@ package com.example.backend.service;
 import com.example.backend.model.dto.DrugConflictRequest;
 import com.example.backend.model.dto.DrugConflictResponse;
 import com.example.backend.model.dto.DrugDetailResponse;
+import com.example.backend.model.dto.DrugSearchResponse;
 
 import java.util.List;
 
@@ -53,4 +54,22 @@ public interface DeepSeekService {
      * @return 完整的冲突检测报告
      */
     DrugConflictResponse analyzeDrugConflicts(DrugConflictRequest request);
+
+    /**
+     * 快速冲突检测（仅使用本地规则，不调用AI）
+     * 适合自动检测场景，响应速度快（毫秒级）
+     *
+     * @param drugNames 药品名称列表
+     * @return 冲突检测报告（本地规则检测结果）
+     */
+    DrugConflictResponse quickCheckWithLocalRules(List<String> drugNames);
+
+    /**
+     * 使用DeepSeek AI搜索多个相关药品
+     * 根据关键词返回多个匹配的药品信息
+     *
+     * @param keyword 搜索关键词
+     * @return 药品搜索结果列表
+     */
+    List<DrugSearchResponse> searchMultipleDrugsWithAI(String keyword);
 }

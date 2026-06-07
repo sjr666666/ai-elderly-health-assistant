@@ -4,6 +4,7 @@ import com.example.backend.model.dto.DrugConflictRequest;
 import com.example.backend.model.dto.DrugConflictResponse;
 import com.example.backend.model.dto.DrugConflictResult;
 import com.example.backend.model.dto.DrugDetailResponse;
+import com.example.backend.model.dto.DrugSearchResponse;
 import com.example.backend.service.DeepSeekService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,6 +15,8 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -505,7 +508,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
 
             HttpEntity<Map<String, Object>> httpRequest = new HttpEntity<>(requestBody, headers);
 
-            // 发送请求
+            // 发送请求，设置超时时间
             ResponseEntity<String> response = restTemplate.postForEntity(DEEPSEEK_API_URL, httpRequest, String.class);
 
             if (response.getStatusCode() == HttpStatus.OK) {
@@ -549,7 +552,8 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             }
 
         } catch (Exception e) {
-            logger.error("调用DeepSeek AI进行冲突检测失败 - 错误: {}", e.getMessage(), e);
+            logger.error("调用DeepSeek AI进行冲突检测失败 - 错误: {}, 将使用本地规则快速返回", e.getMessage(), e);
+            // AI调用失败时，立即使用本地规则返回结果，不阻塞用户
             return analyzeWithLocalRules(request);
         }
     }
@@ -927,9 +931,15 @@ public class DeepSeekServiceImpl implements DeepSeekService {
     }
 
     /**
-     * 检测药品-药品冲突（本地规则）
+     * 检测药品-药品冲突(本地规则)
      */
     private DrugConflictResult checkDrugDrugConflict(String drugA, String drugB) {
+        // 空值检查，避免NullPointerException
+        if (drugA == null || drugA.trim().isEmpty() || drugB == null || drugB.trim().isEmpty()) {
+            logger.warn("药品名称为空，跳过冲突检测 - drugA: {}, drugB: {}", drugA, drugB);
+            return null;
+        }
+            
         String drugALower = drugA.toLowerCase();
         String drugBLower = drugB.toLowerCase();
         
@@ -1031,7 +1041,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         // 7. 含阿司匹林成分的药品与其他解热镇痛药
         if ((drugALower.contains("阿司匹林") || drugALower.contains("乙酰水杨酸") || drugALower.contains("拜阿司匹灵")) &&
             (drugBLower.contains("布洛芬") || drugBLower.contains("对乙酰氨基酚") || drugBLower.contains("扑热息痛") ||
-             drugBLower.contains("双氯芬酸") || drugBLower.contains("消炎痛"))) {
+             drugBLower.contains("双氯芬酸") || drugBLower.contains("消炎痛") || drugBLower.contains("芬必得") || drugBLower.contains("普生"))) {
             return DrugConflictResult.builder()
                     .drugA(drugA)
                     .drugB(drugB)
@@ -1041,6 +1051,40 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                     .conflictExplanation("这两种止痛药一起吃会严重刺激胃，可能引起胃出血，非常危险。")
                     .riskWarning("严重胃肠道出血风险，禁止同时服用！")
                     .alternatives(java.util.Arrays.asList("只选择一种止痛药", "咨询医生选择合适的止痛方案", "如必须联用需在医生指导下进行"))
+                    .build();
+        }
+        
+        // 7.1 布洛芬(芬必得)与阿司匹林
+        if ((drugALower.contains("布洛芬") || drugALower.contains("芬必得")) &&
+            (drugBLower.contains("阿司匹林") || drugBLower.contains("乙酰水杨酸") || drugBLower.contains("拜阿司匹灵"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drugA)
+                    .drugB(drugB)
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_DRUG)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("布洛芬会竞争性地抑制阿司匹林对血小板的不可逆乙酰化作用，降低阿司匹林的心血管保护效果，同时增加胃肠道出血风险。")
+                    .conflictExplanation("布洛芬和阿司匹林一起吃会让阿司匹林的保护心脏效果变差，还会刺激胃引起出血。")
+                    .riskWarning("降低阿司匹林心血管保护效果，增加出血风险！")
+                    .alternatives(java.util.Arrays.asList("如需止痛，咨询医生选择对乙酰氨基酚", "如必须使用布洛芬，应在服用阿司匹林前至少30分钟或后8小时服用", "咨询医生调整用药方案"))
+                    .build();
+        }
+        
+        // 7.2 布洛芬(芬必得)与华法林 - 双向匹配
+        boolean isIbuprofenA = drugALower.contains("布洛芬") || drugALower.contains("芬必得");
+        boolean isWarfarinB = drugBLower.contains("华法林") || drugBLower.contains("香豆素") || drugBLower.contains("抗凝");
+        boolean isWarfarinA = drugALower.contains("华法林") || drugALower.contains("香豆素") || drugALower.contains("抗凝");
+        boolean isIbuprofenB = drugBLower.contains("布洛芬") || drugBLower.contains("芬必得");
+        
+        if ((isIbuprofenA && isWarfarinB) || (isWarfarinA && isIbuprofenB)) {
+            return DrugConflictResult.builder()
+                    .drugA(drugA)
+                    .drugB(drugB)
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_DRUG)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("布洛芬会抑制血小板聚集，与华法林合用会显著增加出血风险；同时布洛芬可能置换华法林与血浆蛋白的结合，增强抗凝效果。")
+                    .conflictExplanation("布洛芬和华法林一起吃会大大增加出血的风险，可能导致流鼻血、牙龈出血、皮下淤青甚至内脏出血。")
+                    .riskWarning("严重出血风险，禁止自行联用！")
+                    .alternatives(java.util.Arrays.asList("止痛首选对乙酰氨基酚（扑热息痛）", "如必须使用布洛芬需在医生严密监控下", "定期监测凝血功能(INR值)"))
                     .build();
         }
         
@@ -1133,9 +1177,15 @@ public class DeepSeekServiceImpl implements DeepSeekService {
     }
 
     /**
-     * 检测药品-酒精冲突（本地规则）
+     * 检测药品-酒精冲突(本地规则)
      */
     private DrugConflictResult checkAlcoholConflict(String drug) {
+        // 空值检查
+        if (drug == null || drug.trim().isEmpty()) {
+            logger.warn("药品名称为空，跳过酒精冲突检测");
+            return null;
+        }
+            
         String drugLower = drug.toLowerCase();
         
         // 头孢类抗生素与酒精的双硫仑样反应
@@ -1188,9 +1238,15 @@ public class DeepSeekServiceImpl implements DeepSeekService {
     }
 
     /**
-     * 检测药品-保健品冲突（本地规则）
+     * 检测药品-保健品冲突(本地规则)
      */
     private DrugConflictResult checkDrugSupplementConflict(String drug, String supplement) {
+        // 空值检查
+        if (drug == null || drug.trim().isEmpty() || supplement == null || supplement.trim().isEmpty()) {
+            logger.warn("药品或保健品名称为空，跳过冲突检测");
+            return null;
+        }
+            
         String drugLower = drug.toLowerCase();
         String supplementLower = supplement.toLowerCase();
         
@@ -1228,9 +1284,15 @@ public class DeepSeekServiceImpl implements DeepSeekService {
     }
 
     /**
-     * 检测药品-食物冲突（本地规则）
+     * 检测药品-食物冲突(本地规则)
      */
     private DrugConflictResult checkDrugFoodConflict(String drug, String food) {
+        // 空值检查
+        if (drug == null || drug.trim().isEmpty() || food == null || food.trim().isEmpty()) {
+            logger.warn("药品或食物名称为空，跳过冲突检测");
+            return null;
+        }
+            
         String drugLower = drug.toLowerCase();
         String foodLower = food.toLowerCase();
         
@@ -1327,9 +1389,15 @@ public class DeepSeekServiceImpl implements DeepSeekService {
     }
 
     /**
-     * 检测药品-过敏史冲突（本地规则）
+     * 检测药品-过敏史冲突(本地规则)
      */
     private DrugConflictResult checkDrugAllergyConflict(String drug, String allergyHistory) {
+        // 空值检查
+        if (drug == null || drug.trim().isEmpty() || allergyHistory == null || allergyHistory.trim().isEmpty()) {
+            logger.warn("药品或过敏史为空，跳过冲突检测");
+            return null;
+        }
+            
         String drugLower = drug.toLowerCase();
         String allergyLower = allergyHistory.toLowerCase();
         
@@ -1496,5 +1564,184 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         }
         
         return null;
+    }
+
+    /**
+     * 快速冲突检测（仅使用本地规则，不调用AI）
+     * 适合自动检测场景，响应速度快（毫秒级）
+     *
+     * @param drugNames 药品名称列表
+     * @return 冲突检测报告（本地规则检测结果）
+     */
+    @Override
+    public DrugConflictResponse quickCheckWithLocalRules(List<String> drugNames) {
+        logger.info("开始快速本地冲突检测 - 药品: {}", drugNames);
+        
+        if (drugNames == null || drugNames.isEmpty()) {
+            return createEmptyResponse(drugNames, null, null, null);
+        }
+
+        // 构建请求对象
+        DrugConflictRequest request = DrugConflictRequest.builder()
+                .drugNames(drugNames)
+                .detailed(false)  // 不需要详细分析
+                .includeAlternatives(true)
+                .build();
+
+        // 直接使用本地规则检测
+        DrugConflictResponse response = analyzeWithLocalRules(request);
+        
+        // 调试日志：打印检测结果
+        logger.info("快速本地冲突检测完成 - 检测到 {} 个冲突", 
+            response.getConflicts() != null ? response.getConflicts().size() : 0);
+        if (response.getConflicts() != null && !response.getConflicts().isEmpty()) {
+            for (DrugConflictResult conflict : response.getConflicts()) {
+                logger.info("冲突详情: {} <-> {}, 严重程度: {}",
+                    conflict.getDrugA(), conflict.getDrugB(), conflict.getSeverity());
+            }
+        }
+        
+        return response;
+    }
+
+    @Override
+    public List<DrugSearchResponse> searchMultipleDrugsWithAI(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            logger.warn("搜索关键词为空，无法调用AI搜索");
+            return Collections.emptyList();
+        }
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            logger.warn("DeepSeek API Key未配置，跳过AI搜索");
+            return Collections.emptyList();
+        }
+
+        try {
+            logger.info("开始调用DeepSeek AI搜索多个药品 - 关键词: {}", keyword);
+
+            // 构建请求体
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("temperature", 0.3);
+            requestBody.put("max_tokens", 2000);
+
+            // 构建消息 - 要求AI返回多个相关药品
+            String systemPrompt = "你是一个专业的药品信息查询助手。请根据用户输入的关键词，返回所有相关的药品信息。\n" +
+                    "输出格式必须严格遵循以下JSON数组结构：\n" +
+                    "[\n" +
+                    "  {\n" +
+                    "    \"drugName\": \"药品通用名\",\n" +
+                    "    \"tradeName\": \"商品名\",\n" +
+                    "    \"specification\": \"规格\",\n" +
+                    "    \"manufacturer\": \"生产厂家\",\n" +
+                    "    \"category\": \"药品分类\"\n" +
+                    "  }\n" +
+                    "]\n" +
+                    "重要要求：\n" +
+                    "1. 返回所有包含关键词的药品，至少5-10个\n" +
+                    "2. 如果某个字段不确定，请填写\"暂无详细信息\"\n" +
+                    "3. 只输出JSON数组，不要有其他文字说明\n" +
+                    "4. 如果关键词是单个汉字，请搜索所有包含该字的药品名称";
+
+            String userPrompt;
+            // 单字搜索时，给出更明确的提示
+            if (keyword.length() == 1) {
+                userPrompt = "请搜索所有药名中包含汉字'" + keyword + "'的药品。\n" +
+                        "例如：如果关键词是'华'，应该返回华法林钠、华蟾素片、华佗再造丸等。\n" +
+                        "请至少返回5个相关药品。";
+            } else {
+                userPrompt = "请搜索所有与以下关键词相关的药品：" + keyword + "\n" +
+                        "例如：如果关键词是'华法'，应该返回华法林钠、华法林等相关药品。";
+            }
+
+            Map<String, String> systemMessage = new HashMap<>();
+            systemMessage.put("role", "system");
+            systemMessage.put("content", systemPrompt);
+
+            Map<String, String> userMessage = new HashMap<>();
+            userMessage.put("role", "user");
+            userMessage.put("content", userPrompt);
+
+            requestBody.put("messages", new Object[]{systemMessage, userMessage});
+
+            // 设置请求头
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Authorization", "Bearer " + apiKey);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+
+            // 发送请求
+            ResponseEntity<String> response = restTemplate.postForEntity(DEEPSEEK_API_URL, request, String.class);
+
+            if (response.getStatusCode() == HttpStatus.OK) {
+                String responseBody = response.getBody();
+                List<DrugSearchResponse> results = parseMultipleDrugsResponse(responseBody);
+                
+                if (results != null && !results.isEmpty()) {
+                    logger.info("DeepSeek AI搜索成功 - 找到 {} 个相关药品", results.size());
+                    return results;
+                } else {
+                    logger.info("DeepSeek AI未能查询到药品信息");
+                    return Collections.emptyList();
+                }
+            } else {
+                logger.error("DeepSeek API请求失败 - 状态码: {}, 响应: {}", response.getStatusCode(), response.getBody());
+                return Collections.emptyList();
+            }
+
+        } catch (Exception e) {
+            logger.error("调用DeepSeek AI搜索药品失败 - 错误: {}", e.getMessage(), e);
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 解析DeepSeek多药品搜索响应
+     */
+    private List<DrugSearchResponse> parseMultipleDrugsResponse(String responseBody) {
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            JsonNode choices = root.get("choices");
+            
+            if (choices != null && choices.isArray() && choices.size() > 0) {
+                JsonNode firstChoice = choices.get(0);
+                JsonNode message = firstChoice.get("message");
+                
+                if (message != null) {
+                    JsonNode content = message.get("content");
+                    if (content != null) {
+                        String jsonContent = content.asText().trim();
+                        
+                        // 尝试解析JSON数组
+                        try {
+                            JsonNode drugsArray = objectMapper.readTree(jsonContent);
+                            
+                            if (drugsArray.isArray()) {
+                                List<DrugSearchResponse> results = new ArrayList<>();
+                                for (JsonNode drugNode : drugsArray) {
+                                    DrugSearchResponse drug = DrugSearchResponse.builder()
+                                            .drugName(getJsonValue(drugNode, "drugName"))
+                                            .tradeName(getJsonValue(drugNode, "tradeName"))
+                                            .specification(getJsonValue(drugNode, "specification"))
+                                            .manufacturer(getJsonValue(drugNode, "manufacturer"))
+                                            .category(getJsonValue(drugNode, "category"))
+                                            .matchScore(0.75) // AI搜索结果匹配度
+                                            .matchType("ai")
+                                            .build();
+                                    results.add(drug);
+                                }
+                                return results;
+                            }
+                        } catch (Exception e) {
+                            logger.warn("解析多药品JSON数组失败，尝试直接提取内容: {}", e.getMessage());
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("解析DeepSeek多药品搜索响应失败 - 错误: {}", e.getMessage());
+        }
+        return Collections.emptyList();
     }
 }

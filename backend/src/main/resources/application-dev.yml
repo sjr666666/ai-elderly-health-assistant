@@ -8,6 +8,23 @@ spring:
   application:
     name: backend
 
+  # ==================== HTTP编码配置 ====================
+  http:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+  # ==================== Jackson配置 ====================
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+
   # ==================== MySQL 数据库配置 ====================
   datasource:
     url: jdbc:mysql://localhost:3306/elderly_medication?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
@@ -101,7 +118,7 @@ deepseek:
 # ==================== 网络请求超时配置 ====================
 rest:
   connection-timeout: 10000
-  read-timeout: 30000
+  read-timeout: 60000
 
 # ==================== 日志配置 ====================
 logging:

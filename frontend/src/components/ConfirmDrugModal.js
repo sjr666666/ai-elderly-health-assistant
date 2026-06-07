@@ -123,13 +123,16 @@ function ConfirmDrugModal({ onClose, onConfirm, drugInfo, userId }) {
       // 构造药品数据
       const drugData = {
         drugId: drugInfo.drugId,
-        drugName: (!drugInfo.drugId && drugInfo.name) ? drugInfo.name : null,
+        name: drugInfo.name || drugInfo.genericName,  // 修复：始终传递药品名称
+        spec: drugInfo.specification || drugInfo.spec,
+        manufacturer: drugInfo.manufacturer,
         dosage: `每次${dosageAmount}${dosageUnit}`,
         frequency: frequency,
         startDate: startDate,
         endDate: endDate,
         expiryDate: expiryDate,
-        totalQuantity: parseInt(totalQuantity)
+        totalQuantity: parseInt(totalQuantity),
+        note: drugInfo.note
       };
 
       // 调用确认回调

@@ -10,6 +10,7 @@ function ManualDrugSearch({ onSelectDrug }) {
   const [confirmingDrug, setConfirmingDrug] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
+  const [displayCount, setDisplayCount] = useState(3); // 当前显示的药品数量，默认3条
   const inputRef = useRef(null);
   const debounceRef = useRef(null);
 
@@ -17,17 +18,29 @@ function ManualDrugSearch({ onSelectDrug }) {
     if (!query || query.trim().length < 1) {
       setSearchResults([]);
       setShowResults(false);
+      setDisplayCount(3); // 重置显示数量
       return;
     }
 
     setIsSearching(true);
+    setDisplayCount(3); // 每次新搜索都重置为显示3条
 
     try {
       const response = await fetch(`/api/v1/drug/search?keyword=${encodeURIComponent(query)}`);
       const data = await response.json();
 
       if (data.code === 200 && data.data && data.data.length > 0) {
-        setSearchResults(data.data);
+        // 按药品名称去重，相同名称只保留一个（忽略规格/厂家差异）
+        const uniqueResults = [];
+        const seenNames = new Set();
+        data.data.forEach(drug => {
+          const drugName = drug.drugName || drug.genericName;
+          if (!seenNames.has(drugName)) {
+            seenNames.add(drugName);
+            uniqueResults.push(drug);
+          }
+        });
+        setSearchResults(uniqueResults);
         setShowResults(true);
         setSelectedIndex(-1);
       } else {
@@ -35,7 +48,17 @@ function ManualDrugSearch({ onSelectDrug }) {
         const aiData = await aiResponse.json();
         
         if (aiData.code === 200 && aiData.data && aiData.data.length > 0) {
-          setSearchResults(aiData.data);
+          // 按药品名称去重，相同名称只保留一个（忽略规格/厂家差异）
+          const uniqueResults = [];
+          const seenNames = new Set();
+          aiData.data.forEach(drug => {
+            const drugName = drug.drugName || drug.genericName;
+            if (!seenNames.has(drugName)) {
+              seenNames.add(drugName);
+              uniqueResults.push(drug);
+            }
+          });
+          setSearchResults(uniqueResults);
           setShowResults(true);
         } else {
           const localResults = generateLocalSuggestions(query);
@@ -56,6 +79,13 @@ function ManualDrugSearch({ onSelectDrug }) {
     } finally {
       setIsSearching(false);
     }
+  };
+
+  // 处理输入变化，隐藏之前的搜索结果
+  const handleInputChange = (e) => {
+    setSearchQuery(e.target.value);
+    // 输入内容变化时，隐藏搜索结果
+    setShowResults(false);
   };
 
   const generateLocalSuggestions = (query) => {
@@ -300,11 +330,16 @@ function ManualDrugSearch({ onSelectDrug }) {
 
     const canonicalName = drugAliases[lowerQuery] || drugAliases[query] || query;
 
-    return allDrugs.filter(drug => 
-      drug.drugName.toLowerCase().includes(lowerQuery) ||
-      drug.manufacturer.toLowerCase().includes(lowerQuery) ||
-      drug.drugName.includes(canonicalName)
-    ).slice(0, 6);
+    // 修复：使用统一的模糊匹配逻辑，显示所有符合条件的药品
+    return allDrugs.filter(drug => {
+      const drugNameLower = drug.drugName.toLowerCase();
+      const manufacturerLower = drug.manufacturer.toLowerCase();
+      
+      // 只要药品名称或生产厂家包含搜索关键词，就显示
+      return drugNameLower.includes(lowerQuery) || 
+             manufacturerLower.includes(lowerQuery) ||
+             drugNameLower.includes(canonicalName.toLowerCase());
+    }).slice(0, 20); // 增加返回数量到20条
   };
 
   useEffect(() => {
@@ -403,6 +438,47 @@ function ManualDrugSearch({ onSelectDrug }) {
     }
   };
 
+  // 加载更多药品
+  const handleLoadMore = () => {
+    setDisplayCount(prev => prev + 3); // 每次再加载3条
+  };
+
+  // 触摸滑动处理
+  const touchStartRef = useRef(null);
+  const touchEndRef = useRef(null);
+
+  const handleTouchStart = (e) => {
+    touchStartRef.current = e.touches[0].clientY;
+  };
+
+  const handleTouchMove = (e) => {
+    touchEndRef.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!touchStartRef.current || !touchEndRef.current) return;
+    
+    const distance = touchStartRef.current - touchEndRef.current;
+    const isSwipeUp = distance > 50; // 向上滑动超过50px
+    const isSwipeDown = distance < -50; // 向下滑动超过50px
+
+    // 向上滑动到底部时，加载更多
+    if (isSwipeUp && displayCount < searchResults.length) {
+      const container = e.target.closest('.manual-search-drawer-content');
+      if (container) {
+        const { scrollTop, scrollHeight, clientHeight } = container;
+        // 如果接近底部（距离底部小于100px），加载更多
+        if (scrollHeight - scrollTop - clientHeight < 100) {
+          handleLoadMore();
+        }
+      }
+    }
+
+    // 重置触摸位置
+    touchStartRef.current = null;
+    touchEndRef.current = null;
+  };
+
   return (
     <div className="manual-search-container" style={{ position: 'relative', width: '100%' }}>
       {/* 加载状态提示 */}
@@ -499,38 +575,38 @@ function ManualDrugSearch({ onSelectDrug }) {
       {/* CSS 动画样式 */}
       <style>{`
         .manual-search-drawer-override {
-          position: fixed !important;
-          top: 0 !important;
+          position: absolute !important;
+          top: 100% !important;
           left: 0 !important;
           right: 0 !important;
-          bottom: 0 !important;
           width: 100% !important;
-          height: 100% !important;
-          background: rgba(0, 0, 0, 0.5);
-          z-index: 99999 !important;
-          display: flex !important;
-          flex-direction: column !important;
-          justify-content: flex-end !important;
-          padding: 0 !important;
-          margin: 0 !important;
+          background: white !important;
+          border-radius: 16px !important;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+          z-index: 1000 !important;
+          margin-top: 8px !important;
+          border: 2px solid #E0E0E0 !important;
         }
         .manual-search-drawer-content {
           width: 100% !important;
-          max-height: 80vh !important;
+          max-height: 500px !important;
           background: white !important;
-          border-radius: 20px 20px 0 0 !important;
-          box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.15) !important;
-          overflow: hidden !important;
+          border-radius: 16px !important;
+          box-shadow: none !important;
+          overflow-y: auto !important; /* 允许垂直滚动 */
+          overflow-x: hidden !important;
           display: flex !important;
           flex-direction: column !important;
-          animation: slideUp 0.3s ease !important;
-          align-self: flex-end !important;
+          animation: slideDown 0.2s ease !important;
+          -webkit-overflow-scrolling: touch !important; /* iOS平滑滚动 */
         }
-        @keyframes slideUp {
+        @keyframes slideDown {
           0% {
-            transform: translateY(100%);
+            opacity: 0;
+            transform: translateY(-10px);
           }
           100% {
+            opacity: 1;
             transform: translateY(0);
           }
         }
@@ -570,7 +646,7 @@ function ManualDrugSearch({ onSelectDrug }) {
           ref={inputRef}
           type="text"
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={handleInputChange}
           onKeyPress={(e) => {
             if (e.key === 'Enter' && searchQuery.trim() && !isLoading) {
               handleSmartSearch();
@@ -679,10 +755,34 @@ function ManualDrugSearch({ onSelectDrug }) {
       )}
 
       {showResults && searchResults.length > 0 && (
-        <div className="manual-search-drawer-override" onClick={() => setShowResults(false)}>
+        <div 
+          className="manual-search-drawer-override" 
+          onClick={() => setShowResults(false)}
+          style={{
+            position: 'absolute', // 相对于父容器定位
+            top: '100%', // 在输入框下方
+            left: 0,
+            right: 0,
+            marginTop: '8px',
+            zIndex: 1000
+          }}
+        >
           <div 
             className="manual-search-drawer-content"
             onClick={(e) => e.stopPropagation()}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            style={{
+              width: '100%',
+              maxHeight: '500px', // 固定最大高度
+              overflowY: 'auto', // 允许垂直滚动
+              scrollBehavior: 'smooth', // 平滑滚动
+              background: 'white',
+              borderRadius: '16px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
+              border: '2px solid #E0E0E0'
+            }}
           >
             {/* 拖拽指示器 */}
             <div style={{
@@ -754,7 +854,7 @@ function ManualDrugSearch({ onSelectDrug }) {
               </div>
             </div>
 
-            {searchResults.map((drug, index) => (
+            {searchResults.slice(0, displayCount).map((drug, index) => (
               <div
                 key={drug.id}
                 onClick={() => handleSelectDrug(drug)}
@@ -802,6 +902,43 @@ function ManualDrugSearch({ onSelectDrug }) {
                 </div>
               </div>
             ))}
+
+            {/* 加载更多按钮 */}
+            {displayCount < searchResults.length && (
+              <div style={{
+                padding: '16px 20px',
+                textAlign: 'center',
+                borderTop: '1px solid #F0F0F0'
+              }}>
+                <button
+                  onClick={handleLoadMore}
+                  style={{
+                    padding: '12px 32px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    border: '2px solid #4A90E2',
+                    borderRadius: '12px',
+                    background: 'white',
+                    color: '#4A90E2',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 2px 8px rgba(74, 144, 226, 0.2)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = '#4A90E2';
+                    e.target.style.color = 'white';
+                    e.target.style.boxShadow = '0 4px 12px rgba(74, 144, 226, 0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'white';
+                    e.target.style.color = '#4A90E2';
+                    e.target.style.boxShadow = '0 2px 8px rgba(74, 144, 226, 0.2)';
+                  }}
+                >
+                  📦 再多加载三条（还剩 {searchResults.length - displayCount} 条）
+                </button>
+              </div>
+            )}
 
             <div style={{
               padding: '12px 20px',

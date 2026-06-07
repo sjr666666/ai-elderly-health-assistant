@@ -109,6 +109,31 @@ public class DrugConflictController {
     }
 
     /**
+     * 快速冲突检测（本地规则，不经过AI，适合自动检测场景）
+     * 直接返回结果，不等待AI响应，适合新药入箱等自动触发场景
+     *
+     * @param drugNames 药品名称列表
+     * @return 冲突检测报告（本地规则检测结果）
+     */
+    @PostMapping("/quick-check-local")
+    public ResponseResult<DrugConflictResponse> quickCheckLocalConflicts(@RequestBody List<String> drugNames) {
+        try {
+            logger.info("收到快速本地冲突检测请求 - 药品列表: {}", drugNames);
+            
+            if (drugNames == null || drugNames.isEmpty()) {
+                return ResponseResult.fail("药品列表不能为空");
+            }
+
+            // 直接使用本地规则检测，不调用AI
+            DrugConflictResponse result = deepSeekService.quickCheckWithLocalRules(drugNames);
+            return ResponseResult.success("快速本地检测完成", result);
+        } catch (Exception e) {
+            logger.error("快速本地冲突检测失败: ", e);
+            return ResponseResult.fail("快速本地检测失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 结合用户健康档案进行全面冲突检测
      * 根据用户ID自动获取过敏史和慢性病史，进行药品冲突检测
      *
