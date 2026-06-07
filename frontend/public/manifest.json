@@ -1,0 +1,24 @@
+{
+  "name": "AI药管家",
+  "short_name": "AI药管家",
+  "description": "智能用药管理助手",
+  "version": "1.0.0",
+  "manifest_version": 3,
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#3498db",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='48' fill='%233498db'/><text x='96' y='130' font-size='80' text-anchor='middle' fill='white'>💊</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='128' fill='%233498db'/><text x='256' y='340' font-size='200' text-anchor='middle' fill='white'>💊</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
