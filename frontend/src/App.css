@@ -5094,6 +5094,129 @@ body {
   color: white;
   margin: 0;
 }
+
+/* ============ CONFIRM DIALOG ============ */
+.confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999999;
+  margin: 0;
+  padding: 0;
+  animation: confirmFadeIn 0.2s ease-out;
+}
+
+@keyframes confirmFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.confirm-content {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  width: 90%;
+  max-width: 380px;
+  overflow: hidden;
+  animation: confirmSlideIn 0.25s ease-out;
+}
+
+@keyframes confirmSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.confirm-header {
+  padding: 20px 24px 0;
+  text-align: center;
+}
+
+.confirm-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1F2937;
+}
+
+.confirm-body {
+  padding: 16px 24px 20px;
+  text-align: center;
+}
+
+.confirm-body p {
+  margin: 0;
+  font-size: 16px;
+  color: #4B5563;
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  border-top: 1px solid #E5E7EB;
+}
+
+.confirm-cancel-btn,
+.confirm-ok-btn {
+  flex: 1;
+  padding: 16px;
+  font-size: 17px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.confirm-cancel-btn {
+  background: #F3F4F6;
+  color: #4B5563;
+  border-right: 1px solid #E5E7EB;
+}
+
+.confirm-cancel-btn:hover {
+  background: #E5E7EB;
+}
+
+.confirm-cancel-btn:active {
+  background: #D1D5DB;
+}
+
+.confirm-ok-btn {
+  background: white;
+  color: #059669;
+}
+
+.confirm-ok-btn:hover {
+  background: #F0FDF4;
+}
+
+.confirm-ok-btn:active {
+  background: #DCFCE7;
+}
+
+.confirm-ok-btn.danger {
+  color: #DC2626;
+}
+
+.confirm-ok-btn.danger:hover {
+  background: #FEF2F2;
+}
+
+.confirm-ok-btn.danger:active {
+  background: #FEE2E2;
+}
+
 .global-modal-overlay {
   position: fixed;
   top: 0;
@@ -5267,14 +5390,100 @@ body {
   transform: translateY(0);
 }
 
+/* 紧急快捷呼叫区域 */
+.emergency-quick-call {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.emergency-quick-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 20px;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: white;
+}
+
+.emergency-quick-btn .quick-call-icon {
+  font-size: 22px;
+}
+
+.emergency-120 {
+  background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+}
+
+.emergency-120:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.45);
+}
+
+.emergency-110 {
+  background: linear-gradient(135deg, #1D4ED8 0%, #1E40AF 100%);
+  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.35);
+}
+
+.emergency-110:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(29, 78, 216, 0.45);
+}
+
+/* 拨打电话按钮 */
+.global-call-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 28px;
+  font-size: 17px;
+  font-weight: 600;
+  border-radius: 14px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  gap: 10px;
+  flex: 1;
+  min-width: 120px;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+.global-call-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(5, 150, 105, 0.4);
+}
+
+.global-call-btn:active {
+  transform: translateY(0);
+}
+
 @media (max-width: 768px) {
   .global-contact-actions {
     flex-direction: column;
   }
 
-  .global-copy-btn {
+  .global-copy-btn,
+  .global-call-btn {
     width: 100%;
     justify-content: center;
+  }
+
+  .emergency-quick-call {
+    flex-direction: column;
+  }
+
+  .emergency-quick-btn {
+    width: 100%;
   }
 }
 

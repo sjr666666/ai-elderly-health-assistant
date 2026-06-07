@@ -111,9 +111,6 @@ function App() {
   }, [drugList]);
 
   const handleRegister = (registerData) => {
-    if (registerData) {
-      alert(`✅ 注册成功！用户ID: ${registerData.userId}`);
-    }
     setShowRegister(false);
   };
 
