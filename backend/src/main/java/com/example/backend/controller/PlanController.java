@@ -5,6 +5,7 @@ import com.example.backend.model.dto.TodayPlanResponseDTO;
 import com.example.backend.model.dto.WeeklyMedicationResponseDTO;
 import com.example.backend.model.dto.ReminderResponseDTO;
 import com.example.backend.model.dto.AddToPlanRequest;
+import com.example.backend.model.dto.MedicationActionRequest;
 import com.example.backend.service.PlanService;
 import com.example.backend.common.ResponseResult;
 import lombok.RequiredArgsConstructor;
@@ -85,5 +86,19 @@ public class PlanController {
     @GetMapping("/weekly")
     public ResponseResult<WeeklyMedicationResponseDTO> getWeeklyMedicationRecords(@RequestParam(required = false) Long userId) {
         return ResponseResult.success(planService.getWeeklyMedicationRecords(userId));
+    }
+
+    /**
+     * 7.9 统一用药操作接口（幂等）
+     * 支持 confirm（确认服药，扣减库存）、skip（跳过服药，不扣减库存）、undo（撤销服药，恢复库存）
+     */
+    @PutMapping("/{planId}/action")
+    public ResponseResult<ConfirmMedicationResponseDTO> executeMedicationAction(
+            @PathVariable Long planId,
+            @RequestBody MedicationActionRequest request) {
+        if (request.getUserId() == null || request.getAction() == null || request.getAction().isEmpty()) {
+            return ResponseResult.fail("参数错误：userId 和 action 不能为空");
+        }
+        return ResponseResult.success(planService.executeMedicationAction(planId, request.getUserId(), request.getAction()));
     }
 }

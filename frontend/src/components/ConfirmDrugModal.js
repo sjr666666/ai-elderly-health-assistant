@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from './Toast';
 
 /**
  * 确认药品信息弹窗组件
  * 用于在用药说明页面添加药品时，让用户确认或修改药品信息
  */
 function ConfirmDrugModal({ onClose, onConfirm, drugInfo, userId }) {
+  const { showToast } = useToast();
+
   // 计算默认有效期（1年后）
   const getDefaultExpiryDate = () => {
     const oneYearLater = new Date();
@@ -105,15 +108,15 @@ function ConfirmDrugModal({ onClose, onConfirm, drugInfo, userId }) {
   const handleConfirm = async () => {
     // 验证必填字段
     if (!frequency) {
-      alert('请选择服药频率');
+      showToast('请选择服药频率', 'warning');
       return;
     }
     if (!dosageAmount) {
-      alert('请输入每次用量');
+      showToast('请输入每次用量', 'warning');
       return;
     }
     if (!totalQuantity) {
-      alert('请输入药品总数量');
+      showToast('请输入药品总数量', 'warning');
       return;
     }
 
@@ -139,7 +142,7 @@ function ConfirmDrugModal({ onClose, onConfirm, drugInfo, userId }) {
       onClose();
     } catch (error) {
       console.error('添加药品失败:', error);
-      alert('添加失败，请稍后重试');
+      showToast('添加失败，请稍后重试', 'error');
     } finally {
       setIsSubmitting(false);
     }

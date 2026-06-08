@@ -44,32 +44,12 @@ mybatis-plus:
         min-idle: 0
         max-wait: -1ms
 
-  # ==================== RabbitMQ 配置 ====================
-  rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
-    virtual-host: /
-    listener:
-      simple:
-        acknowledge-mode: manual
-        prefetch: 10
-
   # ==================== Neo4j 图数据库配置 ====================
   neo4j:
     uri: bolt://localhost:7687
     authentication:
       username: neo4j
       password: dev_neo4j_password
-
-# ==================== MinIO 对象存储配置 ====================
-minio:
-  endpoint: http://localhost:9000
-  access-key: dev_access_key
-  secret-key: dev_secret_key
-  bucket-name: dev-bucket
-  secure: false
 
 # ==================== 阿里云OSS 配置 ====================
 aliyun:

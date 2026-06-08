@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from './Toast';
 
 function ProfileModal({ onComplete, onClose, userId }) {
   const [allergyHistory, setAllergyHistory] = useState('');
   const [chronicDiseases, setChronicDiseases] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const showToast = useToast();
 
   // 获取用户当前信息
   useEffect(() => {
@@ -34,7 +36,7 @@ function ProfileModal({ onComplete, onClose, userId }) {
 
   const handleSubmit = async () => {
     if (!userId) {
-      alert('用户信息缺失，请重新登录');
+      showToast('用户信息缺失，请重新登录', 'warning');
       return;
     }
 
@@ -59,10 +61,10 @@ function ProfileModal({ onComplete, onClose, userId }) {
           chronicDiseases: chronicDiseases || null
         });
       } else {
-        alert(data.message || '更新失败，请重试');
+        showToast(data.message || '更新失败，请重试', 'error');
       }
     } catch (err) {
-      alert('网络连接失败，请稍后重试');
+      showToast('网络连接失败，请稍后重试', 'error');
     } finally {
       setIsSubmitting(false);
     }

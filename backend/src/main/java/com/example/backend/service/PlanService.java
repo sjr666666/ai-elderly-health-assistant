@@ -50,4 +50,12 @@ public interface PlanService extends IService<MedicationPlan> {
      * 获取用户一周内的用药记录（包括已删除但在查询范围内的记录）
      */
     WeeklyMedicationResponseDTO getWeeklyMedicationRecords(Long userId);
+
+    /**
+     * 统一执行用药操作（幂等接口）
+     * @param planId 用药计划ID
+     * @param userId 用户ID
+     * @param action 操作类型：confirm（确认服药）、skip（跳过服药）、undo（撤销服药）
+     */
+    ConfirmMedicationResponseDTO executeMedicationAction(Long planId, Long userId, String action);
 }
