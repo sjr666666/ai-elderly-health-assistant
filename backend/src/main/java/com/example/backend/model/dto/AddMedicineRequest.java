@@ -61,6 +61,21 @@ public class AddMedicineRequest {
     private String drugName;
 
     /**
+     * 药品名称（兼容字段，与drugName相同）
+     */
+    private String name;
+
+    /**
+     * 药品规格（如"0.25g*20片"）
+     */
+    private String spec;
+
+    /**
+     * 生产厂家
+     */
+    private String manufacturer;
+
+    /**
      * 状态，默认 active
      */
     private String status = "active";

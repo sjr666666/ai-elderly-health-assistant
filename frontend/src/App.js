@@ -80,7 +80,9 @@ function App() {
   const [conflictNeedsRecheck, setConflictNeedsRecheck] = useState(false); // 冲突检测页面是否需要重新检测
   
   const fileInputRef = useRef(null);
-  const conflictReportRef = useRef(null); // 冲突报告卡片引用
+  const conflictReportRef = useRef(null); // 冲突报告卡片引用（用于弹窗显示）
+  const screenshotContainerRef = useRef(null); // 隐藏的截图容器引用
+  const [showScreenshotContainer, setShowScreenshotContainer] = useState(false); // 控制隐藏截图容器显示
 
   const expiringDrugsResult = useMemo(() => {
     const today = new Date();
@@ -2428,35 +2430,48 @@ function App() {
       if (!conflictReport || !conflictReport.conflicts || conflictReport.conflicts.length === 0) {
         return;
       }
-      setShowConflictReport(true);
-      // 等待弹窗渲染完成
-      await new Promise(resolve => setTimeout(resolve, 100));
-
+      
       if (action === 'screenshot') {
-        // 截图/图片合成
-        if (conflictReportRef.current) {
-          try {
-            const canvas = await html2canvas(conflictReportRef.current, {
+        // 截图/图片合成 - 使用隐藏容器
+        try {
+          // 1. 显示隐藏容器
+          setShowScreenshotContainer(true);
+          
+          // 2. 等待渲染完成
+          await new Promise(resolve => setTimeout(resolve, 150));
+          
+          // 3. 对隐藏容器截图
+          if (screenshotContainerRef.current) {
+            const canvas = await html2canvas(screenshotContainerRef.current, {
               backgroundColor: '#ffffff',
               scale: 2,
               useCORS: true
             });
+            
+            // 4. 下载图片
             const link = document.createElement('a');
             link.download = `用药冲突报告_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
-          } catch (error) {
-            console.error('截图失败:', error);
           }
+          
+          // 5. 隐藏容器
+          setShowScreenshotContainer(false);
+        } catch (error) {
+          console.error('截图失败:', error);
+          setShowScreenshotContainer(false);
         }
       } else if (action === 'copy') {
-        // 复制文本
+        // 显示弹窗并复制文本
+        setShowConflictReport(true);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         const textContent = [
-          `📋 用药冲突检测报告`,
+          ` 用药冲突检测报告`,
           `检测时间: ${new Date(conflictReport.checkTime).toLocaleString('zh-CN')}`,
           `检测药品数: ${conflictReport.drugsChecked?.length || 0} 种`,
           '',
-          `🔴 严重: ${conflictReport.statistics.severeCount} | 🟡 中度: ${conflictReport.statistics.moderateCount} | 🔵 轻微: ${conflictReport.statistics.mildCount}`,
+          `🔴 严重: ${conflictReport.statistics.severeCount} | 🟡 中度: ${conflictReport.statistics.moderateCount} |  轻微: ${conflictReport.statistics.mildCount}`,
           '',
           '冲突详情:',
           ...conflictReport.conflicts.map((c, i) => {
@@ -2472,7 +2487,6 @@ function App() {
 
         try {
           await navigator.clipboard.writeText(textContent);
-          // 可以添加一个轻提示
         } catch (error) {
           console.error('复制失败:', error);
         }
@@ -2666,68 +2680,49 @@ function App() {
               )}
             </div>
           </div>
-        ) : (
+        ) : conflictReport && conflictReport.conflicts && conflictReport.conflicts.length === 0 ? (
           <div className="safe-display">
             <span className="shield-icon">🛡️</span>
             <h3 className="safe-title">未发现明显冲突</h3>
             <p className="safe-subtitle">您的用药方案在AI分析后未发现明显冲突</p>
-            {conflictReport && (
-              <p style={{ fontSize: '14px', color: '#666', marginTop: '12px' }}>
-                ✅ 检测了 {drugList.length} 种药品，未发现问题
-              </p>
-            )}
-            <button
-              className="btn btn-primary btn-large"
-              style={{ marginTop: '24px' }}
-              onClick={handleCheckConflicts}
-            >
-              🔄 重新检测
-            </button>
+            <p style={{ fontSize: '14px', color: '#666', marginTop: '12px' }}>
+              ✅ 检测了 {drugList.length} 种药品，未发现问题
+            </p>
           </div>
-        )}
-
-        {/* 初始状态 - 显示检测按钮 */}
-        {!conflictReport && !isCheckingConflicts && !conflictError && drugList.length > 0 && (
+        ) : (!conflictReport && !isCheckingConflicts && !conflictError && drugList.length > 0) || conflictNeedsRecheck ? (
           <div className="conflict-section">
-            {conflictNeedsRecheck ? (
-              // 新药加入后，提示需要重新检测
-              <div style={{ textAlign: 'center', padding: '32px' }}>
-                <div style={{ fontSize: '64px', marginBottom: '16px' }}>⚠️</div>
-                <h3 style={{ fontSize: '20px', marginBottom: '12px', color: '#e65100' }}>
-                  药品已更新，建议重新检测
-                </h3>
-                <p style={{ fontSize: '14px', color: '#666', marginBottom: '24px' }}>
-                  您最近添加了新药品，药箱中共有 {drugList.length} 种药品
-                </p>
-                <button 
-                  className="btn btn-primary btn-large"
-                  onClick={handleCheckConflicts}
-                  style={{ minHeight: '56px', fontSize: '18px' }}
-                >
-                  🔬 重新检测冲突
-                </button>
-              </div>
-            ) : (
-              // 正常初始状态
-              <div style={{ textAlign: 'center', padding: '32px' }}>
-                <div style={{ fontSize: '64px', marginBottom: '16px' }}>🔍</div>
-                <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>
-                  AI智能冲突检测
-                </h3>
-                <p style={{ fontSize: '14px', color: '#666', marginBottom: '24px' }}>
-                  基于DeepSeek大模型，分析您的 {drugList.length} 种药品之间可能存在的相互作用
-                </p>
-                <button 
-                  className="btn btn-primary btn-large"
-                  onClick={handleCheckConflicts}
-                  style={{ minHeight: '56px', fontSize: '18px' }}
-                >
-                  🔬 开始智能检测
-                </button>
-              </div>
-            )}
+            <div style={{ textAlign: 'center', padding: '32px' }}>
+              {conflictNeedsRecheck ? (
+                <>
+                  <div style={{ fontSize: '64px', marginBottom: '16px' }}>⚠️</div>
+                  <h3 style={{ fontSize: '20px', marginBottom: '12px', color: '#e65100' }}>
+                    药品已更新，建议重新检测
+                  </h3>
+                  <p style={{ fontSize: '14px', color: '#666', marginBottom: '24px' }}>
+                    您最近添加了新药品，药箱中共有 {drugList.length} 种药品
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: '64px', marginBottom: '16px' }}>🔍</div>
+                  <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>
+                    AI智能冲突检测
+                  </h3>
+                  <p style={{ fontSize: '14px', color: '#666', marginBottom: '24px' }}>
+                    基于DeepSeek大模型，分析您的 {drugList.length} 种药品之间可能存在的相互作用
+                  </p>
+                </>
+              )}
+              <button 
+                className="btn btn-primary btn-large"
+                onClick={handleCheckConflicts}
+                style={{ minHeight: '56px', fontSize: '18px' }}
+              >
+                {conflictNeedsRecheck ? '🔬 重新检测冲突' : ' 开始检测'}
+              </button>
+            </div>
           </div>
-        )}
+        ) : null}
 
       </div>
     );
@@ -3835,6 +3830,133 @@ function App() {
           onClose={handleCloseMedicationReminder}
           onMarkAsTaken={handleMarkAsTakenFromReminder}
         />
+      )}
+
+      {/* 隐藏的截图容器 - 用于完整截图冲突报告 */}
+      {showScreenshotContainer && conflictReport && (
+        <div
+          ref={screenshotContainerRef}
+          style={{
+            position: 'absolute',
+            left: '-9999px',
+            top: '0',
+            width: '600px',
+            background: '#ffffff',
+            padding: '40px',
+            fontFamily: 'inherit'
+          }}
+        >
+          {/* 标题 */}
+          <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '3px solid #e5e7eb', paddingBottom: '20px' }}>
+            <h2 style={{ fontSize: '28px', margin: '0 0 10px 0', color: '#1f2937' }}> 用药冲突检测报告</h2>
+          </div>
+
+          {/* 基本信息 */}
+          <div style={{ marginBottom: '24px' }}>
+            <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '6px' }}>
+              检测时间: {new Date(conflictReport.checkTime).toLocaleString('zh-CN')}
+            </p>
+            <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '0' }}>
+              检测药品数: {conflictReport.drugsChecked?.length || 0} 种
+            </p>
+          </div>
+          
+          {/* 统计信息 */}
+          <div style={{ 
+            display: 'flex', 
+            gap: '12px', 
+            marginBottom: '24px',
+            flexWrap: 'wrap'
+          }}>
+            <div style={{
+              padding: '10px 18px',
+              background: '#fee2e2',
+              borderRadius: '10px',
+              color: '#dc2626',
+              fontSize: '15px',
+              fontWeight: '600'
+            }}>
+               严重: {conflictReport.statistics.severeCount}
+            </div>
+            <div style={{
+              padding: '10px 18px',
+              background: '#ffedd5',
+              borderRadius: '10px',
+              color: '#ea580c',
+              fontSize: '15px',
+              fontWeight: '600'
+            }}>
+              🟡 中度: {conflictReport.statistics.moderateCount}
+            </div>
+            <div style={{
+              padding: '10px 18px',
+              background: '#fef9c3',
+              borderRadius: '10px',
+              color: '#ca8a04',
+              fontSize: '15px',
+              fontWeight: '600'
+            }}>
+               轻微: {conflictReport.statistics.mildCount}
+            </div>
+          </div>
+
+          {/* 冲突列表 */}
+          {conflictReport.conflicts.map((conflict, index) => (
+            <div key={index} style={{
+              padding: '18px',
+              background: conflict.severity === 'SEVERE' ? '#fee2e2' :
+                         conflict.severity === 'MODERATE' ? '#ffedd5' : '#fef9c3',
+              borderRadius: '14px',
+              marginBottom: '16px',
+              border: `2px solid ${
+                conflict.severity === 'SEVERE' ? '#fecaca' :
+                conflict.severity === 'MODERATE' ? '#fed7aa' : '#fde68a'
+              }`
+            }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '10px', fontSize: '16px' }}>
+                {conflict.severity === 'SEVERE' && '🔴 严重冲突'}
+                {conflict.severity === 'MODERATE' && ' 中等冲突'}
+                {conflict.severity === 'MILD' && '🔵 轻微注意'}
+              </div>
+              <p style={{ fontSize: '15px', marginBottom: '8px' }}>
+                <strong>{conflict.drugA}</strong> ⚡ <strong>{conflict.drugB}</strong>
+              </p>
+              {conflict.conflictExplanation && (
+                <p style={{ fontSize: '14px', color: '#4b5563', marginTop: '10px', lineHeight: '1.6' }}>
+                  {conflict.conflictExplanation}
+                </p>
+              )}
+              {conflict.riskWarning && (
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#dc2626', 
+                  fontWeight: 'bold',
+                  marginTop: '10px'
+                }}>
+                  ⚠️ {conflict.riskWarning}
+                </p>
+              )}
+            </div>
+          ))}
+
+          {/* 总体建议 */}
+          {conflictReport.generalAdvice && (
+            <div style={{
+              padding: '18px',
+              background: '#e0f2fe',
+              borderRadius: '14px',
+              marginTop: '24px',
+              border: '2px solid #bae6fd'
+            }}>
+              <h4 style={{ fontSize: '17px', marginBottom: '10px', color: '#0369a1', margin: '0 0 10px 0' }}>
+                💊 总体建议
+              </h4>
+              <p style={{ fontSize: '14px', color: '#075985', lineHeight: '1.6', margin: 0 }}>
+                {conflictReport.generalAdvice}
+              </p>
+            </div>
+          )}
+        </div>
       )}
     </>
   );
