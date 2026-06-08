@@ -1,6 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
+  const audioRef = useRef(null);
+
   useEffect(() => {
     // 阻止背景滚动
     document.body.style.overflow = 'hidden';
@@ -97,28 +99,33 @@ const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
           overflowY: 'auto'
         }}>
           {reminders && reminders.map((reminder, index) => {
-            const overdueMinutes = calculateOverdueMinutes(reminder.scheduledTime);
+            // calendarPlans 中的数据字段是 time，不是 scheduledTime
+            const scheduledTime = reminder.time || reminder.scheduledTime;
+            const drugName = reminder.drug || reminder.drugName || reminder.name || '未知药品';
+            const dosage = reminder.dosage;
+            const overdueMinutes = calculateOverdueMinutes(scheduledTime);
+            // 转换为小时（保留1位小数）
+            const overdueHours = (overdueMinutes / 60).toFixed(1);
+                    
             return (
               <div
-                key={index}
+                key={reminder.id || index}
                 style={{
                   background: overdueMinutes > 60 ? '#ffebee' : '#fff3e0',
                   border: `2px solid ${overdueMinutes > 60 ? '#ef5350' : '#ff9800'}`,
                   borderRadius: '12px',
                   padding: '16px',
                   marginBottom: '12px',
-                  cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                 }}
-                onClick={() => onMarkAsTaken(reminder)}
                 onMouseEnter={(e) => {
-                  e.target.style.transform = 'translateY(-2px)';
-                  e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.transform = 'translateY(0)';
-                  e.target.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -129,14 +136,14 @@ const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
                       color: '#3D3D3D',
                       margin: '0 0 8px 0'
                     }}>
-                      💊 {reminder.drugName || reminder.name || '未知药品'}
+                      💊 {drugName}
                     </p>
                     <p style={{
                       fontSize: '14px',
                       color: '#6B6B6B',
                       margin: '0 0 4px 0'
                     }}>
-                      ⏰ 应在 {formatTime(reminder.scheduledTime)} 服用
+                       应在 {formatTime(scheduledTime)} 服用
                       {reminder.specification && ` - ${reminder.specification}`}
                     </p>
                     {overdueMinutes > 0 && (
@@ -146,31 +153,51 @@ const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
                         margin: 0,
                         fontWeight: '600'
                       }}>
-                        ⚠️ 已超时 {overdueMinutes} 分钟
+                        ⚠️ 已超时 {overdueHours} 小时
                       </p>
                     )}
-                    {reminder.dosage && (
+                    {dosage && (
                       <p style={{
                         fontSize: '13px',
                         color: '#9E9E9E',
                         margin: '4px 0 0 0'
                       }}>
-                        剂量：{reminder.dosage}
+                        剂量：{dosage}
                       </p>
                     )}
                   </div>
-                  <div style={{
-                    background: '#4CAF50',
-                    color: 'white',
-                    padding: '8px 16px',
-                    borderRadius: '20px',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    marginLeft: '12px',
-                    flexShrink: 0
-                  }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMarkAsTaken(reminder);
+                    }}
+                    style={{
+                      background: '#4CAF50',
+                      color: 'white',
+                      padding: '8px 16px',
+                      borderRadius: '20px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      marginLeft: '12px',
+                      flexShrink: 0,
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 2px 8px rgba(76, 175, 80, 0.3)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#45a049';
+                      e.target.style.transform = 'scale(1.05)';
+                      e.target.style.boxShadow = '0 4px 12px rgba(76, 175, 80, 0.4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = '#4CAF50';
+                      e.target.style.transform = 'scale(1)';
+                      e.target.style.boxShadow = '0 2px 8px rgba(76, 175, 80, 0.3)';
+                    }}
+                  >
                     ✓ 已服用
-                  </div>
+                  </button>
                 </div>
               </div>
             );
@@ -189,7 +216,7 @@ const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
             color: '#9E9E9E',
             margin: 0
           }}>
-            💡 点击卡片标记为已服用
+            💡 点击"已服用"按钮标记为已服用
           </p>
         </div>
       </div>
