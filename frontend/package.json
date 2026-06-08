@@ -35,6 +35,7 @@
     ]
   },
   "devDependencies": {
-    "http-proxy-middleware": "2.0.9"
+    "http-proxy-middleware": "2.0.9",
+    "playwright": "^1.60.0"
   }
 }

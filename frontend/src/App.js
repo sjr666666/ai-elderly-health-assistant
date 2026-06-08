@@ -189,6 +189,35 @@ function App() {
     }
   };
 
+  // 今日用药计划缓存 key
+  const TODAY_PLANS_CACHE_KEY = 'today_plans_cache';
+
+  // 从本地缓存加载用药计划（断网时使用）
+  const loadPlansFromCache = () => {
+    try {
+      const cached = localStorage.getItem(TODAY_PLANS_CACHE_KEY);
+      if (cached) {
+        const { plans, timestamp } = JSON.parse(cached);
+        console.log('从本地缓存加载用药计划，缓存时间:', new Date(timestamp).toLocaleString());
+        
+        // 合并本地服药状态
+        const plansWithStatus = mergeLocalMedicationStatus(plans);
+        setCalendarPlans(plansWithStatus);
+        
+        const drugIds = new Set(plansWithStatus.map(p => p.drugId).filter(Boolean));
+        setDrugsWithPlan(drugIds);
+        
+        showToast('已加载缓存的用药计划（离线模式）', 'info');
+        return true;
+      }
+    } catch (err) {
+      console.error('从缓存加载用药计划失败:', err);
+    }
+    setCalendarPlans([]);
+    setDrugsWithPlan(new Set());
+    return false;
+  };
+
   // 从后端加载今日用药计划（根据家庭药箱自动生成）
   const loadCalendarPlans = async () => {
     if (!user || !user.userId) {
@@ -234,15 +263,26 @@ function App() {
         const drugIds = new Set(plans.map(p => p.drugId).filter(Boolean));
         setDrugsWithPlan(drugIds);
         console.log('用药计划已更新，共', plans.length, '条记录');
+        
+        // 保存到本地缓存（用于断网可读）
+        try {
+          localStorage.setItem(TODAY_PLANS_CACHE_KEY, JSON.stringify({
+            plans: plans,
+            timestamp: Date.now()
+          }));
+          console.log('今日用药计划已缓存');
+        } catch (cacheErr) {
+          console.error('缓存用药计划失败:', cacheErr);
+        }
       } else {
         console.error('获取用药计划失败:', data.message);
-        setCalendarPlans([]);
-        setDrugsWithPlan(new Set());
+        // 尝试从缓存读取
+        loadPlansFromCache();
       }
     } catch (err) {
       console.error('获取用药计划异常:', err);
-      setCalendarPlans([]);
-      setDrugsWithPlan(new Set());
+      // 尝试从缓存读取
+      loadPlansFromCache();
     } finally {
       setIsLoadingCalendar(false);
     }
@@ -2383,6 +2423,36 @@ function App() {
   const renderConflictTab = () => {
     const hasConflict = drugList.length > 1;
 
+    // 冲突规则缓存 key
+    const CONFLICT_RULES_CACHE_KEY = 'conflict_rules_cache';
+
+    // 从本地缓存加载冲突规则（断网时使用）
+    const loadConflictFromCache = () => {
+      try {
+        const cached = localStorage.getItem(CONFLICT_RULES_CACHE_KEY);
+        if (cached) {
+          const { report, drugNames, timestamp } = JSON.parse(cached);
+          console.log('从本地缓存加载冲突规则，缓存时间:', new Date(timestamp).toLocaleString());
+          
+          // 检查缓存的药品列表是否与当前药箱匹配
+          const currentDrugNames = drugList.map(d => d.name).sort();
+          const cachedDrugNames = [...drugNames].sort();
+          const isCacheValid = JSON.stringify(currentDrugNames) === JSON.stringify(cachedDrugNames);
+          
+          if (isCacheValid) {
+            setConflictReport(report);
+            showToast('已加载缓存的冲突规则（离线模式）', 'info');
+            return true;
+          } else {
+            showToast('缓存的冲突规则与当前药箱不匹配，请联网后重新检测', 'warning');
+          }
+        }
+      } catch (err) {
+        console.error('从缓存加载冲突规则失败:', err);
+      }
+      return false;
+    };
+
     // 调用冲突检测API
     const handleCheckConflicts = async () => {
       if (drugList.length === 0) {
@@ -2414,12 +2484,28 @@ function App() {
         if (data.code === 200 && data.data) {
           setConflictReport(data.data);
           console.log('冲突检测成功:', data.data);
+          
+          // 保存到本地缓存（用于断网可读）
+          try {
+            localStorage.setItem(CONFLICT_RULES_CACHE_KEY, JSON.stringify({
+              report: data.data,
+              drugNames: drugNames,
+              timestamp: Date.now()
+            }));
+            console.log('冲突规则已缓存');
+          } catch (cacheErr) {
+            console.error('缓存冲突规则失败:', cacheErr);
+          }
         } else {
           setConflictError(data.message || '冲突检测失败');
+          // 尝试从缓存读取
+          loadConflictFromCache();
         }
       } catch (error) {
         console.error('冲突检测异常:', error);
         setConflictError('网络错误，请稍后重试');
+        // 尝试从缓存读取
+        loadConflictFromCache();
       } finally {
         setIsCheckingConflicts(false);
       }
