@@ -25,9 +25,9 @@ input::-ms-clear {
   --warm-apricot: #F5C6A5;
   --warm-apricot-light: #FFE4D1;
   --warm-apricot-dark: #E8B090;
-  --mint-green: #98D4BB;
-  --mint-green-light: #E8F5F0;
-  --mint-green-dark: #7BC4A5;
+  --mint-green: #4CAF50;
+  --mint-green-light: #E8F5E8;
+  --mint-green-dark: #388E3C;
   --cream-white: #FAF7F2;
   --cream-dark: #F0EBE3;
   --tech-blue: #4A90E2;
@@ -750,10 +750,13 @@ body {
 .btn-success {
   background: linear-gradient(135deg, var(--mint-green) 0%, var(--mint-green-dark) 100%);
   color: white;
+  box-shadow: 0 6px 24px rgba(76, 175, 80, 0.4);
 }
 
 .btn-success:hover {
-  background: linear-gradient(135deg, var(--mint-green-light) 0%, var(--mint-green) 100%);
+  background: linear-gradient(135deg, #66BB6A 0%, var(--mint-green) 100%);
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 10px 30px rgba(76, 175, 80, 0.5);
 }
 
 .btn-success.confirmed {
