@@ -2032,6 +2032,292 @@ body {
   font-weight: 700;
 }
 
+/* ============ WEEK VIEW (日历格) ============ */
+.week-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.week-day-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  text-align: center;
+  background: var(--cream-white);
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  padding: 12px 8px 10px;
+  min-height: 144px;
+  font: inherit;
+  color: var(--text-dark);
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.week-day-cell:hover {
+  border-color: var(--tech-blue-light);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-2px);
+}
+
+.week-day-cell:focus-visible {
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.35);
+}
+
+.week-day-cell.is-today {
+  background: linear-gradient(180deg, rgba(74, 144, 226, 0.10), rgba(74, 144, 226, 0.02));
+  border-color: var(--tech-blue);
+}
+
+.week-day-cell.is-selected {
+  border-color: var(--tech-blue);
+  border-top: 2px solid var(--tech-blue);
+  background: white;
+  box-shadow: var(--shadow-soft);
+}
+
+.week-day-cell.is-past .week-day-cell__num {
+  color: var(--text-light);
+}
+
+.week-day-cell.is-future {
+  opacity: 0.78;
+}
+
+.week-day-cell.is-empty .week-day-cell__completion {
+  color: var(--text-muted);
+}
+
+.week-day-cell__weekday {
+  font-size: 13px;
+  color: var(--text-light);
+  letter-spacing: 0.04em;
+}
+
+.week-day-cell.is-today .week-day-cell__weekday {
+  color: var(--tech-blue-dark);
+  font-weight: 700;
+}
+
+.week-day-cell__num {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-dark);
+  margin-top: 2px;
+}
+
+.week-day-cell__completion {
+  font-size: 13px;
+  color: var(--text-light);
+  font-weight: 600;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.week-day-cell__completion.is-all-taken {
+  color: var(--success-green);
+}
+
+.week-day-cell__dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-height: 10px;
+  margin: 6px 0 4px;
+}
+
+.week-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  background: var(--text-muted);
+}
+
+.week-dot.dot-taken { background: var(--success-green); }
+.week-dot.dot-pending { background: var(--warning-orange); }
+.week-dot.dot-missed { background: var(--danger-red); }
+.week-dot.dot-skipped { background: var(--text-muted); }
+
+.week-dot-overflow {
+  font-size: 11px;
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.week-day-cell__empty {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.week-day-cell__count {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: auto;
+}
+
+/* 就地下钻的日详情 */
+.week-day-detail {
+  background: var(--cream-white);
+  border: 1px solid var(--border-color, #E5DFD5);
+  border-radius: var(--radius-medium);
+  padding: 20px 22px 24px;
+  animation: weekDayDetailIn 220ms ease-out;
+}
+
+@keyframes weekDayDetailIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.week-day-detail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color, #E5DFD5);
+}
+
+.week-day-detail__title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.week-day-detail__date {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.week-day-detail__phase {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--tech-blue-light);
+  color: var(--tech-blue-dark);
+  font-weight: 600;
+}
+
+.week-day-detail__close {
+  background: none;
+  border: 1px solid var(--border-color, #E5DFD5);
+  color: var(--text-light);
+  font-size: 14px;
+  padding: 6px 14px;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  min-height: 36px;
+}
+
+.week-day-detail__close:hover {
+  background: white;
+  color: var(--text-dark);
+  border-color: var(--text-light);
+}
+
+.week-day-detail__empty {
+  text-align: center;
+  color: var(--text-light);
+  font-size: 15px;
+  padding: 24px 0;
+}
+
+.week-day-detail__hint {
+  font-size: 13px;
+  color: var(--warning-orange);
+  background: var(--warning-orange-light);
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.week-day-detail__hint--danger {
+  color: var(--danger-red);
+  background: var(--danger-red-light, rgba(231, 76, 60, 0.12));
+}
+
+/* 在日详情里的 timeline 容器减少左侧留白，避免嵌套拥挤 */
+.week-day-detail .timeline-container {
+  padding-left: 56px;
+}
+
+.week-day-detail .timeline-item::before {
+  width: 22px;
+  height: 22px;
+  left: -46px;
+  top: 36px;
+  border-width: 4px;
+}
+
+.week-day-detail .timeline-item {
+  padding: 22px 24px;
+  margin-bottom: 18px;
+}
+
+.week-day-detail .timeline-time {
+  font-size: 22px;
+  min-width: 100px;
+}
+
+.week-day-detail .timeline-period {
+  font-size: 15px;
+}
+
+.week-day-detail .timeline-drug {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.week-day-detail .status-taken,
+.week-day-detail .status-pending,
+.week-day-detail .status-missed {
+  font-size: 16px;
+  padding: 8px 18px;
+}
+
+@media (max-width: 1200px) {
+  .week-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .week-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .week-day-cell {
+    min-height: 116px;
+    padding: 10px 6px 8px;
+  }
+  .week-day-cell__num {
+    font-size: 22px;
+  }
+  .week-day-detail .timeline-container {
+    padding-left: 40px;
+  }
+  .week-day-detail .timeline-item::before {
+    left: -36px;
+  }
+}
+
 .reminder-suggestion {
   background: white;
   padding: 20px 24px;
