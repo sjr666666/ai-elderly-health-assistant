@@ -36,7 +36,8 @@
         SELECT * FROM elderly_medication.medication_plan
         WHERE id = #{id}
           AND user_id = #{userId}
-        LIMIT 1
+          -- 故意不写 `is_deleted = 0`：撤销历史记录场景需查询已被软删除的计划
+          LIMIT 1
     </select>
 
     <!-- 不经 @TableLogic 过滤，给 action 接口用 -->
