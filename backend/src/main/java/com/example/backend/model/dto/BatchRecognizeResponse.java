@@ -19,6 +19,7 @@ public class BatchRecognizeResponse {
         private String status;
         private Long matchedDrugId;
         private String matchedDrugName;
+        private String matchedDrugSpec;
         private String rawText;
         private Double matchScore;
         private String message;
@@ -61,6 +62,14 @@ public class BatchRecognizeResponse {
 
         public void setMatchedDrugName(String matchedDrugName) {
             this.matchedDrugName = matchedDrugName;
+        }
+
+        public String getMatchedDrugSpec() {
+            return matchedDrugSpec;
+        }
+
+        public void setMatchedDrugSpec(String matchedDrugSpec) {
+            this.matchedDrugSpec = matchedDrugSpec;
         }
 
         public String getRawText() {
