@@ -468,6 +468,50 @@ function App() {
     showToast('个人信息已更新！', 'success');
   };
 
+  // 手动触发用药提醒（用于调试）
+  const handleTriggerReminderManually = () => {
+    console.log('手动触发用药提醒');
+    
+    // 获取当前超时的用药计划
+    if (!calendarPlans || calendarPlans.length === 0) {
+      showToast('当前没有用药计划', 'warning');
+      return;
+    }
+
+    const now = new Date();
+    const currentHours = now.getHours();
+    const currentMinutes = now.getMinutes();
+    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+
+    // 找出所有超时需要服用但还未服用的用药计划
+    const missed = calendarPlans.filter(reminder => {
+      if (reminder.taken || reminder.missed) {
+        return false;
+      }
+      const [hours, minutes] = reminder.time.split(':').map(Number);
+      const reminderTimeInMinutes = hours * 60 + minutes;
+      const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
+      return timeDiff >= 0;
+    });
+
+    if (missed.length === 0) {
+      showToast('当前没有需要服用的药物', 'info');
+      // 显示所有待服用的药物，即使还没超时
+      const pending = calendarPlans.filter(reminder => !reminder.taken && !reminder.missed);
+      if (pending.length > 0) {
+        setMissedReminders(pending);
+        setShowMedicationReminder(true);
+        lastReminderTimeRef.current = Date.now();
+      }
+      return;
+    }
+
+    setMissedReminders(missed);
+    setShowMedicationReminder(true);
+    lastReminderTimeRef.current = Date.now();
+    console.log('手动触发用药提醒:', missed);
+  };
+
   const handleAddContact = async () => {
     if (user && user.id) {
       await loadEmergencyContacts(user.id);
@@ -685,19 +729,73 @@ function App() {
 
   // 关闭用药提醒弹窗
   const handleCloseMedicationReminder = () => {
+    // 关闭弹窗时自动停止播报
+    stopSpeaking();
+    // 重置提醒ID，允许下次打开时重新播报
+    lastReminderIdRef.current = null;
     setShowMedicationReminder(false);
     setMissedReminders([]);
     // 不重置 lastReminderTimeRef，确保下次提醒要等3分钟后
   };
 
   // 从提醒弹窗中标记为已服用
-  const handleMarkAsTakenFromReminder = async (reminderId) => {
-    // 调用现有的标记已服用逻辑（不传递event参数）
-    markAsTaken(reminderId, null);
-    // 关闭提醒弹窗
-    handleCloseMedicationReminder();
-    // 重置提醒时间，允许其他药物立即提醒
-    lastReminderTimeRef.current = null;
+  // 用于追踪是否需要重新显示弹窗
+  const [shouldRefreshReminder, setShouldRefreshReminder] = useState(false);
+
+  // 监听calendarPlans变化，当标记为已服用后自动刷新弹窗
+  useEffect(() => {
+    if (shouldRefreshReminder && calendarPlans.length > 0) {
+      setShouldRefreshReminder(false);
+      
+      const now = new Date();
+      const currentHours = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+      
+      // 从最新的calendarPlans中筛选未服用的药物
+      const remainingMissed = calendarPlans.filter(p => 
+        !p.taken && !p.missed && 
+        (() => {
+          const [hours, minutes] = p.time.split(':').map(Number);
+          const reminderTimeInMinutes = hours * 60 + minutes;
+          return currentTimeInMinutes - reminderTimeInMinutes >= 0;
+        })()
+      );
+      
+      console.log('刷新弹窗 - 剩余未服用的药物数量:', remainingMissed.length);
+      
+      // 如果还有未服用的药物，重新打开弹窗
+      if (remainingMissed.length > 0) {
+        console.log('还有未服用的药物，重新打开弹窗:', remainingMissed);
+        setMissedReminders(remainingMissed);
+        setShowMedicationReminder(true);
+        lastReminderTimeRef.current = Date.now();
+      } else {
+        // 所有药物都已服用，关闭弹窗
+        console.log('所有药物都已服用，关闭弹窗');
+        handleCloseMedicationReminder();
+      }
+    }
+  }, [calendarPlans, shouldRefreshReminder]);
+
+  const handleMarkAsTakenFromReminder = async (reminder) => {
+    console.log('标记为已服用:', reminder);
+    
+    // 1. 先调用 markAsTaken 标记为已服用
+    markAsTaken(reminder.id, null);
+    
+    // 2. 等待100ms确保状态更新开始
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // 3. 重新加载用药日历数据（根据当前视图模式）
+    if (calendarViewMode === 'today') {
+      await loadCalendarPlans();
+    } else if (calendarViewMode === 'week') {
+      await loadWeeklyMedication();
+    }
+    
+    // 4. 设置标志，触发 useEffect 重新计算
+    setShouldRefreshReminder(true);
   };
 
   const handleLogout = () => {
@@ -843,6 +941,17 @@ function App() {
     };
   }, []);
 
+  // 将语音播报方法绑定到 window 对象，供 MedicationReminderModal 使用
+  useEffect(() => {
+    window.speakMedicationReminder = (text) => {
+      speak(text);
+    };
+    
+    return () => {
+      delete window.speakMedicationReminder;
+    };
+  }, []); // 空依赖数组，只执行一次
+
   // 用药提醒：每3分钟检查一次是否有超时需要服用的药
   useEffect(() => {
     // 只要用户登录就启用提醒（不再限制在用药日历页面）
@@ -903,13 +1012,49 @@ function App() {
     };
   }, [isLoggedIn, calendarPlans]);
 
+  // 监听弹窗显示，自动播报（只在弹窗首次打开时播报一次）
+  const lastReminderIdRef = useRef(null);
+  
+  useEffect(() => {
+    if (showMedicationReminder && missedReminders.length > 0) {
+      // 使用第一个提醒的ID作为标识，避免重复播报
+      const firstReminderId = missedReminders[0]?.id;
+      
+      // 如果是同一组提醒，不重复播报
+      if (lastReminderIdRef.current === firstReminderId) {
+        return;
+      }
+      
+      // 记录本次提醒ID
+      lastReminderIdRef.current = firstReminderId;
+      
+      // 弹窗打开时，延迟500ms后自动播报
+      const timer = setTimeout(() => {
+        const reminderTexts = missedReminders.map(reminder => {
+          const drugName = reminder.drug || reminder.drugName || '未知药品';
+          const time = reminder.time || reminder.scheduledTime || '未知时间';
+          const dosage = reminder.dosage ? `，用量${reminder.dosage}` : '';
+          return `${time}的${drugName}${dosage}`;
+        });
+        
+        const speakText = `用药提醒！您有以下药物还没有服用：${reminderTexts.join('；')}。请及时服用。`;
+        speak(speakText);
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [showMedicationReminder, missedReminders]);
+
   const audioRef = useRef(null);
 
   const speak = async (text, rate = speechRate) => {
     if (!text || text.trim() === '') {
-      showToast('没有可播放的内容', 'warning');
+      console.log('没有可播放的内容');
       return;
     }
+
+    // 先停止当前播放，避免中断错误
+    stopSpeaking();
 
     // 优先尝试调用百度TTS API
     try {
@@ -926,7 +1071,11 @@ function App() {
           // 播放百度返回的音频
           if (audioRef.current) {
             audioRef.current.src = result.data;
-            audioRef.current.play();
+            // 添加错误处理，避免播放中断错误
+            audioRef.current.play().catch(err => {
+              console.error('音频播放失败:', err);
+              setIsSpeaking(false);
+            });
             return; // 成功则返回
           }
         }
@@ -2735,7 +2884,22 @@ function App() {
           <span className="card-title-icon">📅</span>
           {calendarViewMode === 'today' ? '今日用药时间轴' : '一周用药记录'}
         </h2>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {/* 调试按钮：手动触发提醒 */}
+          <button
+            className="btn btn-warning"
+            onClick={handleTriggerReminderManually}
+            style={{ 
+              minHeight: '40px',
+              fontSize: '14px',
+              background: '#ff9800',
+              color: 'white',
+              border: 'none'
+            }}
+            title="手动触发用药提醒（调试用）"
+          >
+            🔔 测试提醒
+          </button>
           <button
             className={`btn ${calendarViewMode === 'today' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => handleCalendarViewChange('today')}
