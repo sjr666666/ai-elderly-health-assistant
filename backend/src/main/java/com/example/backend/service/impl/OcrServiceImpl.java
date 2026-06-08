@@ -94,7 +94,7 @@ public class OcrServiceImpl implements OcrService {
         try {
             while (it.hasNext()) {
                 Map.Entry<String, CacheEntry> e = it.next();
-                if (e.getValue() == null || now - e.getValue().createdAt >= ttl) {
+                if (e.getValue() == null || e.getValue().isExpired(now, ttl)) {
                     it.remove();
                     removed++;
                 }
@@ -119,8 +119,8 @@ public class OcrServiceImpl implements OcrService {
             this.response = response;
         }
 
-        boolean isExpired(long ttlMillis) {
-            return System.currentTimeMillis() - createdAt >= ttlMillis;
+        boolean isExpired(long now, long ttlMillis) {
+            return now - createdAt >= ttlMillis;
         }
     }
 
@@ -360,7 +360,7 @@ public class OcrServiceImpl implements OcrService {
         if (entry == null) {
             return null;
         }
-        if (entry.isExpired(batchCacheTtlMillis)) {
+        if (entry.isExpired(System.currentTimeMillis(), batchCacheTtlMillis)) {
             batchResultCache.remove(batchId, entry);
             return null;
         }
