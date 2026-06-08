@@ -1477,13 +1477,27 @@ function App() {
 
         // 自动选中识别成功的项目
         const newSelected = new Set();
+        const matchedDrugs = [];
         batchRecognizeItems.forEach((item, index) => {
           const result = results[index] || {};
           if (result.status === 'matched' && result.matchedDrugId) {
             newSelected.add(item.id);
+            matchedDrugs.push({
+              id: result.matchedDrugId,
+              name: result.matchedDrugName,
+              spec: result.matchedDrugSpec || '',
+              manufacturer: '',
+              matchScore: result.matchScore ? Math.round(result.matchScore * 100) : 0
+            });
           }
         });
         setBatchSelectedForAdd(newSelected);
+
+        // 同步命中药品到识别结果列表，并跳转到识别结果页查看
+        if (matchedDrugs.length > 0) {
+          setRecognizedDrugs(matchedDrugs);
+          setActiveTab('recognition');
+        }
 
         showToast(`识别完成！成功: ${data.data.successCount}, 失败: ${data.data.failedCount}`,
           data.data.failedCount > 0 ? 'warning' : 'success');
@@ -2454,10 +2468,25 @@ function App() {
 
   const renderRecognitionTab = () => (
     <div className="card">
-      <h2 className="card-title">
-        <span className="card-title-icon">✅</span>
-        识别结果
-      </h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h2 className="card-title" style={{ margin: 0 }}>
+          <span className="card-title-icon">✅</span>
+          识别结果
+          {recognizedDrugs.length > 0 && (
+            <span style={{ fontSize: '16px', color: '#6B6B6B', marginLeft: '12px', fontWeight: 'normal' }}>
+              （共 {recognizedDrugs.length} 个药品）
+            </span>
+          )}
+        </h2>
+        {recognizedDrugs.length > 0 && (
+          <button
+            className="btn btn-secondary"
+            onClick={() => setActiveTab('upload')}
+          >
+            ← 返回继续识别
+          </button>
+        )}
+      </div>
 
       {recognizedDrugs.length > 0 ? (
         <div className="drug-list">

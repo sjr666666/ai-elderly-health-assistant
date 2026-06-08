@@ -291,6 +291,7 @@ public class OcrServiceImpl implements OcrService {
                         DrugBase drug = drugBaseMapper.selectById(processedRecord.getMatchedDrugId());
                         if (drug != null) {
                             item.setMatchedDrugName(drug.getGenericName());
+                            item.setMatchedDrugSpec(drug.getSpecification());
                         }
                     }
 
