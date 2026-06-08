@@ -8,6 +8,7 @@
 *.swo
 *~
 .DS_Store
+.trae/skills/
 
 # Backend - Maven
 target/
