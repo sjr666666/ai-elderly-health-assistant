@@ -79,6 +79,12 @@ function App() {
   const [conflictAlertResult, setConflictAlertResult] = useState(null); // 新药入箱冲突检测结果
   const [conflictNeedsRecheck, setConflictNeedsRecheck] = useState(false); // 冲突检测页面是否需要重新检测
   
+  // 批量识别相关状态
+  const [batchRecognizeItems, setBatchRecognizeItems] = useState([]); // 批量识别的图片列表
+  const [batchSelectedForAdd, setBatchSelectedForAdd] = useState(new Set()); // 选中的要添加的药品
+  const [isBatchAdding, setIsBatchAdding] = useState(false); // 是否正在添加到药箱
+  const batchFileInputRef = useRef(null); // 批量文件输入引用
+  
   const fileInputRef = useRef(null);
   const conflictReportRef = useRef(null); // 冲突报告卡片引用（用于弹窗显示）
   const screenshotContainerRef = useRef(null); // 隐藏的截图容器引用
@@ -1224,6 +1230,183 @@ function App() {
     });
   };
 
+  // 触发批量选择文件
+  const handleBatchSelectFiles = () => {
+    batchFileInputRef.current?.click();
+  };
+
+  // 处理批量文件选择
+  const handleBatchFileSelect = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    // 将WebP图片转换为JPEG格式
+    const convertedFiles = await Promise.all(files.map(async (file) => {
+      if (!file.type.includes('webp')) return file;
+      
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            canvas.toBlob((blob) => {
+              if (blob) {
+                const converted = new File([blob], file.name.replace('.webp', '.jpg'), { type: 'image/jpeg' });
+                resolve(converted);
+              } else {
+                resolve(file);
+              }
+            }, 'image/jpeg', 0.95);
+          };
+          img.onerror = () => resolve(file);
+          img.src = evt.target.result;
+        };
+        reader.onerror = () => resolve(file);
+        reader.readAsDataURL(file);
+      });
+    }));
+
+    // 创建预览URL
+    const newItems = convertedFiles.map((file, index) => ({
+      id: Date.now() + index,
+      file: file,
+      previewUrl: URL.createObjectURL(file),
+      status: 'pending',
+      result: null
+    }));
+
+    setBatchRecognizeItems(prev => [...prev, ...newItems]);
+    e.target.value = '';
+  };
+
+  // 批量识别所有图片
+  const handleBatchRecognize = async () => {
+    if (batchRecognizeItems.length === 0) {
+      showToast('请先选择要识别的图片', 'warning');
+      return;
+    }
+
+    // 更新状态为识别中
+    setBatchRecognizeItems(prev => prev.map(item => ({ ...item, status: 'recognizing' })));
+
+    try {
+      const files = batchRecognizeItems.map(item => item.file);
+      const formData = new FormData();
+      files.forEach(file => formData.append('files', file));
+
+      const response = await fetch('http://localhost:8080/api/v1/drug/recognize/batch-upload', {
+        method: 'POST',
+        headers: { 'X-User-Id': user?.userId || '1' },
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (data.code === 200 && data.data) {
+        const results = data.data.items || [];
+
+        // 更新图片状态和结果
+        setBatchRecognizeItems(prev => prev.map((item, index) => {
+          const result = results[index] || {};
+          return {
+            ...item,
+            status: result.status === 'matched' ? 'success' : 'failed',
+            result: {
+              drugId: result.matchedDrugId,
+              drugName: result.matchedDrugName,
+              rawText: result.rawText,
+              matchScore: result.matchScore,
+              message: result.message
+            }
+          };
+        }));
+
+        // 自动选中识别成功的项目
+        const newSelected = new Set();
+        batchRecognizeItems.forEach((item, index) => {
+          const result = results[index] || {};
+          if (result.status === 'matched' && result.matchedDrugId) {
+            newSelected.add(item.id);
+          }
+        });
+        setBatchSelectedForAdd(newSelected);
+
+        showToast(`识别完成！成功: ${data.data.successCount}, 失败: ${data.data.failedCount}`,
+          data.data.failedCount > 0 ? 'warning' : 'success');
+      } else {
+        showToast(data.message || '批量识别失败', 'error');
+        setBatchRecognizeItems(prev => prev.map(item => ({ ...item, status: 'pending' })));
+      }
+    } catch (error) {
+      console.error('批量识别失败:', error);
+      showToast('批量识别失败，请检查网络连接', 'error');
+      setBatchRecognizeItems(prev => prev.map(item => ({ ...item, status: 'pending' })));
+    }
+  };
+
+  // 批量添加到药箱
+  const handleBatchAddToMedicineBox = async () => {
+    if (batchSelectedForAdd.size === 0) {
+      showToast('请选择要添加到药箱的药品', 'warning');
+      return;
+    }
+
+    setIsBatchAdding(true);
+
+    try {
+      const selectedItems = batchRecognizeItems.filter(item => batchSelectedForAdd.has(item.id) && item.result?.drugId);
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const item of selectedItems) {
+        try {
+          const response = await fetch(`/api/v1/box?userId=${user?.userId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              drugId: item.result.drugId,
+              dosage: '1片',
+              frequency: '每日一次',
+              startDate: new Date().toISOString().split('T')[0],
+              endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              totalQuantity: 30,
+              status: 'active'
+            })
+          });
+
+          const data = await response.json();
+          if (data.code === 200) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (err) {
+          console.error('添加到药箱失败:', err);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        showToast(`成功添加 ${successCount} 个药品到药箱`, 'success');
+        loadMedicineBoxList(user?.userId);
+        // 清空批量识别列表
+        batchRecognizeItems.forEach(item => URL.revokeObjectURL(item.previewUrl));
+        setBatchRecognizeItems([]);
+        setBatchSelectedForAdd(new Set());
+      } else if (failCount > 0) {
+        showToast(`添加失败 ${failCount} 个药品`, 'error');
+      }
+    } finally {
+      setIsBatchAdding(false);
+    }
+  };
+
   const analyzeImage = async () => {
     console.log('=== 分析图片 ===');
     console.log('fileInputRef.current:', fileInputRef.current);
@@ -1850,116 +2033,218 @@ function App() {
         上传药品照片
       </h2>
 
-      <div
-        className={`upload-area ${isDragging ? 'dragging' : ''} ${imagePreview ? 'has-image' : ''}`}
-        onClick={(e) => {
-          if (!imagePreview) {
-            fileInputRef.current?.click();
-          }
-        }}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onDragEnter={handleDragEnter}
-      >
-        <input
-          ref={fileInputRef}
-          id="file-input"
-          type="file"
-          accept="image/*"
-          style={{ display: 'none' }}
-          onChange={handleFileUpload}
-        />
-        
-        {/* 加载动画覆盖层 */}
-        {(isLoading || showComplete) && (
-          <div className={`loading-overlay ${showComplete ? 'loading-complete' : ''}`}>
-            {!showComplete ? (
-              <>
-                <div className="loading-spinner-container">
-                  <div className="loading-spinner"></div>
-                  <div className="loading-spinner-ring"></div>
-                </div>
-                <div className="loading-progress-bar">
-                  <div className="loading-progress-fill"></div>
-                </div>
-              </>
-            ) : (
-              <div className="loading-complete-icon">✅</div>
-            )}
-            <p className="loading-text">
-              {showComplete ? '🎉 识别完成！正在跳转到结果页面...' : 
-               (ocrPolling ? '⏳ 正在查询识别结果，请稍候...' : '🔍 AI正在识别药品，请稍候...')}
-            </p>
-            {ocrTaskId && !showComplete && (
-              <p className="loading-task-id">
-                任务ID: {ocrTaskId}
-              </p>
-            )}
-            <div className="loading-steps">
-              <div className="loading-step completed">
-                <span className="step-icon">📤</span>
-                <span className="step-text">上传图片</span>
-              </div>
-              <div className="loading-step-arrow">→</div>
-              <div className={`loading-step ${showComplete ? 'completed' : 'active'}`}>
-                <span className="step-icon">🔍</span>
-                <span className="step-text">{showComplete ? '识别完成' : (ocrPolling ? '查询结果' : '识别中')}</span>
-              </div>
-              <div className="loading-step-arrow">→</div>
-              <div className={`loading-step ${showComplete ? 'completed' : 'pending'}`}>
-                <span className="step-icon">✅</span>
-                <span className="step-text">完成</span>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {/* 图片预览 */}
-        {imagePreview && !isLoading && !showComplete && (
-          <div className="upload-preview-container">
-            <img src={imagePreview} alt="药品预览" className="upload-preview-image" />
-            <button 
-              className="upload-clear-btn" 
-              onClick={(e) => {
-                e.stopPropagation();
-                setImagePreview(null);
-                if (fileInputRef.current) {
-                  fileInputRef.current.value = '';
-                }
+      {/* 批量识别区域 */}
+      {batchRecognizeItems.length > 0 ? (
+        <div className="batch-recognize-section">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '20px', color: '#4A90E2', margin: 0 }}>
+              📸 批量识别结果 ({batchRecognizeItems.filter(i => i.status === 'success').length} 成功)
+            </h3>
+            <button
+              onClick={() => {
+                setBatchRecognizeItems([]);
+                setBatchSelectedForAdd(new Set());
+              }}
+              style={{
+                padding: '8px 16px',
+                fontSize: '14px',
+                border: '2px solid #E0E0E0',
+                borderRadius: '8px',
+                background: 'white',
+                color: '#6B6B6B',
+                cursor: 'pointer'
               }}
             >
-              ✕
+              清空
             </button>
           </div>
-        )}
-        
-        {/* 默认提示内容 */}
-        {!imagePreview && !isLoading && !showComplete && (
-          <>
-            <span className="upload-icon">💊</span>
-            <p className="upload-text">拖拽药盒图片到此处，或点击上传</p>
-            <p className="upload-hint">支持 JPG、PNG 格式，文件小于10MB</p>
-          </>
-        )}
-      </div>
 
-      <div className="btn-group">
-        <button
-          className={`btn btn-primary btn-large ${isLoading ? 'btn-loading' : ''}`}
-          onClick={analyzeImage}
-          disabled={!imagePreview || isLoading}
-        >
-          {isLoading ? (
-            <>
-              <span className="btn-spinner"></span>
-              识别中...
-            </>
-          ) : (
-            '🔍 开始识别'
-          )}
-        </button>
-      </div>
+          <div className="batch-preview-grid">
+            {batchRecognizeItems.map((item) => (
+              <div
+                key={item.id}
+                className={`batch-preview-item ${item.status === 'success' ? 'success' : item.status === 'failed' ? 'failed' : 'pending'} ${item.status === 'success' && item.result?.drugId && batchSelectedForAdd.has(item.id) ? 'selected' : ''}`}
+                onClick={() => {
+                  if (item.status === 'success' && item.result?.drugId) {
+                    setBatchSelectedForAdd(prev => {
+                      const newSet = new Set(prev);
+                      if (newSet.has(item.id)) {
+                        newSet.delete(item.id);
+                      } else {
+                        newSet.add(item.id);
+                      }
+                      return newSet;
+                    });
+                  }
+                }}
+              >
+                <img src={item.previewUrl} alt="预览" className="batch-preview-image" />
+                <div className="batch-preview-status">
+                  {item.status === 'success' ? '✓' : item.status === 'failed' ? '✗' : '⏳'}
+                </div>
+                {item.result?.drugName && (
+                  <div className="batch-preview-name">{item.result.drugName}</div>
+                )}
+                {item.status === 'success' && item.result?.drugId && batchSelectedForAdd.has(item.id) && (
+                  <div className="batch-preview-check">✓</div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="batch-actions">
+            <span className="batch-count">
+              已选择 <strong>{batchSelectedForAdd.size}</strong> 个药品
+            </span>
+            <button
+              className="btn btn-primary"
+              onClick={handleBatchRecognize}
+              disabled={batchRecognizeItems.some(item => item.status === 'recognizing')}
+              style={{ marginRight: '12px' }}
+            >
+              {batchRecognizeItems.some(item => item.status === 'recognizing') ? '⏳ 识别中...' : '🔍 开始识别'}
+            </button>
+            <button
+              className={`btn ${batchSelectedForAdd.size > 0 ? 'btn-success' : 'btn-disabled'}`}
+              onClick={handleBatchAddToMedicineBox}
+              disabled={batchSelectedForAdd.size === 0 || isBatchAdding}
+            >
+              {isBatchAdding ? '⏳ 添加中...' : `✅ 全部加入药箱 (${batchSelectedForAdd.size})`}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div
+            className={`upload-area ${isDragging ? 'dragging' : ''} ${imagePreview ? 'has-image' : ''}`}
+            onClick={(e) => {
+              if (!imagePreview) {
+                fileInputRef.current?.click();
+              }
+            }}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onDragEnter={handleDragEnter}
+          >
+            <input
+              ref={fileInputRef}
+              id="file-input"
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleFileUpload}
+            />
+            
+            {/* 加载动画覆盖层 */}
+            {(isLoading || showComplete) && (
+              <div className={`loading-overlay ${showComplete ? 'loading-complete' : ''}`}>
+                {!showComplete ? (
+                  <>
+                    <div className="loading-spinner-container">
+                      <div className="loading-spinner"></div>
+                      <div className="loading-spinner-ring"></div>
+                    </div>
+                    <div className="loading-progress-bar">
+                      <div className="loading-progress-fill"></div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="loading-complete-icon">✅</div>
+                )}
+                <p className="loading-text">
+                  {showComplete ? '🎉 识别完成！正在跳转到结果页面...' : 
+                   (ocrPolling ? '⏳ 正在查询识别结果，请稍候...' : '🔍 AI正在识别药品，请稍候...')}
+                </p>
+                {ocrTaskId && !showComplete && (
+                  <p className="loading-task-id">
+                    任务ID: {ocrTaskId}
+                  </p>
+                )}
+                <div className="loading-steps">
+                  <div className="loading-step completed">
+                    <span className="step-icon">📤</span>
+                    <span className="step-text">上传图片</span>
+                  </div>
+                  <div className="loading-step-arrow">→</div>
+                  <div className={`loading-step ${showComplete ? 'completed' : 'active'}`}>
+                    <span className="step-icon">🔍</span>
+                    <span className="step-text">{showComplete ? '识别完成' : (ocrPolling ? '查询结果' : '识别中')}</span>
+                  </div>
+                  <div className="loading-step-arrow">→</div>
+                  <div className={`loading-step ${showComplete ? 'completed' : 'pending'}`}>
+                    <span className="step-icon">✅</span>
+                    <span className="step-text">完成</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* 图片预览 */}
+            {imagePreview && !isLoading && !showComplete && (
+              <div className="upload-preview-container">
+                <img src={imagePreview} alt="药品预览" className="upload-preview-image" />
+                <button 
+                  className="upload-clear-btn" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setImagePreview(null);
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                    }
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            
+            {/* 默认提示内容 */}
+            {!imagePreview && !isLoading && !showComplete && (
+              <>
+                <span className="upload-icon">💊</span>
+                <p className="upload-text">拖拽药盒图片到此处，或点击上传</p>
+                <p className="upload-hint">支持 JPG、PNG 格式，文件小于10MB</p>
+              </>
+            )}
+          </div>
+
+          <div className="btn-group">
+            <button
+              className={`btn btn-primary btn-large ${isLoading ? 'btn-loading' : ''}`}
+              onClick={analyzeImage}
+              disabled={!imagePreview || isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <span className="btn-spinner"></span>
+                  识别中...
+                </>
+              ) : (
+                '🔍 开始识别'
+              )}
+            </button>
+            <button
+              className="btn btn-secondary btn-large"
+              onClick={handleBatchSelectFiles}
+              style={{ marginLeft: '16px' }}
+            >
+              📸 批量拍照
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* 隐藏的批量文件输入 */}
+      <input
+        type="file"
+        ref={batchFileInputRef}
+        id="batch-file-input"
+        accept="image/*"
+        multiple
+        onChange={handleBatchFileSelect}
+        style={{ display: 'none' }}
+      />
 
       <div style={{ marginTop: '48px' }}>
         <h3 style={{ fontSize: '26px', fontWeight: 'bold', color: 'var(--tech-blue)', marginBottom: '24px' }}>
