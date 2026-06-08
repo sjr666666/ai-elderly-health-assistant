@@ -573,7 +573,11 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         }
 
         Long actualUserId = user.getId();
-        MedicationPlan plan = validatePlanOwnership(planId, actualUserId);
+        // action 接口允许操作软删除的计划（撤销历史记录等场景），不走逻辑删除过滤
+        MedicationPlan plan = medicationPlanMapper.selectByIdIgnoreDeleted(planId, actualUserId);
+        if (plan == null) {
+            throw new BusinessException(ResponseCode.PARAM_ERROR, "用药计划不存在");
+        }
 
         switch (action.toLowerCase()) {
             case "confirm":
@@ -704,9 +708,8 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         // 删除用药记录
         medicationLogMapper.deleteById(log.getId());
 
-        // 恢复计划状态
-        plan.setStatus("pending");
-        updateById(plan);
+        // 恢复计划状态（不走 @TableLogic 过滤，软删除的计划也允许改）
+        medicationPlanMapper.updateStatusIgnoreDeleted(planId, "pending");
 
         // 恢复库存（如果有 boxItemId）
         if (plan.getBoxItemId() != null) {

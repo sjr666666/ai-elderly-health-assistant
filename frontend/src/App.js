@@ -41,6 +41,7 @@ function App() {
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false); // 用药日历加载状态
   const [calendarViewMode, setCalendarViewMode] = useState('today'); // 用药日历视图模式：today/week
   const [weeklyMedicationData, setWeeklyMedicationData] = useState(null); // 一周用药数据
+  const [selectedWeekDay, setSelectedWeekDay] = useState(null); // 周视图中就地展开的某天（YYYY-MM-DD）
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false); // 添加到用药日历弹窗
   const [selectedDrugForPlan, setSelectedDrugForPlan] = useState(null); // 选中的要添加到计划的药品
   const [showCelebration, setShowCelebration] = useState(false);
@@ -449,15 +450,18 @@ function App() {
       if (response.ok && data.code === 200) {
         // 关闭弹窗
         handleCloseAddToPlanModal();
-        
+
         // 更新已设置用药计划的药品集合
         setDrugsWithPlan(prev => new Set([...prev, selectedDrugForPlan.drugId]));
-        
+
         // 显示成功提示
         showToast('已添加到用药日历！', 'success');
 
-        // 刷新用药日历数据
+        // 刷新用药日历数据：今日 + 一周都刷
         loadCalendarPlans();
+        if (typeof loadWeeklyMedication === 'function') {
+          loadWeeklyMedication();
+        }
       } else {
         showToast(data.message || '添加失败，请重试', 'error');
       }
@@ -1903,22 +1907,88 @@ function App() {
           action
         })
       });
-      
+
       const result = await response.json();
-      
+
       if (!response.ok || result.code !== 200) {
         const errorMsg = result.message || '操作失败';
         // 显示失败 Toast 提示
         showToast(errorMsg, 'error');
         return { success: false, error: errorMsg };
       }
-      
+
       return { success: true, data: result.data };
     } catch (err) {
       const errorMsg = '网络错误，请检查连接';
       showToast(errorMsg, 'error');
       return { success: false, error: errorMsg };
     }
+  };
+
+  // 周视图：把 weeklyMedicationData 中某条 item 的状态按 action 乐观更新
+  const patchWeeklyItemStatus = (date, planId, nextStatus) => {
+    setWeeklyMedicationData(prev => {
+      if (!prev || !prev.dailyRecords) return prev;
+      return {
+        ...prev,
+        dailyRecords: prev.dailyRecords.map(day => {
+          if (day.date !== date) return day;
+          return {
+            ...day,
+            items: day.items.map(item =>
+              item.planId === planId ? { ...item, status: nextStatus } : item
+            )
+          };
+        })
+      };
+    });
+  };
+
+  // 周视图：补打 / 我吃了（confirm 动作）
+  const handleWeekItemConfirm = async (date, item) => {
+    if (!item || !item.planId) {
+      showToast('该计划无法补打', 'warning');
+      return;
+    }
+    if (!user || !user.userId) {
+      showToast('请先登录', 'warning');
+      return;
+    }
+    // 乐观更新：confirm 之后一定是 taken
+    patchWeeklyItemStatus(date, item.planId, 'taken');
+    const result = await executeMedicationActionWithAPI(item.planId, user.userId, 'confirm');
+    if (!result.success) {
+      // 回滚：重新拉一次
+      loadWeeklyMedication();
+    }
+  };
+
+  // 周视图：撤销（undo 动作）
+  // 撤销后的状态后端说了算（pending 或 missed），不在前端猜
+  const handleWeekItemUndo = async (date, item) => {
+    if (!item || !item.planId) {
+      showToast('该计划无法撤销', 'warning');
+      return;
+    }
+    if (!user || !user.userId) {
+      showToast('请先登录', 'warning');
+      return;
+    }
+    const result = await executeMedicationActionWithAPI(item.planId, user.userId, 'undo');
+    if (result.success) {
+      // 重拉当周数据，让后端的真实状态覆盖本地
+      loadWeeklyMedication();
+      // 如果撤销的是今天那一格，顺便刷新今日视图数据
+      const todayKey = toDateKey(new Date());
+      if (date === todayKey) {
+        loadCalendarPlans();
+      }
+    }
+  };
+
+  // 周视图：切换某天就地展开
+  const handleWeekDayToggle = (date) => {
+    setSelectedWeekDay(prev => (prev === date ? null : date));
   };
 
   // 更新药箱剩余数量（仅用于乐观更新 UI，实际由后端处理）
@@ -3408,17 +3478,58 @@ function App() {
     </>
   );
 
-  const renderWeekCalendar = () => (
-    <>
-      {/* 只在首次加载且没有数据时显示加载动画 */}
-      {isLoadingCalendar && (!weeklyMedicationData || weeklyMedicationData.dailyRecords.length === 0) ? (
+  // 周视图辅助：把任意日期归一成 YYYY-MM-DD 字符串（本地时区）
+  const toDateKey = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  // 周视图辅助：归一化后端 status
+  // MedicationPlan.status 写的是 "completed"/"cancelled"；
+  // MedicationLog.status 写的是 "taken"/"skipped"；
+  // 周视图走的是前者，这里统一映射到 UI 关心的语义。
+  const normalizeWeekStatus = (raw) => {
+    const s = (raw || '').toLowerCase();
+    if (s === 'taken' || s === 'completed') return 'taken';
+    if (s === 'skipped' || s === 'cancelled') return 'skipped';
+    if (s === 'missed' || s === 'deleted') return 'missed';
+    return 'pending';
+  };
+
+  // 周视图辅助：根据 day.date 与今天的相对位置返回 'past' | 'today' | 'future'
+  const getDayPhase = (dateStr) => {
+    const todayKey = toDateKey(new Date());
+    if (dateStr === todayKey) return 'today';
+    return dateStr < todayKey ? 'past' : 'future';
+  };
+
+  // 周视图辅助：状态点颜色映射
+  const getStatusDotClass = (rawStatus) => {
+    const s = normalizeWeekStatus(rawStatus);
+    if (s === 'taken') return 'dot-taken';
+    if (s === 'missed') return 'dot-missed';
+    if (s === 'skipped') return 'dot-skipped';
+    return 'dot-pending';
+  };
+
+  const renderWeekCalendar = () => {
+    // 首次加载且没数据：保留 loading
+    if (isLoadingCalendar && (!weeklyMedicationData || weeklyMedicationData.dailyRecords.length === 0)) {
+      return (
         <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-light)' }}>
           <div className="loading-spinner-container" style={{ margin: '0 auto 20px' }}>
             <div className="loading-spinner"></div>
           </div>
           <p style={{ fontSize: '18px' }}>正在加载一周用药记录...</p>
         </div>
-      ) : !weeklyMedicationData || weeklyMedicationData.dailyRecords.length === 0 ? (
+      );
+    }
+
+    // 没有任何 7 天数据：空态
+    if (!weeklyMedicationData || weeklyMedicationData.dailyRecords.length === 0) {
+      return (
         <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-light)' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
           <p style={{ fontSize: '22px', marginBottom: '12px' }}>一周内暂无用药记录</p>
@@ -3431,22 +3542,120 @@ function App() {
             🏠 去添加药品
           </button>
         </div>
-      ) : (
-        <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
-          {weeklyMedicationData.dailyRecords.map((day) => (
-            <div key={day.date} style={{ marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '16px', color: 'var(--text-primary)', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--border-color)' }}>
-                {formatDate(day.date)}
-              </h3>
-              {day.items.length === 0 ? (
-                <p style={{ color: 'var(--text-light)', fontSize: '14px', textAlign: 'center', padding: '12px' }}>无用药记录</p>
-              ) : (
-                <div className="timeline-container">
-                  <div className="timeline-line"></div>
-                  {day.items.map((item, index) => (
+      );
+    }
+
+    // 取选中的那一天
+    const selectedDay = selectedWeekDay
+      ? weeklyMedicationData.dailyRecords.find(d => d.date === selectedWeekDay)
+      : null;
+
+    return (
+      <div className="week-view">
+        {/* 7 格日历 */}
+        <div className="week-grid" role="grid">
+          {weeklyMedicationData.dailyRecords.map((day) => {
+            const phase = getDayPhase(day.date);
+            const isToday = phase === 'today';
+            const isSelected = selectedWeekDay === day.date;
+            const items = day.items || [];
+            const total = items.length;
+            const taken = items.filter(i => normalizeWeekStatus(i.status) === 'taken').length;
+            const weekday = ['日', '一', '二', '三', '四', '五', '六'][new Date(day.date).getDay()];
+            const dayNum = new Date(day.date).getDate();
+            // 状态点：最多 5 个，超出折叠为 +N
+            const dots = items.slice(0, 5);
+            const overflow = items.length - dots.length;
+            const allTaken = total > 0 && taken === total;
+
+            return (
+              <button
+                key={day.date}
+                type="button"
+                aria-pressed={isSelected}
+                aria-label={`${formatDate(day.date)}，共 ${total} 项，已服 ${taken} 项`}
+                className={[
+                  'week-day-cell',
+                  isToday ? 'is-today' : '',
+                  isSelected ? 'is-selected' : '',
+                  phase === 'past' ? 'is-past' : '',
+                  phase === 'future' ? 'is-future' : '',
+                  total === 0 ? 'is-empty' : ''
+                ].filter(Boolean).join(' ')}
+                onClick={() => handleWeekDayToggle(day.date)}
+              >
+                <div className="week-day-cell__weekday">周{weekday}</div>
+                <div className="week-day-cell__num">{dayNum}</div>
+                <div className={`week-day-cell__completion ${allTaken ? 'is-all-taken' : ''}`}>
+                  {total === 0 ? '—' : `${taken}/${total}`}
+                </div>
+                <div className="week-day-cell__dots" aria-hidden="true">
+                  {total === 0 ? <span className="week-day-cell__empty">无</span> : (
+                    <>
+                      {dots.map((item, idx) => (
+                        <span key={`${item.planId}_${idx}`} className={`week-dot ${getStatusDotClass(item.status)}`} />
+                      ))}
+                      {overflow > 0 && <span className="week-dot-overflow">+{overflow}</span>}
+                    </>
+                  )}
+                </div>
+                <div className="week-day-cell__count">{total === 0 ? '无计划' : `${total} 项`}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 就地下钻的日详情 */}
+        {selectedDay && (
+          <div className="week-day-detail" role="region" aria-label={`${formatDate(selectedDay.date)}用药详情`}>
+            <div className="week-day-detail__header">
+              <div className="week-day-detail__title">
+                <span className="week-day-detail__date">{formatDate(selectedDay.date)}</span>
+                <span className="week-day-detail__phase">
+                  {getDayPhase(selectedDay.date) === 'today' && '今天'}
+                  {getDayPhase(selectedDay.date) === 'past' && '已过'}
+                  {getDayPhase(selectedDay.date) === 'future' && '未来'}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="week-day-detail__close"
+                aria-label="收起"
+                onClick={() => setSelectedWeekDay(null)}
+              >
+                收起 ✕
+              </button>
+            </div>
+
+            {selectedDay.items.length === 0 ? (
+              <p className="week-day-detail__empty">这一天没有用药计划</p>
+            ) : (
+              <div className="timeline-container">
+                <div className="timeline-line"></div>
+                {selectedDay.items.map((item, index) => {
+                  const phase = getDayPhase(selectedDay.date);
+                  const ns = normalizeWeekStatus(item.status);
+                  const isTaken = ns === 'taken';
+                  const isMissed = ns === 'missed';
+                  const isSkipped = ns === 'skipped';
+                  // 软删除的药：补打/撤销一律禁用
+                  const isDeleted = item.deleted === true;
+                  // 过去日期：按钮文案换成"补打"；当天保持"我吃了"；未来 / 软删除：禁用
+                  const confirmDisabled = phase === 'future' || !item.planId || isDeleted;
+                  const confirmLabel = phase === 'past' ? '⏰ 补打' : '✓ 我吃了';
+                  const showConfirm = !isTaken && !isSkipped;
+                  const confirmTitle = isDeleted
+                    ? '该药品已从药箱移除，无法补打'
+                    : phase === 'future'
+                      ? '该计划尚未到时点'
+                      : phase === 'past'
+                        ? '补打：补录这次服药记录'
+                        : '我吃了';
+
+                  return (
                     <div
                       key={`${item.planId}_${index}`}
-                      className={`timeline-item ${item.status === 'taken' ? 'taken' : item.status === 'missed' || item.deleted ? 'missed' : 'pending'}`}
+                      className={`timeline-item ${isTaken ? 'taken' : isMissed ? 'missed' : isSkipped ? 'skipped' : 'pending'}`}
                       style={item.deleted ? { opacity: 0.7 } : {}}
                     >
                       <div className="timeline-header">
@@ -3465,26 +3674,58 @@ function App() {
                         </p>
                       )}
                       <div className="timeline-status">
-                        {item.status === 'taken' ? (
-                          <span className="status-taken">✓ 已吃</span>
-                        ) : item.status === 'missed' ? (
-                          <span className="status-missed">⏰ 漏服</span>
-                        ) : item.status === 'skipped' ? (
+                        {isTaken ? (
+                          <>
+                            <span className="status-taken">✓ 已吃</span>
+                            <button
+                              className="btn btn-secondary btn-undo"
+                              style={{ minHeight: '44px', marginTop: '12px' }}
+                              onClick={() => handleWeekItemUndo(selectedDay.date, item)}
+                              disabled={!item.planId}
+                              title="撤销这次服药记录"
+                            >
+                              ↩️ 撤销
+                            </button>
+                          </>
+                        ) : isSkipped ? (
                           <span className="status-missed">➖ 已跳过</span>
                         ) : (
-                          <span className="status-pending">🔔 待吃</span>
+                          <>
+                            <span className={isMissed ? 'status-missed' : 'status-pending'}>
+                              {isMissed ? '⏰ 漏服' : '🔔 待吃'}
+                            </span>
+                            {showConfirm && (
+                              <button
+                                className="btn btn-success btn-ripple"
+                                style={{ minHeight: '52px' }}
+                                onClick={() => handleWeekItemConfirm(selectedDay.date, item)}
+                                disabled={confirmDisabled}
+                                title={confirmTitle}
+                              >
+                                <span className="btn-text">{confirmLabel}</span>
+                              </button>
+                            )}
+                            {isDeleted && (
+                              <span className="week-day-detail__hint week-day-detail__hint--danger">
+                                该药品已从药箱移除
+                              </span>
+                            )}
+                            {!isDeleted && phase === 'past' && isMissed && (
+                              <span className="week-day-detail__hint">过去日期，可补打</span>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </>
-  );
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);

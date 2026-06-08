@@ -23,12 +23,27 @@
           AND plan_date BETWEEN #{startDate} AND #{endDate}
         ORDER BY plan_date,
             CASE time_slot
-                WHEN 'morning' THEN 1
-                WHEN 'afternoon' THEN 2
-                WHEN 'evening' THEN 3
-                WHEN 'night' THEN 4
-                ELSE 5
-                END
+            WHEN 'morning' THEN 1
+            WHEN 'afternoon' THEN 2
+            WHEN 'evening' THEN 3
+            WHEN 'night' THEN 4
+            ELSE 5
+            END
     </select>
+
+    <!-- 不经 @TableLogic 过滤，给 action 接口用 -->
+    <select id="selectByIdIgnoreDeleted" resultType="com.example.backend.model.entity.MedicationPlan">
+        SELECT * FROM elderly_medication.medication_plan
+        WHERE id = #{id}
+          AND user_id = #{userId}
+        LIMIT 1
+    </select>
+
+    <!-- 不经 @TableLogic 过滤，给 action 接口用 -->
+    <update id="updateStatusIgnoreDeleted">
+        UPDATE elderly_medication.medication_plan
+        SET status = #{status}, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
 
 </mapper>
