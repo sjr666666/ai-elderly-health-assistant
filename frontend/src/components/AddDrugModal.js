@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useToast } from './Toast';
 
 /**
  * 添加新药弹窗组件
  * 用户选择药品后填写用量、频率、有效期、备注等信息
  */
 function AddDrugModal({ onClose, onAdd, userId }) {
+  const { showToast } = useToast();
+
   // 药品列表数据（从后端 API 获取）
   const [drugOptions, setDrugOptions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -198,12 +201,12 @@ function AddDrugModal({ onClose, onAdd, userId }) {
         });
         setIsSubmitting(false);
       } else {
-        alert(data.message || '添加失败，请重试');
+        showToast(data.message || '添加失败，请重试', 'error');
         setIsSubmitting(false);
       }
 
     } catch (err) {
-      alert('❌ 添加失败，请稍后重试');
+      showToast('添加失败，请稍后重试', 'error');
       setIsSubmitting(false);
     }
   };

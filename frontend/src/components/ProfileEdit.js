@@ -1,20 +1,46 @@
 import React, { useState } from 'react';
+import { useToast } from './Toast';
 
 function ProfileEdit({ user, onSave, onClose }) {
+  const { showToast } = useToast();
+
   const [realName, setRealName] = useState(user?.realName || '');
   const [age, setAge] = useState(user?.age || '');
   const [allergyHistory, setAllergyHistory] = useState(user?.allergyHistory || '');
   const [chronicDiseases, setChronicDiseases] = useState(user?.chronicDiseases || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // 格式校验
+  const validateForm = () => {
+    // 称呼校验
+    if (!realName || !realName.trim()) {
+      showToast('请输入您的称呼', 'warning');
+      return false;
+    }
+    if (realName.trim().length > 50) {
+      showToast('称呼不能超过50个字符', 'warning');
+      return false;
+    }
+
+    // 年龄校验（选填，但如果有值必须有效）
+    if (age !== '') {
+      const ageNum = parseInt(age, 10);
+      if (isNaN(ageNum) || ageNum < 0 || ageNum > 120) {
+        showToast('年龄必须是0-120之间的数字', 'warning');
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   const handleSubmit = async () => {
-    if (!realName) {
-      alert('请输入您的称呼');
+    if (!validateForm()) {
       return;
     }
 
     if (!user || !user.userId) {
-      alert('用户信息缺失，请重新登录');
+      showToast('用户信息缺失，请重新登录', 'error');
       return;
     }
 
@@ -27,27 +53,28 @@ function ProfileEdit({ user, onSave, onClose }) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          realName: realName || null,
-          age: age ? parseInt(age) : null,
-          allergyHistory: allergyHistory || null,
-          chronicDiseases: chronicDiseases || null
+          realName: realName.trim() || null,
+          age: age ? parseInt(age, 10) : null,
+          allergyHistory: allergyHistory.trim() || null,
+          chronicDiseases: chronicDiseases.trim() || null
         }),
       });
 
       const data = await response.json();
 
       if (response.ok && data.code === 200) {
+        showToast('个人信息已更新！', 'success');
         onSave({
-          realName,
-          age: age ? parseInt(age) : null,
-          allergyHistory: allergyHistory || null,
-          chronicDiseases: chronicDiseases || null
+          realName: realName.trim(),
+          age: age ? parseInt(age, 10) : null,
+          allergyHistory: allergyHistory.trim() || null,
+          chronicDiseases: chronicDiseases.trim() || null
         });
       } else {
-        alert(data.message || '更新失败，请重试');
+        showToast(data.message || '更新失败，请重试', 'error');
       }
     } catch (err) {
-      alert('网络连接失败，请稍后重试');
+      showToast('网络连接失败，请稍后重试', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -72,6 +99,7 @@ function ProfileEdit({ user, onSave, onClose }) {
               onChange={(e) => setRealName(e.target.value)}
               placeholder="请输入您的姓名或称呼"
               className="form-input"
+              maxLength={50}
             />
           </div>
 

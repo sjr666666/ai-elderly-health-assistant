@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from './Toast';
 
 /**
  * 添加到用药日历弹窗组件
  * 允许用户选择要添加到用药日历的时间段
  */
 function AddToPlanModal({ drug, onClose, onSubmit }) {
+  const { showToast } = useToast();
   const [selectedTimeSlots, setSelectedTimeSlots] = useState([]);
 
   const timeSlotOptions = [
@@ -41,7 +43,7 @@ function AddToPlanModal({ drug, onClose, onSubmit }) {
       } else {
         // 最多只能选择 requiredSlotCount 个时段
         if (prev.length >= requiredSlotCount) {
-          alert(`根据您的用药频率，最多只能选择 ${requiredSlotCount} 个时段`);
+          showToast(`根据您的用药频率，最多只能选择 ${requiredSlotCount} 个时段`, 'warning');
           return prev;
         }
         return [...prev, value];
@@ -52,11 +54,11 @@ function AddToPlanModal({ drug, onClose, onSubmit }) {
   // 提交
   const handleSubmit = () => {
     if (selectedTimeSlots.length === 0) {
-      alert('请至少选择一个服药时间段');
+      showToast('请至少选择一个服药时间段', 'warning');
       return;
     }
     if (selectedTimeSlots.length !== requiredSlotCount) {
-      alert(`根据您的用药频率，请选择恰好 ${requiredSlotCount} 个服药时间段`);
+      showToast(`根据您的用药频率，请选择恰好 ${requiredSlotCount} 个服药时间段`, 'warning');
       return;
     }
     onSubmit(selectedTimeSlots);

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { useToast } from './Toast';
 
-function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, userId }) {
+function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
+  const { showToast } = useToast();
   const [showAddForm, setShowAddForm] = useState(false);
   const [newContact, setNewContact] = useState({
     name: '',
@@ -17,12 +19,12 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
 
   const handleAddContact = async () => {
     if (!newContact.name || !newContact.phone) {
-      alert('请填写姓名和电话');
+      showToast('请填写姓名和电话', 'warning');
       return;
     }
 
     if (!userId) {
-      alert('用户ID不能为空，请重新登录');
+      showToast('用户ID不能为空，请重新登录', 'error');
       return;
     }
 
@@ -52,14 +54,14 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
         onAdd && onAdd();
         setNewContact({ name: '', phone: '', email: '', relationship: '' });
         setShowAddForm(false);
-        onShowToast && onShowToast('添加成功');
+        showToast('添加成功', 'success');
       } else {
         console.error('添加联系人失败，响应码:', result.code, '消息:', result.message);
-        alert(result.message || '添加失败');
+        showToast(result.message || '添加失败', 'error');
       }
     } catch (error) {
       console.error('添加联系人失败:', error);
-      alert('添加失败，请检查网络连接');
+      showToast('添加失败，请检查网络连接', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -82,10 +84,10 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
       
       if (result.code === 200) {
         onDelete(deleteId);
-        onShowToast && onShowToast('删除成功');
+        showToast('删除成功', 'success');
       } else {
         console.error('删除联系人失败，响应码:', result.code, '消息:', result.message);
-        alert(result.message || '删除失败');
+        showToast(result.message || '删除失败', 'error');
       }
       
       setShowConfirmDialog(false);
@@ -93,7 +95,7 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
       setDeleteId(null);
     } catch (error) {
       console.error('删除联系人失败:', error);
-      alert('删除失败，请检查网络连接');
+      showToast('删除失败，请检查网络连接', 'error');
       setShowConfirmDialog(false);
       setIsClosingDialog(false);
       setDeleteId(null);
@@ -117,7 +119,7 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
   // 保存主要联系人
   const handleSavePrimaryContact = async () => {
     if (!selectedPrimaryId) {
-      alert('请选择一个主要联系人');
+      showToast('请选择一个主要联系人', 'warning');
       return;
     }
 
@@ -128,7 +130,7 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
     if (currentPrimary && currentPrimary.id === selectedPrimaryId) {
       setIsEditMode(false);
       setSelectedPrimaryId(null);
-      onShowToast && onShowToast('未修改主要联系人');
+      showToast('未修改主要联系人', 'info');
       return;
     }
 
@@ -198,10 +200,10 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, onShowToast, us
       }
       setIsEditMode(false);
       setSelectedPrimaryId(null);
-      onShowToast && onShowToast('主要联系人修改成功');
+      showToast('主要联系人修改成功', 'success');
     } catch (error) {
       console.error('修改主要联系人失败:', error);
-      alert(error.message || '修改失败，请重试');
+      showToast(error.message || '修改失败，请重试', 'error');
     } finally {
       setIsSubmitting(false);
     }

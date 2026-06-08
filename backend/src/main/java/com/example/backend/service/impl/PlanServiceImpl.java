@@ -557,4 +557,190 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         response.setDailyRecords(dailyRecords);
         return response;
     }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ConfirmMedicationResponseDTO executeMedicationAction(Long planId, Long userId, String action) {
+        logger.info("执行用药操作 - planId: {}, userId: {}, action: {}", planId, userId, action);
+
+        // 根据雪花算法 user_id 查询实际的自增主键 id
+        LambdaQueryWrapper<SysUser> userQueryWrapper = new LambdaQueryWrapper<>();
+        userQueryWrapper.eq(SysUser::getUserId, userId);
+        SysUser user = userMapper.selectOne(userQueryWrapper);
+
+        if (user == null) {
+            throw new BusinessException(ResponseCode.PARAM_ERROR, "用户不存在");
+        }
+
+        Long actualUserId = user.getId();
+        MedicationPlan plan = validatePlanOwnership(planId, actualUserId);
+
+        switch (action.toLowerCase()) {
+            case "confirm":
+                return executeConfirmAction(planId, actualUserId, plan);
+            case "skip":
+                executeSkipAction(planId, actualUserId, plan);
+                return new ConfirmMedicationResponseDTO();
+            case "undo":
+                executeUndoAction(planId, actualUserId, plan);
+                return new ConfirmMedicationResponseDTO();
+            default:
+                throw new BusinessException(ResponseCode.PARAM_ERROR, "不支持的操作类型: " + action);
+        }
+    }
+
+    /**
+     * 解析用量字符串为数字
+     * 如："一片" -> 1, "半片" -> 0.5, "2片" -> 2
+     */
+    private int parseDosageToNumber(String dosage) {
+        if (dosage == null || dosage.isEmpty()) {
+            return 1;
+        }
+
+        String d = dosage.trim();
+        if (d.contains("半")) {
+            return 1; // 半片按1片算（简化处理）
+        }
+
+        // 提取数字
+        String numStr = d.replaceAll("[^0-9]", "");
+        if (numStr.isEmpty()) {
+            return 1;
+        }
+
+        try {
+            int num = Integer.parseInt(numStr);
+            return num > 0 ? num : 1;
+        } catch (NumberFormatException e) {
+            return 1;
+        }
+    }
+
+    /**
+     * 执行确认服药操作（扣减库存）
+     */
+    private ConfirmMedicationResponseDTO executeConfirmAction(Long planId, Long userId, MedicationPlan plan) {
+        // 检查是否已记录过（幂等性）
+        Long logCount = medicationLogMapper.selectCount(new LambdaQueryWrapper<MedicationLog>()
+                .eq(MedicationLog::getPlanId, planId)
+                .eq(MedicationLog::getStatus, "taken"));
+        if (logCount > 0) {
+            logger.info("该用药计划已确认过 - planId: {}", planId);
+            // 幂等返回：已确认过
+            ConfirmMedicationResponseDTO response = new ConfirmMedicationResponseDTO();
+            response.setLogId(null);
+            return response;
+        }
+
+        // 创建用药记录
+        MedicationLog log = new MedicationLog();
+        log.setPlanId(planId);
+        log.setUserId(userId);
+        log.setStatus("taken");
+        log.setConfirmedAt(LocalDateTime.now());
+        medicationLogMapper.insert(log);
+
+        // 更新计划状态
+        plan.setStatus("completed");
+        updateById(plan);
+
+        // 扣减库存（如果有 boxItemId）
+        if (plan.getBoxItemId() != null) {
+            updateInventory(plan.getBoxItemId(), plan.getDosageAtTime(), false);
+        }
+
+        markReminderAsRead(userId, planId);
+
+        ConfirmMedicationResponseDTO response = new ConfirmMedicationResponseDTO();
+        response.setLogId(log.getId());
+        return response;
+    }
+
+    /**
+     * 执行跳过服药操作（不扣减库存）
+     */
+    private void executeSkipAction(Long planId, Long userId, MedicationPlan plan) {
+        // 检查是否已记录过（幂等性）
+        Long logCount = medicationLogMapper.selectCount(new LambdaQueryWrapper<MedicationLog>()
+                .eq(MedicationLog::getPlanId, planId));
+        if (logCount > 0) {
+            logger.info("该用药计划已记录过 - planId: {}", planId);
+            return;
+        }
+
+        // 创建用药记录
+        MedicationLog log = new MedicationLog();
+        log.setPlanId(planId);
+        log.setUserId(userId);
+        log.setStatus("skipped");
+        log.setConfirmedAt(LocalDateTime.now());
+        medicationLogMapper.insert(log);
+
+        // 更新计划状态
+        plan.setStatus("cancelled");
+        updateById(plan);
+
+        // 注意：跳过不扣减库存
+
+        markReminderAsRead(userId, planId);
+    }
+
+    /**
+     * 执行撤销服药操作（恢复库存）
+     */
+    private void executeUndoAction(Long planId, Long userId, MedicationPlan plan) {
+        // 查找并删除用药记录
+        LambdaQueryWrapper<MedicationLog> logQuery = new LambdaQueryWrapper<MedicationLog>()
+                .eq(MedicationLog::getPlanId, planId)
+                .eq(MedicationLog::getStatus, "taken");
+        MedicationLog log = medicationLogMapper.selectOne(logQuery);
+
+        if (log == null) {
+            logger.info("未找到已确认的用药记录 - planId: {}", planId);
+            return;
+        }
+
+        // 删除用药记录
+        medicationLogMapper.deleteById(log.getId());
+
+        // 恢复计划状态
+        plan.setStatus("pending");
+        updateById(plan);
+
+        // 恢复库存（如果有 boxItemId）
+        if (plan.getBoxItemId() != null) {
+            updateInventory(plan.getBoxItemId(), plan.getDosageAtTime(), true);
+        }
+    }
+
+    /**
+     * 更新库存（幂等）
+     * @param boxItemId 药箱条目ID
+     * @param dosage 用量
+     * @param isRestore true=恢复（增加），false=扣减（减少）
+     */
+    private void updateInventory(Long boxItemId, String dosage, boolean isRestore) {
+        if (boxItemId == null) {
+            return;
+        }
+
+        UserMedicineBox boxItem = userMedicineBoxMapper.selectById(boxItemId);
+        if (boxItem == null) {
+            logger.warn("药箱条目不存在，无法更新库存 - boxItemId: {}", boxItemId);
+            return;
+        }
+
+        int amount = parseDosageToNumber(dosage);
+        int currentRemaining = boxItem.getRemainingQuantity() != null ? boxItem.getRemainingQuantity() : 0;
+        int newRemaining = isRestore
+                ? currentRemaining + amount
+                : Math.max(0, currentRemaining - amount);
+
+        boxItem.setRemainingQuantity(newRemaining);
+        userMedicineBoxMapper.updateById(boxItem);
+
+        logger.info("库存更新成功 - boxItemId: {}, {}, amount: {}, 剩余: {}",
+                boxItemId, isRestore ? "恢复" : "扣减", amount, newRemaining);
+    }
 }

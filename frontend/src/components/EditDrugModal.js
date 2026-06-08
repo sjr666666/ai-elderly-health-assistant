@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
+import { useToast } from './Toast';
 
 /**
  * 编辑药品弹窗组件
  */
 const EditDrugModal = ({ onClose, onSave, drug, userId }) => {
+  const { showToast } = useToast();
+
   // 初始化表单数据
   const [dosage, setDosage] = useState(drug?.dosage || '');
   const [frequency, setFrequency] = useState(drug?.frequency || '');
@@ -24,15 +27,15 @@ const EditDrugModal = ({ onClose, onSave, drug, userId }) => {
 
     // 验证必填字段
     if (!dosage.trim()) {
-      alert('请输入每次用量');
+      showToast('请输入每次用量', 'warning');
       return;
     }
     if (!frequency.trim()) {
-      alert('请输入用药频率');
+      showToast('请输入用药频率', 'warning');
       return;
     }
     if (!expiryDate) {
-      alert('请选择药品有效期');
+      showToast('请选择药品有效期', 'warning');
       return;
     }
 
@@ -87,11 +90,11 @@ const EditDrugModal = ({ onClose, onSave, drug, userId }) => {
         });
         onClose();
       } else {
-        alert(data.message || '修改失败，请重试');
+        showToast(data.message || '修改失败，请重试', 'error');
       }
     } catch (err) {
       console.error('修改药品异常:', err);
-      alert(' 网络连接失败，请稍后重试');
+      showToast('网络连接失败，请稍后重试', 'error');
     } finally {
       setIsSubmitting(false);
     }

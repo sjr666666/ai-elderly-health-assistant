@@ -14,8 +14,10 @@ import EmergencyAssistant from './components/EmergencyAssistant';
 import AddToPlanModal from './components/AddToPlanModal';
 import ConfirmDrugModal from './components/ConfirmDrugModal';
 import MedicationReminderModal from './components/MedicationReminderModal';
+import { useToast } from './components/Toast';
 
 function App() {
+  const { showToast } = useToast();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -55,8 +57,6 @@ function App() {
   const [pendingDeleteDrug, setPendingDeleteDrug] = useState(null); // 待删除的药品
   const [showConfirmDrugModal, setShowConfirmDrugModal] = useState(false); // 确认药品弹窗
   const [pendingDrugInfo, setPendingDrugInfo] = useState(null); // 待确认的药品信息
-  const [showSuccessToast, setShowSuccessToast] = useState(false); // 成功提示弹窗
-  const [toastMessage, setToastMessage] = useState(''); // 提示消息
   const [showDrugDetailModal, setShowDrugDetailModal] = useState(false); // 药品详情弹窗
   const [selectedDrug, setSelectedDrug] = useState(null); // 选中的药品
   const [drugsWithPlan, setDrugsWithPlan] = useState(new Set()); // 已设置用药计划的药品ID集合
@@ -365,17 +365,17 @@ function App() {
   // 提交添加到用药日历
   const handleSubmitAddToPlan = async (selectedTimeSlots) => {
     if (!selectedDrugForPlan || !selectedDrugForPlan.boxItemId) {
-      alert('请选择要添加的药品');
+      showToast('请选择要添加的药品', 'warning');
       return;
     }
 
     if (!user || !user.userId) {
-      alert('用户未登录，请先登录');
+      showToast('用户未登录，请先登录', 'warning');
       return;
     }
 
     if (!selectedTimeSlots || selectedTimeSlots.length === 0) {
-      alert('请至少选择一个服药时间段');
+      showToast('请至少选择一个服药时间段', 'warning');
       return;
     }
 
@@ -406,18 +406,16 @@ function App() {
         setDrugsWithPlan(prev => new Set([...prev, selectedDrugForPlan.drugId]));
         
         // 显示成功提示
-        setToastMessage('✅ 已添加到用药日历！');
-        setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 2000);
+        showToast('已添加到用药日历！', 'success');
 
         // 刷新用药日历数据
         loadCalendarPlans();
       } else {
-        alert(data.message || '添加失败，请重试');
+        showToast(data.message || '添加失败，请重试', 'error');
       }
     } catch (error) {
       console.error('添加到用药计划失败:', error);
-      alert('网络连接失败，请稍后重试');
+      showToast('网络连接失败，请稍后重试', 'error');
     }
   };
 
@@ -465,17 +463,13 @@ function App() {
     setShowProfileEdit(false);
     
     // 显示成功提示弹窗
-    setToastMessage('个人信息已更新！');
-    setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 2000);
+    showToast('个人信息已更新！', 'success');
   };
 
   const handleAddContact = async () => {
     if (user && user.id) {
       await loadEmergencyContacts(user.id);
-      setToastMessage('紧急联系人已添加！');
-      setShowSuccessToast(true);
-      setTimeout(() => setShowSuccessToast(false), 2000);
+      showToast('紧急联系人已添加！', 'success');
     } else {
       console.error('用户ID为空，无法刷新联系人列表');
     }
@@ -491,20 +485,14 @@ function App() {
         
         if (result.code === 200) {
           await loadEmergencyContacts(user.id);
-          setToastMessage('联系人已删除！');
-          setShowSuccessToast(true);
-          setTimeout(() => setShowSuccessToast(false), 2000);
+          showToast('联系人已删除！', 'success');
         } else {
           console.error('删除联系人失败:', result.message);
-          setToastMessage('删除失败：' + (result.message || '未知错误'));
-          setShowSuccessToast(false);
-          setTimeout(() => setShowSuccessToast(false), 2000);
+          showToast('删除失败：' + (result.message || '未知错误'), 'error');
         }
       } catch (error) {
         console.error('删除联系人失败:', error);
-        setToastMessage('删除失败，请检查网络连接');
-        setShowSuccessToast(false);
-        setTimeout(() => setShowSuccessToast(false), 2000);
+        showToast('删除失败，请检查网络连接', 'error');
       }
     } else {
       console.error('用户ID为空，无法删除联系人');
@@ -540,9 +528,7 @@ function App() {
     setSelectedDrug(updatedDrug);
     
     // 显示成功提示
-    setToastMessage('药品修改成功！');
-    setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 2000);
+    showToast('药品修改成功！', 'success');
     
     // 重新加载列表（后台刷新，不影响当前详情显示）
     if (user && user.userId) {
@@ -579,20 +565,18 @@ function App() {
         handleCloseDrugDetail();
         
         // 显示成功提示
-        setToastMessage(data.message || '药品删除成功！');
-        setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 2000);
+        showToast(data.message || '药品删除成功！', 'success');
         
         // 重新加载列表（从数据库获取最新数据）
         if (user && user.userId) {
           await loadMedicineBoxList(user.userId);
         }
       } else {
-        alert(data.message || '删除失败，请重试');
+        showToast(data.message || '删除失败，请重试', 'error');
       }
     } catch (err) {
       console.error('删除药品异常:', err);
-      alert(' 网络连接失败，请稍后重试');
+      showToast('网络连接失败，请稍后重试', 'error');
     }
   };
 
@@ -670,9 +654,7 @@ function App() {
     setShowAddDrugModal(false);
     
     // 显示自定义成功提示
-    setToastMessage('药品添加成功！');
-    setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 2000);
+    showToast('药品添加成功！', 'success');
     
     // 添加成功后重新加载药箱列表（从数据库获取最新数据）
     if (user && user.userId) {
@@ -804,7 +786,7 @@ function App() {
       reader.readAsDataURL(file);
     } else {
       console.warn('拖拽的文件不是图片类型');
-      alert('请选择图片文件！');
+      showToast('请选择图片文件！', 'warning');
     }
     
     // 确保焦点回到窗口，关闭可能的文件对话框
@@ -923,7 +905,7 @@ function App() {
 
   const speak = async (text, rate = speechRate) => {
     if (!text || text.trim() === '') {
-      alert('没有可播放的内容');
+      showToast('没有可播放的内容', 'warning');
       return;
     }
 
@@ -984,7 +966,7 @@ function App() {
 
       window.speechSynthesis.speak(utterance);
     } else {
-      alert('您的浏览器不支持语音播报功能');
+      showToast('您的浏览器不支持语音播报功能', 'error');
       setIsSpeaking(false);
     }
   };
@@ -1207,7 +1189,7 @@ function App() {
     console.log('fileInputRef.current?.files[0]:', fileInputRef.current?.files[0]);
     
     if (!fileInputRef.current?.files[0]) {
-      alert('请先选择图片');
+      showToast('请先选择图片', 'warning');
       return;
     }
 
@@ -1257,12 +1239,12 @@ function App() {
         setOcrTaskId(data.data.taskId);
         pollOcrResult(data.data.taskId);
       } else {
-        alert(data.message || '上传失败');
+        showToast(data.message || '上传失败', 'error');
         setIsLoading(false);
       }
     } catch (error) {
       console.error('=== 上传失败 ===', error);
-      alert('上传失败，请检查网络连接');
+      showToast('上传失败，请检查网络连接', 'error');
       setIsLoading(false);
     }
   };
@@ -1313,10 +1295,10 @@ function App() {
               }, 1500);
             } else if (result.status === 'unmatched') {
               setIsLoading(false);
-              alert('未能识别出匹配的药品，请尝试手动输入');
+              showToast('未能识别出匹配的药品，请尝试手动输入', 'warning');
             } else if (result.status === 'failed') {
               setIsLoading(false);
-              alert('识别失败，请重试');
+              showToast('识别失败，请重试', 'error');
             }
           } else if (pollingCount < maxPollingCount) {
             pollingCount++;
@@ -1324,18 +1306,18 @@ function App() {
           } else {
             setOcrPolling(false);
             setIsLoading(false);
-            alert('识别超时，请重试');
+            showToast('识别超时，请重试', 'error');
           }
         } else {
           setOcrPolling(false);
           setIsLoading(false);
-          alert(data.message || '查询失败');
+          showToast(data.message || '查询失败', 'error');
         }
       } catch (error) {
         console.error('查询失败:', error);
         setOcrPolling(false);
         setIsLoading(false);
-        alert('查询失败，请检查网络连接');
+        showToast('查询失败，请检查网络连接', 'error');
       }
     };
 
@@ -1344,7 +1326,7 @@ function App() {
 
   const addToMedicineBox = async (drug) => {
     if (!user || !user.userId) {
-      alert('请先登录');
+      showToast('请先登录', 'warning');
       return;
     }
 
@@ -1379,7 +1361,7 @@ function App() {
       setShowConfirmDrugModal(true);
     } catch (error) {
       console.error('查询药品信息失败:', error);
-      alert('添加失败，请稍后重试');
+      showToast('添加失败，请稍后重试', 'error');
     }
   };
 
@@ -1389,8 +1371,7 @@ function App() {
     setShowConfirmDrugModal(false);
     
     // 显示正在添加的反馈
-    setToastMessage('正在添加药品...');
-    setShowSuccessToast(true);
+    showToast('正在添加药品...', 'info');
     
     try {
       const addResponse = await fetch(`/api/v1/box?userId=${user.userId}`, {
@@ -1406,8 +1387,7 @@ function App() {
       if (addResponse.ok && addData.code === 200) {
         // 添加成功后重新加载药箱列表
         await loadMedicineBoxList(user.userId);
-        setToastMessage('✅ 药品已加入药箱！正在检测冲突...');
-        setShowSuccessToast(true);
+        showToast('药品已加入药箱！正在检测冲突...', 'success');
 
         // 等待状态更新后获取最新药箱列表
         // 使用 setTimeout 确保状态已更新
@@ -1420,17 +1400,13 @@ function App() {
           if (conflictResult.noConflict) {
             // 没有冲突，根据原因显示不同提示
             if (conflictResult.reason === 'empty' || conflictResult.reason === 'firstDrug') {
-              setToastMessage('✅ 药品已加入药箱！药箱中暂无其他药品');
+              showToast('药品已加入药箱！药箱中暂无其他药品', 'success');
             } else {
-              setToastMessage('✅ 药品已加入药箱！未检测到冲突');
+              showToast('药品已加入药箱！未检测到冲突', 'success');
             }
-            setShowSuccessToast(true);
-            setTimeout(() => setShowSuccessToast(false), 3000);
           } else {
             // 检测到冲突
-            setToastMessage('⚠️ 检测到冲突！');
-            setShowSuccessToast(true);
-            setTimeout(() => setShowSuccessToast(false), 2000);
+            showToast('检测到冲突！', 'warning');
             setConflictAlertResult(conflictResult);
             setShowConflictAlert(true);
           }
@@ -1440,13 +1416,11 @@ function App() {
         setConflictNeedsRecheck(true);
         setConflictReport(null); // 清除之前的检测结果
       } else {
-        setShowSuccessToast(false);
-        alert(addData.message || '添加失败，请重试');
+        showToast(addData.message || '添加失败，请重试', 'error');
       }
     } catch (error) {
-      setShowSuccessToast(false);
+      showToast('添加失败，请稍后重试', 'error');
       console.error('添加药品失败:', error);
-      alert('添加失败，请稍后重试');
     }
   };
 
@@ -1493,16 +1467,15 @@ function App() {
           saveLocalMedicationStatus(r.planId, 'taken');
         }
         
-        // 如果有 planId，尝试调用后端 API 保存到数据库
+        // 调用后端统一幂等接口（库存更新由后端处理）
         if (r.planId && user?.userId) {
-          confirmMedicationWithAPI(r.planId, user.userId);
+          executeMedicationActionWithAPI(r.planId, user.userId, 'confirm', r.dosage);
         }
         
-        // 更新药箱剩余数量（如果有 boxItemId）
+        // 更新药箱剩余数量（乐观更新 UI）
         if (r.boxItemId && r.remainingQuantity !== undefined) {
           const amount = parseDosageToNumber(r.dosage);
           const newRemaining = Math.max(0, (r.remainingQuantity || 0) - amount);
-          updateMedicineBoxQuantity(r.boxItemId, r.remainingQuantity, r.dosage);
           return { ...r, taken: true, missed: false, remainingQuantity: newRemaining };
         }
         
@@ -1526,25 +1499,41 @@ function App() {
     setTimeout(() => setShowCelebration(false), 2500);
   };
 
-  // 调用后端确认服药 API
-  const confirmMedicationWithAPI = async (planId, userId) => {
+  // 调用后端统一幂等用药操作接口
+  const executeMedicationActionWithAPI = async (planId, userId, action, dosage = '') => {
     if (!userId) {
-      return;
+      return { success: false, error: '用户未登录' };
     }
     try {
-      const response = await fetch(`/api/v1/plan/${planId}/confirm?userId=${userId}`, {
-        method: 'PUT'
+      const response = await fetch(`/api/v1/plan/${planId}/action`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId,
+          action
+        })
       });
       
-      if (!response.ok) {
-        // 静默处理API调用失败，本地状态已保存
+      const result = await response.json();
+      
+      if (!response.ok || result.code !== 200) {
+        const errorMsg = result.message || '操作失败';
+        // 显示失败 Toast 提示
+        showToast(errorMsg, 'error');
+        return { success: false, error: errorMsg };
       }
+      
+      return { success: true, data: result.data };
     } catch (err) {
-      // 静默处理异常，本地状态已保存
+      const errorMsg = '网络错误，请检查连接';
+      showToast(errorMsg, 'error');
+      return { success: false, error: errorMsg };
     }
   };
 
-  // 更新药箱剩余数量
+  // 更新药箱剩余数量（仅用于乐观更新 UI，实际由后端处理）
   const updateMedicineBoxQuantity = async (boxItemId, currentRemaining, dosage, isRestore = false) => {
     if (!boxItemId || !user || !user.userId) {
       console.warn('缺少必要参数，无法更新药箱库存');
@@ -1556,36 +1545,14 @@ function App() {
       ? (currentRemaining || 0) + amount  // 恢复时增加数量
       : Math.max(0, (currentRemaining || 0) - amount);  // 正常时减少数量
 
-    try {
-      const response = await fetch(`/api/v1/box/${boxItemId}?userId=${user.userId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          remainingQuantity: newRemaining
-        })
-      });
-
-      if (response.ok) {
-        console.log(`药箱库存更新成功: boxItemId=${boxItemId}, ${isRestore ? '恢复' : '减少'}${amount}, 剩余${newRemaining}`);
-        
-        // 更新前端 drugList 中的剩余数量
-        setDrugList(prevList => prevList.map(drug => 
-          drug.boxItemId === boxItemId 
-            ? { ...drug, remaining: newRemaining } 
-            : drug
-        ));
-        
-        return true;
-      } else {
-        console.error('药箱库存更新失败:', response.status);
-        return false;
-      }
-    } catch (err) {
-      console.error('药箱库存更新异常:', err);
-      return false;
-    }
+    // 仅更新前端 UI 状态，不再单独调用后端（后端统一处理）
+    setDrugList(prevList => prevList.map(drug => 
+      drug.boxItemId === boxItemId 
+        ? { ...drug, remaining: newRemaining } 
+        : drug
+    ));
+    
+    return true;
   };
 
   const undoMarkAsTaken = (id) => {
@@ -1617,7 +1584,7 @@ function App() {
           saveLocalMedicationStatus(r.planId, null);
         }
         
-        // 恢复药箱剩余数量（如果有 boxItemId）
+        // 恢复药箱剩余数量（乐观更新 UI，后端统一处理）
         if (r.boxItemId && r.remainingQuantity !== undefined) {
           const amount = parseDosageToNumber(r.dosage);
           const newRemaining = (r.remainingQuantity || 0) + amount;
@@ -1630,10 +1597,10 @@ function App() {
       
       // 如果是同一种药品的其他时间段，同步更新剩余数量
       if (r.boxItemId && r.boxItemId === calendarPlans.find(p => p.id === id)?.boxItemId) {
-        const targetPlan = calendarPlans.find(p => p.id === id);
-        if (targetPlan && targetPlan.boxItemId && targetPlan.remainingQuantity !== undefined) {
-          const amount = parseDosageToNumber(targetPlan.dosage);
-          const newRemaining = (targetPlan.remainingQuantity || 0) + amount;
+        const srcPlan = calendarPlans.find(p => p.id === id);
+        if (srcPlan && srcPlan.boxItemId && srcPlan.remainingQuantity !== undefined) {
+          const amount = parseDosageToNumber(srcPlan.dosage);
+          const newRemaining = (srcPlan.remainingQuantity || 0) + amount;
           return { ...r, remainingQuantity: newRemaining };
         }
       }
@@ -1641,9 +1608,9 @@ function App() {
       return r;
     }));
 
-    // 调用后端API撤销服药记录
+    // 调用后端统一幂等接口撤销（库存恢复由后端处理）
     if (targetPlan?.planId && user?.userId) {
-      undoMedicationWithAPI(targetPlan.planId, user.userId);
+      executeMedicationActionWithAPI(targetPlan.planId, user.userId, 'undo', targetPlan.dosage);
     }
 
     setTakenButtons(prev => {
@@ -1651,24 +1618,6 @@ function App() {
       delete newState[id];
       return newState;
     });
-  };
-
-  // 调用后端撤销服药 API
-  const undoMedicationWithAPI = async (planId, userId) => {
-    if (!userId) {
-      return;
-    }
-    try {
-      const response = await fetch(`/api/v1/plan/${planId}/undo?userId=${userId}`, {
-        method: 'PUT'
-      });
-      
-      if (!response.ok) {
-        // 静默处理API调用失败，本地状态已撤销
-      }
-    } catch (err) {
-      // 静默处理异常，本地状态已撤销
-    }
   };
 
   const takenCount = calendarPlans.filter(r => r.taken).length;
@@ -2435,7 +2384,7 @@ function App() {
     // 调用冲突检测API
     const handleCheckConflicts = async () => {
       if (drugList.length === 0) {
-        alert('请先添加药品到药箱');
+        showToast('请先添加药品到药箱', 'warning');
         return;
       }
 
@@ -3374,11 +3323,6 @@ function App() {
           onAdd={handleAddContact}
           onDelete={handleDeleteContact}
           onClose={() => setShowAddContact(false)}
-          onShowToast={(message) => {
-            setToastMessage(message);
-            setShowSuccessToast(true);
-            setTimeout(() => setShowSuccessToast(false), 2000);
-          }}
           userId={user?.id}
         />
       )}
@@ -3525,16 +3469,6 @@ function App() {
               }}
             />
           ))}
-        </div>
-      )}
-
-      {/* 成功提示弹窗 */}
-      {showSuccessToast && (
-        <div className="success-toast">
-          <div className="success-toast-content">
-            <div className="success-toast-icon">✓</div>
-            <p className="success-toast-message">{toastMessage}</p>
-          </div>
         </div>
       )}
 

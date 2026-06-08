@@ -22,7 +22,6 @@
         <java.version>17</java.version>
         <lombok.version>1.18.30</lombok.version>
         <mybatis-plus.version>3.5.5</mybatis-plus.version>
-        <minio.version>8.5.7</minio.version>
         <aliyun-oss.version>3.17.1</aliyun-oss.version>
         <hutool.version>5.8.22</hutool.version>
     </properties>
@@ -60,19 +59,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
-        </dependency>
-
-        <!-- RabbitMQ -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-amqp</artifactId>
-        </dependency>
-
-        <!-- MinIO -->
-        <dependency>
-            <groupId>io.minio</groupId>
-            <artifactId>minio</artifactId>
-            <version>${minio.version}</version>
         </dependency>
 
         <!-- 阿里云OSS -->
