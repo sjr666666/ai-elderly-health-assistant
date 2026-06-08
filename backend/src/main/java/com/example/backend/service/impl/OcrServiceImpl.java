@@ -24,9 +24,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 
 @Service
 public class OcrServiceImpl implements OcrService {
@@ -42,8 +50,79 @@ public class OcrServiceImpl implements OcrService {
     @Value("${upload.path:./uploads}")
     private String uploadPath;
 
-    // 批量识别结果缓存（用于轮询获取结果）
-    private static final ConcurrentHashMap<String, BatchRecognizeResponse> batchResultCache = new ConcurrentHashMap<>();
+    /**
+     * 批量识别结果缓存的过期时间（毫秒），默认 30 分钟。
+     */
+    @Value("${ocr.batch-cache.ttl-millis:1800000}")
+    private long batchCacheTtlMillis;
+
+    /**
+     * 过期缓存清理任务的执行间隔（毫秒），默认 5 分钟。
+     */
+    @Value("${ocr.batch-cache.cleanup-interval-millis:300000}")
+    private long batchCacheCleanupIntervalMillis;
+
+    // 批量识别结果缓存（用于轮询获取结果），value 中携带写入时间，用于过期淘汰
+    private static final ConcurrentHashMap<String, CacheEntry> batchResultCache = new ConcurrentHashMap<>();
+
+    private ScheduledExecutorService batchCacheCleaner;
+
+    @PostConstruct
+    public void initBatchCacheCleaner() {
+        this.batchCacheCleaner = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "ocr-batch-cache-cleaner");
+            t.setDaemon(true);
+            return t;
+        });
+        long interval = Math.max(60_000L, batchCacheCleanupIntervalMillis);
+        this.batchCacheCleaner.scheduleAtFixedRate(this::evictExpiredBatchResults,
+                interval, interval, TimeUnit.MILLISECONDS);
+    }
+
+    @PreDestroy
+    public void shutdownBatchCacheCleaner() {
+        if (batchCacheCleaner != null) {
+            batchCacheCleaner.shutdownNow();
+        }
+    }
+
+    private void evictExpiredBatchResults() {
+        long now = System.currentTimeMillis();
+        long ttl = batchCacheTtlMillis;
+        Iterator<Map.Entry<String, CacheEntry>> it = batchResultCache.entrySet().iterator();
+        int removed = 0;
+        try {
+            while (it.hasNext()) {
+                Map.Entry<String, CacheEntry> e = it.next();
+                if (e.getValue() == null || now - e.getValue().createdAt >= ttl) {
+                    it.remove();
+                    removed++;
+                }
+            }
+        } catch (Exception ex) {
+            logger.warn("清理批量识别结果缓存时发生异常", ex);
+        }
+        if (removed > 0) {
+            logger.debug("已清理 {} 条过期的批量识别结果缓存", removed);
+        }
+    }
+
+    /**
+     * 缓存条目，记录写入时间用于 TTL 判定。
+     */
+    private static final class CacheEntry {
+        final long createdAt;
+        final BatchRecognizeResponse response;
+
+        CacheEntry(BatchRecognizeResponse response) {
+            this.createdAt = System.currentTimeMillis();
+            this.response = response;
+        }
+
+        boolean isExpired(long ttlMillis) {
+            return System.currentTimeMillis() - createdAt >= ttlMillis;
+        }
+    }
 
     @Autowired
     public OcrServiceImpl(
@@ -247,7 +326,7 @@ public class OcrServiceImpl implements OcrService {
         response.setFailedCount(failedCount.get());
 
         // 缓存结果供后续查询
-        batchResultCache.put(batchId, response);
+        batchResultCache.put(batchId, new CacheEntry(response));
 
         logger.info("批量OCR识别完成 - batchId: {}, 成功: {}, 失败: {}",
                 batchId, successCount.get(), failedCount.get());
@@ -277,6 +356,14 @@ public class OcrServiceImpl implements OcrService {
 
     @Override
     public BatchRecognizeResponse getBatchResult(String batchId) {
-        return batchResultCache.get(batchId);
+        CacheEntry entry = batchResultCache.get(batchId);
+        if (entry == null) {
+            return null;
+        }
+        if (entry.isExpired(batchCacheTtlMillis)) {
+            batchResultCache.remove(batchId, entry);
+            return null;
+        }
+        return entry.response;
     }
 }
