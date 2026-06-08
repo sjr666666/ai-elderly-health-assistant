@@ -1448,7 +1448,7 @@ function App() {
       const formData = new FormData();
       files.forEach(file => formData.append('files', file));
 
-      const response = await fetch('http://localhost:8080/api/v1/drug/recognize/batch-upload', {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/v1/drug/recognize/batch-upload`, {
         method: 'POST',
         headers: { 'X-User-Id': user?.userId || '1' },
         body: formData
