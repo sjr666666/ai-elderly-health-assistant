@@ -329,17 +329,62 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
         </button>
       </div>
 
-      {/* 紧急模式开关 */}
-      <div className="emergency-toggle">
-        <label className="toggle-label">
+      {/* 紧急模式开关 - 大号高对比度设计 */}
+      <div className="emergency-toggle" style={{
+        marginBottom: '20px',
+        padding: '16px 20px',
+        background: 'linear-gradient(135deg, #FFF5F5 0%, #FFF0F0 100%)',
+        borderRadius: '16px',
+        border: '2px solid #FFCDD2',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '28px' }}>🚨</span>
+          <div>
+            <div style={{
+              fontSize: '18px',
+              fontWeight: '700',
+              color: '#C62828',
+              letterSpacing: '0.5px'
+            }}>紧急模式（救命用）</div>
+            <div style={{
+              fontSize: '12px',
+              color: '#E57373',
+              marginTop: '2px'
+            }}>开启后优先处理紧急求助</div>
+          </div>
+        </div>
+        <label style={{ cursor: 'pointer', position: 'relative' }}>
           <input
             type="checkbox"
             checked={emergencyMode}
             onChange={(e) => setEmergencyMode(e.target.checked)}
+            style={{
+              width: '64px',
+              height: '36px',
+              appearance: 'none',
+              background: emergencyMode ? 'linear-gradient(135deg, #E53935, #C62828)' : '#E0E0E0',
+              borderRadius: '18px',
+              position: 'relative',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              boxShadow: emergencyMode ? '0 4px 15px rgba(229, 57, 53, 0.4)' : '0 2px 8px rgba(0,0,0,0.1)'
+            }}
           />
-          <span className="toggle-text">
-            {emergencyMode ? '🚨 紧急模式已开启' : '🔄 标准模式'}
-          </span>
+          <span style={{
+            position: 'absolute',
+            width: '28px',
+            height: '28px',
+            background: 'white',
+            borderRadius: '50%',
+            top: '4px',
+            left: emergencyMode ? '32px' : '4px',
+            transition: 'all 0.3s ease',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+            pointerEvents: 'none'
+          }} />
         </label>
       </div>
 
