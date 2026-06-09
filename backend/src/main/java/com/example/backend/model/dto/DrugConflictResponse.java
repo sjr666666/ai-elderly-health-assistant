@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -57,6 +58,61 @@ public class DrugConflictResponse {
      * 用户慢性病史
      */
     private String chronicDiseases;
+
+    /**
+     * 用户性别
+     */
+    private String gender;
+
+    /**
+     * 用户年龄
+     */
+    private Integer age;
+
+    /**
+     * 用户身高（cm）
+     */
+    private BigDecimal height;
+
+    /**
+     * 用户体重（kg）
+     */
+    private BigDecimal weight;
+
+    /**
+     * BMI（计算得出）
+     */
+    private BigDecimal bmi;
+
+    /**
+     * 用户肾功能状态
+     */
+    private String kidneyFunction;
+
+    /**
+     * 用户肝功能状态
+     */
+    private String liverFunction;
+
+    /**
+     * 是否孕期
+     */
+    private Integer isPregnant;
+
+    /**
+     * 是否哺乳期
+     */
+    private Integer isBreastfeeding;
+
+    /**
+     * 是否吸烟
+     */
+    private Integer isSmoking;
+
+    /**
+     * 是否饮酒
+     */
+    private Integer isDrinking;
 
     /**
      * 检测到的冲突列表

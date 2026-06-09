@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 /**
  * 用户档案更新请求DTO
  * 用于更新用户档案信息
@@ -25,6 +27,21 @@ public class UserProfileUpdateRequest {
     private Integer age;
 
     /**
+     * 性别：male/female
+     */
+    private String gender;
+
+    /**
+     * 身高（cm）
+     */
+    private BigDecimal height;
+
+    /**
+     * 体重（kg）
+     */
+    private BigDecimal weight;
+
+    /**
      * 过敏史
      */
     private String allergyHistory;
@@ -33,4 +50,36 @@ public class UserProfileUpdateRequest {
      * 慢性病史
      */
     private String chronicDiseases;
+
+    /**
+     * 肾功能状态
+     * normal/mild_impairment/moderate_impairment/severe_impairment/unknown
+     */
+    private String kidneyFunction;
+
+    /**
+     * 肝功能状态
+     * normal/mild_impairment/moderate_impairment/severe_impairment/unknown
+     */
+    private String liverFunction;
+
+    /**
+     * 是否孕期：0否/1是
+     */
+    private Integer isPregnant;
+
+    /**
+     * 是否哺乳期：0否/1是
+     */
+    private Integer isBreastfeeding;
+
+    /**
+     * 是否吸烟：0否/1是
+     */
+    private Integer isSmoking;
+
+    /**
+     * 是否饮酒：0否/1是
+     */
+    private Integer isDrinking;
 }

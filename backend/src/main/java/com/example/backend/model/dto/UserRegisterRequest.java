@@ -7,6 +7,7 @@ import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Size;
+import java.math.BigDecimal;
 
 @Data
 public class UserRegisterRequest {
@@ -27,7 +28,25 @@ public class UserRegisterRequest {
     @Max(value = 150, message = "年龄不能大于150")
     private Integer age;
 
+    private String gender;
+
+    private BigDecimal height;
+
+    private BigDecimal weight;
+
     private String allergyHistory;
 
     private String chronicDiseases;
+
+    private String kidneyFunction;
+
+    private String liverFunction;
+
+    private Integer isPregnant;
+
+    private Integer isBreastfeeding;
+
+    private Integer isSmoking;
+
+    private Integer isDrinking;
 }

@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -16,7 +18,16 @@ public class UserLoginResponse {
     private String username;
     private String realName;
     private Integer age;
+    private String gender;
+    private BigDecimal height;
+    private BigDecimal weight;
     private String allergyHistory;
     private String chronicDiseases;
+    private String kidneyFunction;
+    private String liverFunction;
+    private Integer isPregnant;
+    private Integer isBreastfeeding;
+    private Integer isSmoking;
+    private Integer isDrinking;
     private String role;
 }
