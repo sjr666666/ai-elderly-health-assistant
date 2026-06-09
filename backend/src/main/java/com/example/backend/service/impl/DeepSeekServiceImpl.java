@@ -5,6 +5,7 @@ import com.example.backend.model.dto.DrugConflictResponse;
 import com.example.backend.model.dto.DrugConflictResult;
 import com.example.backend.model.dto.DrugDetailResponse;
 import com.example.backend.model.dto.DrugSearchResponse;
+import com.example.backend.model.entity.SysUser;
 import com.example.backend.service.DeepSeekService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -671,10 +672,10 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             prompt.append("- 体重：").append(request.getWeight()).append(" kg\n");
         }
         if (request.getKidneyFunction() != null && !request.getKidneyFunction().trim().isEmpty()) {
-            prompt.append("- 肾功能：").append(describeOrganFunction(request.getKidneyFunction())).append("\n");
+            prompt.append("- 肾功能：").append(SysUser.OrganFunction.fromCode(request.getKidneyFunction()).getDescription()).append("\n");
         }
         if (request.getLiverFunction() != null && !request.getLiverFunction().trim().isEmpty()) {
-            prompt.append("- 肝功能：").append(describeOrganFunction(request.getLiverFunction())).append("\n");
+            prompt.append("- 肝功能：").append(SysUser.OrganFunction.fromCode(request.getLiverFunction()).getDescription()).append("\n");
         }
         if (Integer.valueOf(1).equals(request.getIsPregnant())) {
             prompt.append("- 孕期：是\n");
@@ -704,27 +705,6 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         prompt.append("\n请提供详细的冲突分析和专业建议。");
 
         return prompt.toString();
-    }
-
-    /**
-     * 器官功能状态码转中文描述
-     */
-    private String describeOrganFunction(String code) {
-        if (code == null) {
-            return "不详";
-        }
-        switch (code.toLowerCase()) {
-            case "normal":
-                return "正常";
-            case "mild_impairment":
-                return "轻度不全";
-            case "moderate_impairment":
-                return "中度不全";
-            case "severe_impairment":
-                return "重度不全";
-            default:
-                return "不详";
-        }
     }
 
     /**
