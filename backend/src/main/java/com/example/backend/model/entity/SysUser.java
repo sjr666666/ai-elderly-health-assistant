@@ -4,12 +4,13 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
  * 用户实体类
  * 对应数据库表：sys_user
- * 
+ *
  * @author backend
  * @since 1.0.0
  */
@@ -56,6 +57,26 @@ public class SysUser extends BaseEntity {
     private Integer age;
 
     /**
+     * 性别：male/female
+     */
+    @TableField("gender")
+    private String gender;
+
+    /**
+     * 身高（cm）
+     * 用于BMI/剂量计算等用药评估
+     */
+    @TableField("height")
+    private BigDecimal height;
+
+    /**
+     * 体重（kg）
+     * 用于BMI/剂量计算等用药评估
+     */
+    @TableField("weight")
+    private BigDecimal weight;
+
+    /**
      * 过敏史描述
      * 如"青霉素过敏"，用于用药安全提醒
      */
@@ -68,6 +89,44 @@ public class SysUser extends BaseEntity {
      */
     @TableField("chronic_diseases")
     private String chronicDiseases;
+
+    /**
+     * 肾功能状态
+     * normal/mild_impairment/moderate_impairment/severe_impairment/unknown
+     */
+    @TableField("kidney_function")
+    private String kidneyFunction;
+
+    /**
+     * 肝功能状态
+     * normal/mild_impairment/moderate_impairment/severe_impairment/unknown
+     */
+    @TableField("liver_function")
+    private String liverFunction;
+
+    /**
+     * 是否孕期：0否/1是
+     */
+    @TableField("is_pregnant")
+    private Integer isPregnant;
+
+    /**
+     * 是否哺乳期：0否/1是
+     */
+    @TableField("is_breastfeeding")
+    private Integer isBreastfeeding;
+
+    /**
+     * 是否吸烟：0否/1是
+     */
+    @TableField("is_smoking")
+    private Integer isSmoking;
+
+    /**
+     * 是否饮酒：0否/1是
+     */
+    @TableField("is_drinking")
+    private Integer isDrinking;
 
     /**
      * 角色
@@ -116,6 +175,45 @@ public class SysUser extends BaseEntity {
                 }
             }
             return ELDER;
+        }
+    }
+
+    /**
+     * 器官功能状态枚举
+     */
+    public enum OrganFunction {
+        NORMAL("normal", "正常"),
+        MILD("mild_impairment", "轻度不全"),
+        MODERATE("moderate_impairment", "中度不全"),
+        SEVERE("severe_impairment", "重度不全"),
+        UNKNOWN("unknown", "不详");
+
+        private final String code;
+        private final String description;
+
+        OrganFunction(String code, String description) {
+            this.code = code;
+            this.description = description;
+        }
+
+        public String getCode() {
+            return code;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public static OrganFunction fromCode(String code) {
+            if (code == null) {
+                return UNKNOWN;
+            }
+            for (OrganFunction v : values()) {
+                if (v.code.equalsIgnoreCase(code)) {
+                    return v;
+                }
+            }
+            return UNKNOWN;
         }
     }
 }

@@ -16,16 +16,24 @@ USE `elderly_medication`;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ==================== 用户表 ====================
-DROP TABLE IF EXISTS `sys_user`;
-CREATE TABLE `sys_user` (
+CREATE TABLE IF NOT EXISTS `sys_user` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '自增主键ID',
   `user_id` bigint NOT NULL UNIQUE COMMENT '用户ID（雪花算法生成）',
   `username` varchar(50) NOT NULL UNIQUE COMMENT '登录名',
   `password` varchar(255) NOT NULL COMMENT '加密密码',
   `real_name` varchar(50) NOT NULL COMMENT '真实姓名/称呼',
   `age` tinyint NULL COMMENT '年龄',
+  `gender` varchar(10) NULL COMMENT '性别：male/female',
+  `height` decimal(5,1) NULL COMMENT '身高（cm）',
+  `weight` decimal(5,1) NULL COMMENT '体重（kg）',
   `allergy_history` text NULL COMMENT '过敏史描述',
   `chronic_diseases` text NULL COMMENT '慢性病史描述',
+  `kidney_function` varchar(50) NULL COMMENT '肾功能状态：normal/mild_impairment/moderate_impairment/severe_impairment/unknown',
+  `liver_function` varchar(50) NULL COMMENT '肝功能状态：normal/mild_impairment/moderate_impairment/severe_impairment/unknown',
+  `is_pregnant` tinyint NOT NULL DEFAULT 0 COMMENT '是否孕期：0否/1是',
+  `is_breastfeeding` tinyint NOT NULL DEFAULT 0 COMMENT '是否哺乳期：0否/1是',
+  `is_smoking` tinyint NOT NULL DEFAULT 0 COMMENT '是否吸烟：0否/1是',
+  `is_drinking` tinyint NOT NULL DEFAULT 0 COMMENT '是否饮酒：0否/1是',
   `role` varchar(20) NOT NULL DEFAULT 'elder' COMMENT '角色：elder/family',
   `bind_elder_id` bigint NULL COMMENT '家属绑定的老人ID',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -35,6 +43,42 @@ CREATE TABLE `sys_user` (
   UNIQUE KEY `uk_user_id` (`user_id`),
   UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
+
+-- ==================== 用户表-扩展字段平滑升级（已存在库兼容） ====================
+-- 兼容老库：通过存储过程判断列是否存在再 ADD（MySQL 8.0.x 不支持 ADD COLUMN IF NOT EXISTS）
+DROP PROCEDURE IF EXISTS add_col_if_missing;
+DELIMITER $$
+CREATE PROCEDURE add_col_if_missing(
+    IN p_table VARCHAR(64),
+    IN p_column VARCHAR(64),
+    IN p_definition TEXT
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = p_table
+          AND COLUMN_NAME = p_column
+    ) THEN
+        SET @sql = CONCAT('ALTER TABLE `', p_table, '` ADD COLUMN `', p_column, '` ', p_definition);
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END$$
+DELIMITER ;
+
+CALL add_col_if_missing('sys_user', 'gender',         "varchar(10) NULL COMMENT '性别：male/female' AFTER `age`");
+CALL add_col_if_missing('sys_user', 'height',         "decimal(5,1) NULL COMMENT '身高（cm）' AFTER `gender`");
+CALL add_col_if_missing('sys_user', 'weight',         "decimal(5,1) NULL COMMENT '体重（kg）' AFTER `height`");
+CALL add_col_if_missing('sys_user', 'kidney_function',"varchar(50) NULL COMMENT '肾功能状态' AFTER `chronic_diseases`");
+CALL add_col_if_missing('sys_user', 'liver_function', "varchar(50) NULL COMMENT '肝功能状态' AFTER `kidney_function`");
+CALL add_col_if_missing('sys_user', 'is_pregnant',    "tinyint NOT NULL DEFAULT 0 COMMENT '是否孕期' AFTER `liver_function`");
+CALL add_col_if_missing('sys_user', 'is_breastfeeding',"tinyint NOT NULL DEFAULT 0 COMMENT '是否哺乳期' AFTER `is_pregnant`");
+CALL add_col_if_missing('sys_user', 'is_smoking',     "tinyint NOT NULL DEFAULT 0 COMMENT '是否吸烟' AFTER `is_breastfeeding`");
+CALL add_col_if_missing('sys_user', 'is_drinking',    "tinyint NOT NULL DEFAULT 0 COMMENT '是否饮酒' AFTER `is_smoking`");
+
+DROP PROCEDURE add_col_if_missing;
 
 -- ==================== 药品基础库表 ====================
 DROP TABLE IF EXISTS `drug_base`;
@@ -280,11 +324,12 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- =============== 插入测试数据 ===============
 
 -- ---------------- 用户测试数据 ----------------
-INSERT INTO `sys_user` (`user_id`, `username`, `password`, `real_name`, `age`, `allergy_history`, `chronic_diseases`, `role`) VALUES
-(10001, 'laowang', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '王阿姨', 68, '无药物过敏史', '高血压、糖尿病', 'elder'),
-(10002, 'zhangsan', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '张三', 35, NULL, NULL, 'family'),
-(10003, 'laoli', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '李大爷', 72, '青霉素过敏', '冠心病、脑梗死后遗症', 'elder'),
-(10004, 'zhaosi', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '赵四', 42, NULL, NULL, 'family');
+INSERT INTO `sys_user` (`user_id`, `username`, `password`, `real_name`, `age`, `gender`, `height`, `weight`, `allergy_history`, `chronic_diseases`, `kidney_function`, `liver_function`, `is_pregnant`, `is_breastfeeding`, `is_smoking`, `is_drinking`, `role`) VALUES
+(10001, 'laowang', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '王阿姨', 68, 'female', 160.0, 62.5, '无药物过敏史', '高血压、糖尿病', 'mild_impairment', 'normal', 0, 0, 0, 0, 'elder'),
+(10002, 'zhangsan', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '张三', 35, 'male', 175.0, 72.0, NULL, NULL, 'normal', 'normal', 0, 0, 0, 1, 'family'),
+(10003, 'laoli', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '李大爷', 72, 'male', 168.0, 68.0, '青霉素过敏', '冠心病、脑梗死后遗症', 'moderate_impairment', 'mild_impairment', 0, 0, 1, 0, 'elder'),
+(10004, 'zhaosi', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '赵四', 42, 'male', 178.0, 80.0, NULL, NULL, 'normal', 'normal', 0, 0, 0, 0, 'family'),
+(10005, 'xiaomei', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '小美', 28, 'female', 165.0, 55.0, '磺胺过敏', NULL, 'normal', 'normal', 1, 0, 0, 0, 'family');
 
 -- ---------------- 药品基础数据（完整版84种） ----------------
 -- 注意：实际生产中应通过 init_drug_data.sql 导入完整药品数据

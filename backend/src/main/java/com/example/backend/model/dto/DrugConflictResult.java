@@ -32,6 +32,15 @@ public class DrugConflictResult {
      * DRUG_FOOD: 药品-食物冲突
      * DRUG_BEVERAGE: 药品-饮料冲突
      * DRUG_SUPPLEMENT: 药品-保健品冲突
+     * DRUG_ALLERGY: 药品-过敏史冲突
+     * DRUG_DISEASE: 药品-慢性病史冲突
+     * DRUG_PREGNANCY: 药品-孕期冲突
+     * DRUG_LACTATION: 药品-哺乳期冲突
+     * DRUG_KIDNEY: 药品-肾功能不全冲突
+     * DRUG_LIVER: 药品-肝功能不全冲突
+     * DRUG_SMOKING: 药品-吸烟习惯冲突
+     * DRUG_AGE: 药品-年龄/特殊人群冲突
+     * DRUG_WEIGHT: 药品-体重/剂量冲突
      */
     private ConflictType conflictType;
 
@@ -73,7 +82,14 @@ public class DrugConflictResult {
         DRUG_BEVERAGE("药品-饮料冲突"),
         DRUG_SUPPLEMENT("药品-保健品冲突"),
         DRUG_ALLERGY("药品-过敏史冲突"),
-        DRUG_DISEASE("药品-慢性病史冲突");
+        DRUG_DISEASE("药品-慢性病史冲突"),
+        DRUG_PREGNANCY("药品-孕期冲突"),
+        DRUG_LACTATION("药品-哺乳期冲突"),
+        DRUG_KIDNEY("药品-肾功能不全冲突"),
+        DRUG_LIVER("药品-肝功能不全冲突"),
+        DRUG_SMOKING("药品-吸烟习惯冲突"),
+        DRUG_AGE("药品-年龄/特殊人群冲突"),
+        DRUG_WEIGHT("药品-体重/剂量冲突");
 
         private final String description;
 

@@ -3459,6 +3459,31 @@ body {
   transform: scale(1.1);
 }
 
+.contact-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.btn-edit {
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: var(--tech-blue-light);
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-edit:hover {
+  background: var(--tech-blue);
+  transform: scale(1.1);
+}
+
 .confirm-dialog-overlay {
   position: fixed;
   top: 0;
@@ -3646,6 +3671,13 @@ body {
   padding: 24px;
   border-radius: var(--radius-medium);
   border: 3px solid var(--cream-dark);
+}
+
+.form-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 0 0 20px 0;
 }
 
 .form-actions {

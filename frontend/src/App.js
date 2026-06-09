@@ -338,10 +338,14 @@ function App() {
     try {
       const key = getTodayStorageKey();
       const savedStatus = JSON.parse(localStorage.getItem(key) || '{}');
-      savedStatus[planId] = {
-        status: status, // 'taken' 或 null(撤销)
-        timestamp: Date.now()
-      };
+      if (status == null) {
+        delete savedStatus[planId];
+      } else {
+        savedStatus[planId] = {
+          status: status, // 'taken' 或 null(撤销)
+          timestamp: Date.now()
+        };
+      }
       localStorage.setItem(key, JSON.stringify(savedStatus));
       console.log(`已保存本地服药状态: planId=${planId}, status=${status}`);
     } catch (err) {
@@ -830,21 +834,11 @@ function App() {
 
   const handleMarkAsTakenFromReminder = async (reminder) => {
     console.log('标记为已服用:', reminder);
-    
-    // 1. 先调用 markAsTaken 标记为已服用
-    markAsTaken(reminder.id, null);
-    
-    // 2. 等待100ms确保状态更新开始
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // 3. 重新加载用药日历数据（根据当前视图模式）
-    if (calendarViewMode === 'today') {
-      await loadCalendarPlans();
-    } else if (calendarViewMode === 'week') {
-      await loadWeeklyMedication();
-    }
-    
-    // 4. 设置标志，触发 useEffect 重新计算
+
+    // markAsTaken 内部已经 await API + reload 两个视图，这里不再重复 reload
+    await markAsTaken(reminder.id, null);
+
+    // 触发 useEffect 重新计算漏服提醒
     setShouldRefreshReminder(true);
   };
 
@@ -1827,7 +1821,7 @@ function App() {
     return 1;
   };
 
-  const markAsTaken = (id, event) => {
+  const markAsTaken = async (id, event) => {
     if (event) {
       const rect = event.target.getBoundingClientRect();
       const x = rect.left + rect.width / 2;
@@ -1845,50 +1839,63 @@ function App() {
       setTakenButtons(prev => ({ ...prev, [id]: true }));
     }
 
-    // 更新 reminders 状态（兼容旧逻辑）
+    // 取出目标 plan（提前，避免在 setState 闭包里取不到更新后的 calendarPlans）
+    const targetPlan = calendarPlans.find(r => r.id === id);
+    const targetPlanId = targetPlan?.planId;
+    const targetDosage = targetPlan?.dosage;
+
+    // 乐观更新本地 state
     setReminders(reminders.map(r =>
       r.id === id ? { ...r, taken: true, missed: false } : r
     ));
-
-    // 更新 calendarPlans 状态（修复用药日历不更新的问题）
     setCalendarPlans(calendarPlans.map(r => {
       if (r.id === id) {
-        // 保存到 localStorage（持久化状态）
         saveLocalMedicationStatus(id, 'taken');
         if (r.planId) {
           saveLocalMedicationStatus(r.planId, 'taken');
         }
-        
-        // 调用后端统一幂等接口（库存更新由后端处理）
-        if (r.planId && user?.userId) {
-          executeMedicationActionWithAPI(r.planId, user.userId, 'confirm', r.dosage);
-        }
-        
-        // 更新药箱剩余数量（乐观更新 UI）
         if (r.boxItemId && r.remainingQuantity !== undefined) {
           const amount = parseDosageToNumber(r.dosage);
           const newRemaining = Math.max(0, (r.remainingQuantity || 0) - amount);
           return { ...r, taken: true, missed: false, remainingQuantity: newRemaining };
         }
-        
         return { ...r, taken: true, missed: false };
       }
-      
-      // 如果是同一种药品的其他时间段，同步更新剩余数量
-      if (r.boxItemId && r.boxItemId === calendarPlans.find(p => p.id === id)?.boxItemId) {
-        const targetPlan = calendarPlans.find(p => p.id === id);
-        if (targetPlan && targetPlan.boxItemId && targetPlan.remainingQuantity !== undefined) {
-          const amount = parseDosageToNumber(targetPlan.dosage);
-          const newRemaining = Math.max(0, (targetPlan.remainingQuantity || 0) - amount);
-          return { ...r, remainingQuantity: newRemaining };
-        }
+      // 同一药品的其他时间段同步扣减库存
+      if (r.boxItemId && targetPlan && r.boxItemId === targetPlan.boxItemId) {
+        const amount = parseDosageToNumber(targetPlan.dosage);
+        const newRemaining = Math.max(0, (r.remainingQuantity || 0) - amount);
+        return { ...r, remainingQuantity: newRemaining };
       }
-      
       return r;
     }));
 
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 2500);
+
+    // 等后端真正接受这次操作，再用后端数据做一次校验，避免本地乐观更新和后端脱节
+    if (targetPlanId && user?.userId) {
+      try {
+        await executeMedicationActionWithAPI(targetPlanId, user.userId, 'confirm', targetDosage);
+      } catch (err) {
+        // executeMedicationActionWithAPI 内部已经 toast 报错；继续 reload 让 UI 与后端对齐
+        console.error('确认服药 API 调用异常:', err);
+      }
+    }
+
+    // API 已落定，删掉 localStorage 里这条临时记录，让后端成为唯一真相源
+    // 不论成功失败都清：成功时没必要再缓存，失败时也要避免下次刷新把旧乐观值覆盖回来
+    if (targetPlanId) {
+      saveLocalMedicationStatus(targetPlanId, null);
+    }
+
+    // 不论成功失败都拉后端做最终校验：今日 + 一周都刷
+    // 成功时：本地就是 taken、后端也是 completed，状态对齐
+    // 失败时：后端仍是 pending，reload 后 UI 自动回退到"待吃"，消除本地和后端的不一致
+    await Promise.all([
+      loadCalendarPlans(),
+      typeof loadWeeklyMedication === 'function' ? loadWeeklyMedication() : Promise.resolve()
+    ]);
   };
 
   // 调用后端统一幂等用药操作接口
@@ -2018,64 +2025,63 @@ function App() {
     setShowUndoConfirmModal(true);
   };
 
-  const confirmUndo = () => {
+  const confirmUndo = async () => {
     const id = pendingUndoId;
     if (!id) return;
-    
+
     setShowUndoConfirmModal(false);
     setPendingUndoId(null);
 
-    // 找到对应的plan
+    // 取出目标 plan（提前，避免在 setState 闭包里取不到更新后的 calendarPlans）
     const targetPlan = calendarPlans.find(r => r.id === id);
-    
-    // 更新 reminders 状态
+    const targetPlanId = targetPlan?.planId;
+    const targetDosage = targetPlan?.dosage;
+
+    // 乐观更新本地 state
     setReminders(reminders.map(r =>
       r.id === id ? { ...r, taken: false } : r
     ));
-
-    // 更新 calendarPlans 状态（修复用药日历不更新的问题）
     setCalendarPlans(calendarPlans.map(r => {
       if (r.id === id) {
-        // 从 localStorage 中移除该记录（撤销标记）
-        saveLocalMedicationStatus(id, null);
-        if (r.planId) {
-          saveLocalMedicationStatus(r.planId, null);
-        }
-        
-        // 恢复药箱剩余数量（乐观更新 UI，后端统一处理）
         if (r.boxItemId && r.remainingQuantity !== undefined) {
           const amount = parseDosageToNumber(r.dosage);
           const newRemaining = (r.remainingQuantity || 0) + amount;
           updateMedicineBoxQuantity(r.boxItemId, r.remainingQuantity, r.dosage, true);
           return { ...r, taken: false, remainingQuantity: newRemaining };
         }
-        
         return { ...r, taken: false };
       }
-      
-      // 如果是同一种药品的其他时间段，同步更新剩余数量
-      if (r.boxItemId && r.boxItemId === calendarPlans.find(p => p.id === id)?.boxItemId) {
-        const srcPlan = calendarPlans.find(p => p.id === id);
-        if (srcPlan && srcPlan.boxItemId && srcPlan.remainingQuantity !== undefined) {
-          const amount = parseDosageToNumber(srcPlan.dosage);
-          const newRemaining = (srcPlan.remainingQuantity || 0) + amount;
-          return { ...r, remainingQuantity: newRemaining };
-        }
+      if (r.boxItemId && targetPlan && r.boxItemId === targetPlan.boxItemId) {
+        const amount = parseDosageToNumber(targetPlan.dosage);
+        const newRemaining = (r.remainingQuantity || 0) + amount;
+        return { ...r, remainingQuantity: newRemaining };
       }
-      
       return r;
     }));
-
-    // 调用后端统一幂等接口撤销（库存恢复由后端处理）
-    if (targetPlan?.planId && user?.userId) {
-      executeMedicationActionWithAPI(targetPlan.planId, user.userId, 'undo', targetPlan.dosage);
-    }
 
     setTakenButtons(prev => {
       const newState = { ...prev };
       delete newState[id];
       return newState;
     });
+
+    // 等后端真正接受这次撤销操作
+    if (targetPlanId && user?.userId) {
+      try {
+        await executeMedicationActionWithAPI(targetPlanId, user.userId, 'undo', targetDosage);
+      } catch (err) {
+        console.error('撤销服药 API 调用异常:', err);
+      }
+    }
+
+    // 清掉 localStorage + reload 两个视图，让后端做最终校验
+    if (targetPlanId) {
+      saveLocalMedicationStatus(targetPlanId, null);
+    }
+    await Promise.all([
+      loadCalendarPlans(),
+      typeof loadWeeklyMedication === 'function' ? loadWeeklyMedication() : Promise.resolve()
+    ]);
   };
 
   const takenCount = calendarPlans.filter(r => r.taken).length;

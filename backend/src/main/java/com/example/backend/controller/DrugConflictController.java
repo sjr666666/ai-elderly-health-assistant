@@ -13,6 +13,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 /**
@@ -135,7 +137,7 @@ public class DrugConflictController {
 
     /**
      * 结合用户健康档案进行全面冲突检测
-     * 根据用户ID自动获取过敏史和慢性病史，进行药品冲突检测
+     * 根据用户ID自动获取身高体重、肾肝功能、孕期/哺乳期、吸烟饮酒等关键用药因素，进行药品冲突检测
      *
      * @param userId 用户ID
      * @param drugNames 药品名称列表
@@ -147,11 +149,11 @@ public class DrugConflictController {
             @RequestBody List<String> drugNames) {
         try {
             logger.info("收到结合健康档案的冲突检测请求 - 用户ID: {}, 药品列表: {}", userId, drugNames);
-            
+
             if (userId == null || userId.trim().isEmpty()) {
                 return ResponseResult.fail("用户ID不能为空");
             }
-            
+
             if (drugNames == null || drugNames.isEmpty()) {
                 return ResponseResult.fail("药品列表不能为空");
             }
@@ -160,7 +162,7 @@ public class DrugConflictController {
             LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
             queryWrapper.eq(SysUser::getUserId, uid);
             SysUser user = userMapper.selectOne(queryWrapper);
-            
+
             if (user == null) {
                 return ResponseResult.fail("用户不存在");
             }
@@ -169,11 +171,23 @@ public class DrugConflictController {
                     .drugNames(drugNames)
                     .allergyHistory(user.getAllergyHistory())
                     .chronicDiseases(user.getChronicDiseases())
+                    .gender(user.getGender())
+                    .age(user.getAge())
+                    .height(user.getHeight())
+                    .weight(user.getWeight())
+                    .kidneyFunction(user.getKidneyFunction())
+                    .liverFunction(user.getLiverFunction())
+                    .isPregnant(user.getIsPregnant())
+                    .isBreastfeeding(user.getIsBreastfeeding())
+                    .isSmoking(user.getIsSmoking())
+                    .isDrinking(user.getIsDrinking())
                     .detailed(true)
                     .includeAlternatives(true)
                     .build();
 
             DrugConflictResponse result = deepSeekService.analyzeDrugConflicts(request);
+            // 回填 BMI 供前端展示
+            result.setBmi(calculateBmi(user.getHeight(), user.getWeight()));
             return ResponseResult.success("冲突检测完成", result);
         } catch (NumberFormatException e) {
             logger.error("用户ID格式错误: ", e);
@@ -182,5 +196,19 @@ public class DrugConflictController {
             logger.error("结合健康档案的冲突检测失败: ", e);
             return ResponseResult.fail("冲突检测失败: " + e.getMessage());
         }
+    }
+
+    /**
+     * 计算 BMI（体重 kg / 身高 m²）
+     */
+    private BigDecimal calculateBmi(BigDecimal heightCm, BigDecimal weightKg) {
+        if (heightCm == null || weightKg == null) {
+            return null;
+        }
+        BigDecimal heightM = heightCm.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        if (heightM.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        return weightKg.divide(heightM.multiply(heightM), 2, RoundingMode.HALF_UP);
     }
 }

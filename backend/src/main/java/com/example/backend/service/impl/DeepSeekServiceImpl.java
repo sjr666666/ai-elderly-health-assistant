@@ -570,7 +570,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         prompt.append("    {\n");
         prompt.append("      \"drugA\": \"药品A名称\",\n");
         prompt.append("      \"drugB\": \"药品B名称或其他物质名称\",\n");
-        prompt.append("      \"conflictType\": \"DRUG_DRUG|DRUG_FOOD|DRUG_BEVERAGE|DRUG_SUPPLEMENT\",\n");
+        prompt.append("      \"conflictType\": \"DRUG_DRUG|DRUG_FOOD|DRUG_BEVERAGE|DRUG_SUPPLEMENT|DRUG_ALLERGY|DRUG_DISEASE|DRUG_PREGNANCY|DRUG_LACTATION|DRUG_KIDNEY|DRUG_LIVER|DRUG_SMOKING|DRUG_AGE|DRUG_WEIGHT\",\n");
         prompt.append("      \"severity\": \"SEVERE|MODERATE|MILD\",\n");
         prompt.append("      \"conflictMechanism\": \"专业的冲突原理描述\",\n");
         prompt.append("      \"conflictExplanation\": \"用通俗易懂的语言解释冲突\",\n");
@@ -590,19 +590,26 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         prompt.append("- DRUG_BEVERAGE：药品与饮料（如酒精、咖啡、茶等）之间的冲突\n");
         prompt.append("- DRUG_SUPPLEMENT：药品与保健品之间的冲突\n");
         prompt.append("- DRUG_ALLERGY：药品与用户过敏史之间的冲突（如用户对青霉素过敏，检测药品是否含青霉素）\n");
-        prompt.append("- DRUG_DISEASE：药品与用户慢性病史之间的冲突（如用户有高血压，检测药品是否禁忌用于高血压患者）\n\n");
-        
+        prompt.append("- DRUG_DISEASE：药品与用户慢性病史之间的冲突（如用户有高血压，检测药品是否禁忌用于高血压患者）\n");
+        prompt.append("- DRUG_PREGNANCY：药品与孕期禁忌之间的冲突（如利巴韦林、异维A酸、华法林、四环素、链霉素等孕期禁用药物）\n");
+        prompt.append("- DRUG_LACTATION：药品与哺乳期禁忌之间的冲突（哺乳期妇女使用是否安全）\n");
+        prompt.append("- DRUG_KIDNEY：药品与肾功能不全之间的冲突（肾功能不全患者是否需调整剂量或禁忌）\n");
+        prompt.append("- DRUG_LIVER：药品与肝功能不全之间的冲突（肝功能不全患者是否需调整剂量或禁忌）\n");
+        prompt.append("- DRUG_SMOKING：药品与吸烟习惯之间的冲突（如吸烟会诱导 CYP1A2，影响茶碱、氯丙嗪等代谢）\n");
+        prompt.append("- DRUG_AGE：药品与年龄/特殊人群之间的冲突（如老人/儿童慎用、8岁以下儿童禁用氟喹诺酮类）\n");
+        prompt.append("- DRUG_WEIGHT：药品与体重/剂量之间的冲突（用于提示医生根据体重计算剂量，特别是低体重或肥胖患者）\n\n");
+
         if (detailed) {
             prompt.append("请提供详细的冲突原理和解释，包括药理机制。\n");
         }
-        
+
         if (includeAlternatives) {
             prompt.append("请为存在冲突的组合提供合理的替代方案建议。\n");
         }
-        
+
         prompt.append("如果没有检测到冲突，conflicts数组应为空数组[]。\n");
         prompt.append("输出必须是严格的JSON格式，不能包含任何其他文本。");
-        
+
         return prompt.toString();
     }
 
@@ -612,43 +619,76 @@ public class DeepSeekServiceImpl implements DeepSeekService {
     private String buildConflictUserPrompt(DrugConflictRequest request) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("请分析以下药品、保健品、饮料和食物之间的相互作用：\n\n");
-        
+
         prompt.append("【药品列表】\n");
         for (String drug : request.getDrugNames()) {
             prompt.append("- ").append(drug).append("\n");
         }
-        
+
         if (request.getSupplements() != null && !request.getSupplements().isEmpty()) {
             prompt.append("\n【保健品列表】\n");
             for (String supplement : request.getSupplements()) {
                 prompt.append("- ").append(supplement).append("\n");
             }
         }
-        
+
         if (request.getBeverages() != null && !request.getBeverages().isEmpty()) {
             prompt.append("\n【饮料列表】\n");
             for (String beverage : request.getBeverages()) {
                 prompt.append("- ").append(beverage).append("\n");
             }
         }
-        
+
         if (request.getFoods() != null && !request.getFoods().isEmpty()) {
             prompt.append("\n【食物列表】\n");
             for (String food : request.getFoods()) {
                 prompt.append("- ").append(food).append("\n");
             }
         }
-        
+
         if (request.getAllergyHistory() != null && !request.getAllergyHistory().trim().isEmpty()) {
             prompt.append("\n【用户过敏史】\n");
             prompt.append(request.getAllergyHistory()).append("\n");
         }
-        
+
         if (request.getChronicDiseases() != null && !request.getChronicDiseases().trim().isEmpty()) {
             prompt.append("\n【用户慢性病史】\n");
             prompt.append(request.getChronicDiseases()).append("\n");
         }
-        
+
+        // 关键用药因素（档案扩面）
+        prompt.append("\n【用户关键用药因素】\n");
+        if (request.getGender() != null && !request.getGender().trim().isEmpty()) {
+            prompt.append("- 性别：").append("male".equalsIgnoreCase(request.getGender()) ? "男" : "female".equalsIgnoreCase(request.getGender()) ? "女" : request.getGender()).append("\n");
+        }
+        if (request.getAge() != null) {
+            prompt.append("- 年龄：").append(request.getAge()).append(" 岁\n");
+        }
+        if (request.getHeight() != null) {
+            prompt.append("- 身高：").append(request.getHeight()).append(" cm\n");
+        }
+        if (request.getWeight() != null) {
+            prompt.append("- 体重：").append(request.getWeight()).append(" kg\n");
+        }
+        if (request.getKidneyFunction() != null && !request.getKidneyFunction().trim().isEmpty()) {
+            prompt.append("- 肾功能：").append(describeOrganFunction(request.getKidneyFunction())).append("\n");
+        }
+        if (request.getLiverFunction() != null && !request.getLiverFunction().trim().isEmpty()) {
+            prompt.append("- 肝功能：").append(describeOrganFunction(request.getLiverFunction())).append("\n");
+        }
+        if (Integer.valueOf(1).equals(request.getIsPregnant())) {
+            prompt.append("- 孕期：是\n");
+        }
+        if (Integer.valueOf(1).equals(request.getIsBreastfeeding())) {
+            prompt.append("- 哺乳期：是\n");
+        }
+        if (Integer.valueOf(1).equals(request.getIsSmoking())) {
+            prompt.append("- 吸烟：是\n");
+        }
+        if (Integer.valueOf(1).equals(request.getIsDrinking())) {
+            prompt.append("- 饮酒：是\n");
+        }
+
         prompt.append("\n请检测所有可能的组合，包括：\n");
         prompt.append("1. 药品与药品之间的相互作用\n");
         prompt.append("2. 药品与保健品之间的相互作用\n");
@@ -656,9 +696,35 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         prompt.append("4. 药品与食物之间的相互作用\n");
         prompt.append("5. 药品与用户过敏史之间的冲突（检测药品是否含过敏原或与过敏原相关）\n");
         prompt.append("6. 药品与用户慢性病史之间的冲突（检测药品是否禁忌用于该基础疾病患者）\n");
+        prompt.append("7. 药品与孕期/哺乳期之间的冲突（重点检查孕期绝对禁忌药品，如利巴韦林、异维A酸、华法林、四环素、链霉素、喹诺酮类等）\n");
+        prompt.append("8. 药品与肝/肾功能不全之间的冲突（评估剂量调整或禁忌）\n");
+        prompt.append("9. 药品与吸烟习惯之间的冲突（吸烟对茶碱、氯丙嗪、苯二氮卓等药物代谢的影响）\n");
+        prompt.append("10. 药品与年龄/特殊人群之间的冲突（≥65岁老人慎用、≤8岁儿童禁用氟喹诺酮类等）\n");
+        prompt.append("11. 药品与体重/剂量之间的冲突（低体重或肥胖患者剂量提示）\n");
         prompt.append("\n请提供详细的冲突分析和专业建议。");
-        
+
         return prompt.toString();
+    }
+
+    /**
+     * 器官功能状态码转中文描述
+     */
+    private String describeOrganFunction(String code) {
+        if (code == null) {
+            return "不详";
+        }
+        switch (code.toLowerCase()) {
+            case "normal":
+                return "正常";
+            case "mild_impairment":
+                return "轻度不全";
+            case "moderate_impairment":
+                return "中度不全";
+            case "severe_impairment":
+                return "重度不全";
+            default:
+                return "不详";
+        }
     }
 
     /**
@@ -779,13 +845,13 @@ public class DeepSeekServiceImpl implements DeepSeekService {
     /**
      * 构建冲突检测响应
      */
-    private DrugConflictResponse buildResponse(DrugConflictRequest request, 
-                                              List<DrugConflictResult> conflicts, 
+    private DrugConflictResponse buildResponse(DrugConflictRequest request,
+                                              List<DrugConflictResult> conflicts,
                                               String generalAdvice) {
         int severeCount = 0;
         int moderateCount = 0;
         int mildCount = 0;
-        
+
         for (DrugConflictResult conflict : conflicts) {
             switch (conflict.getSeverity()) {
                 case SEVERE:
@@ -799,14 +865,14 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                     break;
             }
         }
-        
+
         DrugConflictResponse.ConflictStatistics statistics = DrugConflictResponse.ConflictStatistics.builder()
                 .totalConflicts(conflicts.size())
                 .severeCount(severeCount)
                 .moderateCount(moderateCount)
                 .mildCount(mildCount)
                 .build();
-        
+
         return DrugConflictResponse.builder()
                 .reportId(java.util.UUID.randomUUID().toString())
                 .checkTime(java.time.LocalDateTime.now())
@@ -816,6 +882,17 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                 .foodsChecked(request.getFoods())
                 .allergyHistory(request.getAllergyHistory())
                 .chronicDiseases(request.getChronicDiseases())
+                .gender(request.getGender())
+                .age(request.getAge())
+                .height(request.getHeight())
+                .weight(request.getWeight())
+                .bmi(calculateBmi(request.getHeight(), request.getWeight()))
+                .kidneyFunction(request.getKidneyFunction())
+                .liverFunction(request.getLiverFunction())
+                .isPregnant(request.getIsPregnant())
+                .isBreastfeeding(request.getIsBreastfeeding())
+                .isSmoking(request.getIsSmoking())
+                .isDrinking(request.getIsDrinking())
                 .conflicts(conflicts)
                 .hasSevereConflict(severeCount > 0)
                 .statistics(statistics)
@@ -825,11 +902,25 @@ public class DeepSeekServiceImpl implements DeepSeekService {
     }
 
     /**
+     * 计算 BMI（体重 kg / 身高 m²）
+     */
+    private java.math.BigDecimal calculateBmi(java.math.BigDecimal heightCm, java.math.BigDecimal weightKg) {
+        if (heightCm == null || weightKg == null) {
+            return null;
+        }
+        java.math.BigDecimal heightM = heightCm.divide(java.math.BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+        if (heightM.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        return weightKg.divide(heightM.multiply(heightM), 2, java.math.RoundingMode.HALF_UP);
+    }
+
+    /**
      * 创建空的响应
      */
-    private DrugConflictResponse createEmptyResponse(List<String> drugs, 
-                                                     List<String> supplements, 
-                                                     List<String> beverages, 
+    private DrugConflictResponse createEmptyResponse(List<String> drugs,
+                                                     List<String> supplements,
+                                                     List<String> beverages,
                                                      List<String> foods) {
         return DrugConflictResponse.builder()
                 .reportId(java.util.UUID.randomUUID().toString())
@@ -922,8 +1013,78 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                 }
             }
         }
-        
-        String generalAdvice = conflicts.isEmpty() 
+
+        // 检测药品-孕期冲突（仅当用户怀孕时触发）
+        if (Integer.valueOf(1).equals(request.getIsPregnant())) {
+            for (String drug : drugNames) {
+                DrugConflictResult conflict = checkDrugPregnancyConflict(drug);
+                if (conflict != null) {
+                    conflicts.add(conflict);
+                }
+            }
+        }
+
+        // 检测药品-哺乳期冲突
+        if (Integer.valueOf(1).equals(request.getIsBreastfeeding())) {
+            for (String drug : drugNames) {
+                DrugConflictResult conflict = checkDrugLactationConflict(drug);
+                if (conflict != null) {
+                    conflicts.add(conflict);
+                }
+            }
+        }
+
+        // 检测药品-肾功能不全冲突
+        if (isOrganImpaired(request.getKidneyFunction())) {
+            for (String drug : drugNames) {
+                DrugConflictResult conflict = checkDrugKidneyConflict(drug, request.getKidneyFunction());
+                if (conflict != null) {
+                    conflicts.add(conflict);
+                }
+            }
+        }
+
+        // 检测药品-肝功能不全冲突
+        if (isOrganImpaired(request.getLiverFunction())) {
+            for (String drug : drugNames) {
+                DrugConflictResult conflict = checkDrugLiverConflict(drug, request.getLiverFunction());
+                if (conflict != null) {
+                    conflicts.add(conflict);
+                }
+            }
+        }
+
+        // 检测药品-吸烟习惯冲突
+        if (Integer.valueOf(1).equals(request.getIsSmoking())) {
+            for (String drug : drugNames) {
+                DrugConflictResult conflict = checkDrugSmokingConflict(drug);
+                if (conflict != null) {
+                    conflicts.add(conflict);
+                }
+            }
+        }
+
+        // 检测药品-年龄/特殊人群冲突
+        if (request.getAge() != null) {
+            for (String drug : drugNames) {
+                DrugConflictResult conflict = checkDrugAgeConflict(drug, request.getAge());
+                if (conflict != null) {
+                    conflicts.add(conflict);
+                }
+            }
+        }
+
+        // 检测药品-体重/剂量冲突（低体重或肥胖提示）
+        if (request.getWeight() != null) {
+            for (String drug : drugNames) {
+                DrugConflictResult conflict = checkDrugWeightConflict(drug, request.getWeight());
+                if (conflict != null) {
+                    conflicts.add(conflict);
+                }
+            }
+        }
+
+        String generalAdvice = conflicts.isEmpty()
             ? "未检测到明显的药品冲突，但仍建议在医生或药师指导下使用。"
             : "检测到药品冲突，请务必咨询医生或药师后再使用。";
         
@@ -1549,7 +1710,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                     .build();
         }
         
-        if (diseaseLower.contains("胃溃疡") && 
+        if (diseaseLower.contains("胃溃疡") &&
             (drugLower.contains("阿司匹林") || drugLower.contains("布洛芬") || drugLower.contains("双氯芬酸"))) {
             return DrugConflictResult.builder()
                     .drugA(drug)
@@ -1562,7 +1723,566 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                     .alternatives(java.util.Arrays.asList("立即停止使用该药品", "咨询医生更换对胃刺激较小的药物", "告知医生您的胃溃疡病史"))
                     .build();
         }
-        
+
+        return null;
+    }
+
+    /**
+     * 判断器官功能是否处于"不全"状态（轻度/中度/重度）
+     */
+    private boolean isOrganImpaired(String organFunction) {
+        if (organFunction == null) {
+            return false;
+        }
+        String lower = organFunction.toLowerCase();
+        return lower.contains("mild_impairment")
+                || lower.contains("moderate_impairment")
+                || lower.contains("severe_impairment")
+                || lower.contains("不全");
+    }
+
+    /**
+     * 器官功能状态转中文描述
+     */
+    private String describeImpairment(String organFunction) {
+        if (organFunction == null) {
+            return "不全";
+        }
+        String lower = organFunction.toLowerCase();
+        if (lower.contains("severe") || lower.contains("重度")) {
+            return "重度不全";
+        }
+        if (lower.contains("moderate") || lower.contains("中度")) {
+            return "中度不全";
+        }
+        if (lower.contains("mild") || lower.contains("轻度")) {
+            return "轻度不全";
+        }
+        return "不全";
+    }
+
+    /**
+     * 检测药品-孕期冲突
+     */
+    private DrugConflictResult checkDrugPregnancyConflict(String drug) {
+        if (drug == null || drug.trim().isEmpty()) {
+            return null;
+        }
+        String drugLower = drug.toLowerCase();
+
+        // 利巴韦林：孕期绝对禁忌（致畸）
+        if (drugLower.contains("利巴韦林")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("孕期")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_PREGNANCY)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("利巴韦林具有明确的致畸性，孕期使用可导致胎儿严重畸形，属孕期绝对禁忌。")
+                    .conflictExplanation("您现在怀孕了，利巴韦林会导致胎儿畸形，绝对不能吃！")
+                    .riskWarning("孕期绝对禁忌，可能导致胎儿严重畸形！")
+                    .alternatives(java.util.Arrays.asList("立即停药", "咨询医生更换孕期可用药物", "如近期有妊娠计划，服药期间及停药后6个月内严格避孕"))
+                    .build();
+        }
+
+        // 异维A酸/维A酸：孕期绝对禁忌
+        if (drugLower.contains("异维a酸") || drugLower.contains("维a酸") || drugLower.contains("异维甲酸")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("孕期")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_PREGNANCY)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("维A酸类药物具有强致畸性，孕期使用可导致胎儿中枢神经系统、心血管系统等多发畸形。")
+                    .conflictExplanation("您现在怀孕了，维A酸类药物会让宝宝畸形，绝对不能碰！")
+                    .riskWarning("孕期绝对禁忌，强致畸性！")
+                    .alternatives(java.util.Arrays.asList("立即停药", "咨询皮肤科/产科医生改用孕期安全药物", "服药期间及停药后至少3个月严格避孕"))
+                    .build();
+        }
+
+        // 四环素类：孕期禁用
+        if (drugLower.contains("四环素") || drugLower.contains("多西环素") || drugLower.contains("米诺环素")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("孕期")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_PREGNANCY)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("四环素类可穿过胎盘屏障，与发育中的骨骼和牙齿中的钙结合，导致胎儿牙齿黄染、骨骼发育异常。")
+                    .conflictExplanation("您怀孕了，四环素类药物会让宝宝牙齿变黄、骨头发育不好，绝对不能吃！")
+                    .riskWarning("孕期禁用，可能导致胎儿牙齿和骨骼发育异常！")
+                    .alternatives(java.util.Arrays.asList("立即停药", "咨询医生改用青霉素类或头孢类抗生素（需先确认无过敏史）"))
+                    .build();
+        }
+
+        // 喹诺酮类（沙星）：孕期禁用
+        if (drugLower.contains("沙星") || drugLower.contains("诺氟沙星") || drugLower.contains("氧氟沙星")
+                || drugLower.contains("环丙沙星") || drugLower.contains("左氧氟沙星")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("孕期")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_PREGNANCY)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("喹诺酮类动物实验显示对幼年动物的软骨有毒性，孕期使用可能影响胎儿软骨发育。")
+                    .conflictExplanation("您怀孕了，喹诺酮类（沙星）可能影响宝宝骨骼发育，不能服用！")
+                    .riskWarning("孕期禁用，可能影响胎儿软骨发育！")
+                    .alternatives(java.util.Arrays.asList("立即停药", "咨询医生改用孕期安全的抗生素"))
+                    .build();
+        }
+
+        // 氨基糖苷类（链霉素/庆大霉素/阿米卡星）：孕期慎用
+        if (drugLower.contains("链霉素") || drugLower.contains("庆大霉素") || drugLower.contains("阿米卡星")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("孕期")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_PREGNANCY)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("氨基糖苷类可透过胎盘屏障，对胎儿第Ⅷ对脑神经及肾脏有毒性，可能导致先天性耳聋和肾损害。")
+                    .conflictExplanation("您怀孕了，这类抗生素可能让宝宝听力受损、伤肾，禁用！")
+                    .riskWarning("孕期禁用，可能导致胎儿耳聋和肾损害！")
+                    .alternatives(java.util.Arrays.asList("立即停药", "咨询医生改用其他安全的抗生素"))
+                    .build();
+        }
+
+        // 华法林：孕期（尤其孕早期）致畸
+        if (drugLower.contains("华法林")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("孕期")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_PREGNANCY)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("华法林可透过胎盘屏障，孕早期使用可能导致胎儿华法林综合征（鼻骨发育不良、点状骨骺等），孕中晚期可致胎儿出血、神经系统异常。")
+                    .conflictExplanation("您怀孕了，华法林会让宝宝畸形或出血，非常危险！")
+                    .riskWarning("孕期禁用，可能致畸或致胎儿出血！")
+                    .alternatives(java.util.Arrays.asList("立即停药并就医", "孕期抗凝可改用低分子肝素"))
+                    .build();
+        }
+
+        // ACEI/ARB（普利/沙坦）：孕期中后期禁用
+        if (drugLower.contains("普利") || drugLower.contains("沙坦")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("孕期")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_PREGNANCY)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("ACEI/ARB类降压药在孕中晚期使用可导致胎儿肾衰竭、羊水过少、颅骨发育不全等严重不良结局。")
+                    .conflictExplanation("您怀孕了，这类降压药会损害宝宝肾脏和发育，不能吃！")
+                    .riskWarning("孕中晚期禁用，可能导致胎儿肾衰竭！")
+                    .alternatives(java.util.Arrays.asList("立即停药并就医", "孕期可改用甲基多巴、拉贝洛尔等孕期安全降压药"))
+                    .build();
+        }
+
+        // 甲硝唑：孕早期慎用
+        if (drugLower.contains("甲硝唑") && !drugLower.contains("替硝唑")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("孕期")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_PREGNANCY)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("甲硝唑动物实验有致畸风险，孕早期（前3个月）一般建议避免使用；孕中晚期在医生评估下可使用。")
+                    .conflictExplanation("您怀孕了，甲硝唑在孕早期可能对宝宝有影响，务必先咨询医生！")
+                    .riskWarning("孕早期尽量避免使用，必须使用时需医生严格评估。")
+                    .alternatives(java.util.Arrays.asList("咨询医生评估是否必须使用", "可用克林霉素等更安全的替代药"))
+                    .build();
+        }
+
+        return null;
+    }
+
+    /**
+     * 检测药品-哺乳期冲突
+     */
+    private DrugConflictResult checkDrugLactationConflict(String drug) {
+        if (drug == null || drug.trim().isEmpty()) {
+            return null;
+        }
+        String drugLower = drug.toLowerCase();
+
+        // 哺乳期禁用：四环素类、喹诺酮类、氯霉素、磺胺类、放射性药物、口服抗凝
+        if (drugLower.contains("氯霉素")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("哺乳期")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_LACTATION)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("氯霉素可分泌入乳汁，导致婴儿灰婴综合征（循环衰竭、皮肤灰紫），并抑制骨髓。")
+                    .conflictExplanation("您正在哺乳，氯霉素会让宝宝出现危险的\"灰婴综合征\"，必须停药！")
+                    .riskWarning("哺乳期禁用，可能导致婴儿灰婴综合征！")
+                    .alternatives(java.util.Arrays.asList("立即停药", "咨询医生改用安全的抗生素", "用药期间暂停哺乳并定期吸奶维持泌乳"))
+                    .build();
+        }
+
+        if (drugLower.contains("四环素") || drugLower.contains("多西环素") || drugLower.contains("米诺环素")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("哺乳期")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_LACTATION)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("四环素类可分泌入乳汁，与乳汁中钙结合影响婴儿骨骼和牙齿发育。")
+                    .conflictExplanation("您正在哺乳，四环素类药物会让宝宝牙齿骨骼受影响，谨慎使用！")
+                    .riskWarning("哺乳期慎用，短期小剂量可在医生指导下使用。")
+                    .alternatives(java.util.Arrays.asList("咨询医生改用青霉素类或头孢类"))
+                    .build();
+        }
+
+        if (drugLower.contains("沙星") || drugLower.contains("诺氟沙星") || drugLower.contains("氧氟沙星")
+                || drugLower.contains("环丙沙星") || drugLower.contains("左氧氟沙星")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("哺乳期")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_LACTATION)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("喹诺酮类可分泌入乳汁，动物实验对幼年动物软骨有毒性，理论上可能影响婴儿关节发育。")
+                    .conflictExplanation("您正在哺乳，沙星类药物可能影响宝宝关节发育，谨慎使用！")
+                    .riskWarning("哺乳期慎用，建议改用其他抗生素。")
+                    .alternatives(java.util.Arrays.asList("咨询医生改用青霉素类或头孢类"))
+                    .build();
+        }
+
+        if (drugLower.contains("磺胺")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("哺乳期")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_LACTATION)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("磺胺类可分泌入乳汁，导致早产儿、新生儿发生核黄疸及溶血性贫血。")
+                    .conflictExplanation("您正在哺乳，磺胺类药物可能让宝宝发生黄疸和贫血，谨慎使用！")
+                    .riskWarning("哺乳期（尤其早产儿）慎用。")
+                    .alternatives(java.util.Arrays.asList("咨询医生改用更安全的抗生素", "用药期间暂停哺乳"))
+                    .build();
+        }
+
+        // 抗甲状腺药（他巴唑/丙硫氧嘧啶）哺乳期慎用
+        if (drugLower.contains("甲巯咪唑") || drugLower.contains("他巴唑")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("哺乳期")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_LACTATION)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("抗甲状腺药可分泌入乳汁，影响婴儿甲状腺功能。")
+                    .conflictExplanation("您正在哺乳，这类抗甲状腺药可能影响宝宝甲状腺功能，谨慎使用！")
+                    .riskWarning("哺乳期使用需医生评估，监测婴儿甲状腺功能。")
+                    .alternatives(java.util.Arrays.asList("如必须使用，丙硫氧嘧啶相对更安全", "定期检查婴儿甲状腺功能"))
+                    .build();
+        }
+
+        return null;
+    }
+
+    /**
+     * 检测药品-肾功能不全冲突
+     */
+    private DrugConflictResult checkDrugKidneyConflict(String drug, String kidneyFunction) {
+        if (drug == null || drug.trim().isEmpty()) {
+            return null;
+        }
+        String drugLower = drug.toLowerCase();
+        String desc = describeImpairment(kidneyFunction);
+        boolean severe = kidneyFunction != null && kidneyFunction.toLowerCase().contains("severe");
+
+        // 氨基糖苷类抗生素：肾毒性
+        if (drugLower.contains("庆大霉素") || drugLower.contains("阿米卡星") || drugLower.contains("链霉素")
+                || drugLower.contains("卡那霉素") || drugLower.contains("妥布霉素")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("肾功能" + desc)
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_KIDNEY)
+                    .severity(severe ? DrugConflictResult.SeverityLevel.SEVERE : DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("氨基糖苷类抗生素具有明显肾毒性，肾功能不全患者使用会进一步损害肾功能，并因排泄减少导致药物蓄积中毒。")
+                    .conflictExplanation("您肾功能不好，这类抗生素会进一步损害您的肾脏，需要谨慎使用！")
+                    .riskWarning(severe ? "重度肾功能不全禁用！" : "肾功能不全需减量或延长给药间隔，监测肾功能。")
+                    .alternatives(java.util.Arrays.asList("咨询医生改用其他肾毒性较小的抗生素", "必要时进行血药浓度监测"))
+                    .build();
+        }
+
+        // 非甾体抗炎药：影响肾灌注
+        if (drugLower.contains("布洛芬") || drugLower.contains("双氯芬酸") || drugLower.contains("消炎痛")
+                || drugLower.contains("尼美舒利") || drugLower.contains("塞来昔布") || drugLower.contains("美洛昔康")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("肾功能" + desc)
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_KIDNEY)
+                    .severity(severe ? DrugConflictResult.SeverityLevel.SEVERE : DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("非甾体抗炎药通过抑制前列腺素合成影响肾脏血流灌注，肾功能不全患者使用可能诱发急性肾损伤或加重肾损害。")
+                    .conflictExplanation("您肾功能不好，这类止痛药会减少肾脏血流，可能让肾病更严重！")
+                    .riskWarning(severe ? "重度肾功能不全禁用！" : "肾功能不全慎用，避免长期使用。")
+                    .alternatives(java.util.Arrays.asList("咨询医生改用对乙酰氨基酚", "避免长期使用，密切监测肾功能"))
+                    .build();
+        }
+
+        // ACEI/ARB：肾功能不全高钾血症风险
+        if (drugLower.contains("普利") || drugLower.contains("沙坦")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("肾功能" + desc)
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_KIDNEY)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("ACEI/ARB类药物减少钾排泄并可能降低肾小球滤过率，肾功能不全患者使用有高钾血症和肾功能恶化的风险。")
+                    .conflictExplanation("您肾功能不好，这类降压药会让血钾升高、肾功能恶化，谨慎使用！")
+                    .riskWarning("需在医生指导下使用，定期监测肾功能和血钾。")
+                    .alternatives(java.util.Arrays.asList("咨询医生评估是否需要调整剂量", "定期监测血钾、肌酐"))
+                    .build();
+        }
+
+        // 二甲双胍：肾功能不全禁用/慎用
+        if (drugLower.contains("二甲双胍")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("肾功能" + desc)
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_KIDNEY)
+                    .severity(severe ? DrugConflictResult.SeverityLevel.SEVERE : DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("二甲双胍主要经肾脏排泄，肾功能不全患者使用易发生药物蓄积，增加乳酸酸中毒风险。")
+                    .conflictExplanation("您肾功能不好，二甲双胍会在体内堆积，可能引起危险的乳酸酸中毒！")
+                    .riskWarning(severe ? "重度肾功能不全禁用！" : "需根据肌酐清除率减量使用。")
+                    .alternatives(java.util.Arrays.asList("咨询医生评估是否换用其他降糖药", "提供近期肾功能检查结果给医生参考"))
+                    .build();
+        }
+
+        return null;
+    }
+
+    /**
+     * 检测药品-肝功能不全冲突
+     */
+    private DrugConflictResult checkDrugLiverConflict(String drug, String liverFunction) {
+        if (drug == null || drug.trim().isEmpty()) {
+            return null;
+        }
+        String drugLower = drug.toLowerCase();
+        String desc = describeImpairment(liverFunction);
+        boolean severe = liverFunction != null && liverFunction.toLowerCase().contains("severe");
+
+        // 对乙酰氨基酚（扑热息痛/泰诺/感冒灵等复方感冒药）：肝毒性
+        if (drugLower.contains("对乙酰氨基酚") || drugLower.contains("扑热息痛") || drugLower.contains("泰诺")
+                || drugLower.contains("感冒灵") || drugLower.contains("感康") || drugLower.contains("白加黑")
+                || drugLower.contains("复方氨酚") || drugLower.contains("氨酚烷胺") || drugLower.contains("氨咖黄敏")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("肝功能" + desc)
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_LIVER)
+                    .severity(severe ? DrugConflictResult.SeverityLevel.SEVERE : DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("对乙酰氨基酚主要在肝脏代谢，经CYP450酶系产生有毒中间代谢产物（NAPQI），由谷胱甘肽解毒。肝功能不全时解毒能力下降，易发生肝损伤。")
+                    .conflictExplanation("您肝功能不好，含有对乙酰氨基酚的药物会加重肝脏损伤，谨慎使用！")
+                    .riskWarning(severe ? "重度肝功能不全禁用！" : "肝功能不全应避免大剂量或长期使用，监测肝功能。")
+                    .alternatives(java.util.Arrays.asList("单次剂量不超过300mg，24小时内不超过2g", "咨询医生选择对肝脏影响较小的解热镇痛药", "定期检查肝功能"))
+                    .build();
+        }
+
+        // 他汀类调脂药：肝功能异常
+        if (drugLower.contains("他汀") || drugLower.contains("阿托伐") || drugLower.contains("辛伐")
+                || drugLower.contains("瑞舒伐") || drugLower.contains("普伐") || drugLower.contains("氟伐")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("肝功能" + desc)
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_LIVER)
+                    .severity(severe ? DrugConflictResult.SeverityLevel.SEVERE : DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("他汀类主要经肝脏代谢，肝功能不全患者使用有肝酶升高、横纹肌溶解风险。")
+                    .conflictExplanation("您肝功能不好，他汀类降脂药可能伤肝，需要谨慎！")
+                    .riskWarning(severe ? "活动性肝病禁用！" : "肝功能不全应减量，监测肝酶和肌酶。")
+                    .alternatives(java.util.Arrays.asList("咨询医生评估是否需要调整剂量", "定期监测肝功能、肌酸激酶"))
+                    .build();
+        }
+
+        // 抗结核药（异烟肼/利福平/吡嗪酰胺）：肝毒性
+        if (drugLower.contains("异烟肼") || drugLower.contains("利福平") || drugLower.contains("吡嗪酰胺")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("肝功能" + desc)
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_LIVER)
+                    .severity(severe ? DrugConflictResult.SeverityLevel.SEVERE : DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("一线抗结核药均具有不同程度的肝毒性，肝功能不全患者使用会进一步加重肝损伤。")
+                    .conflictExplanation("您肝功能不好，抗结核药伤肝，需要严密监测！")
+                    .riskWarning(severe ? "重度肝功能不全禁用！" : "需在医生指导下使用，定期监测肝功能。")
+                    .alternatives(java.util.Arrays.asList("咨询医生评估是否需要调整方案", "每2-4周监测肝功能"))
+                    .build();
+        }
+
+        return null;
+    }
+
+    /**
+     * 检测药品-吸烟习惯冲突
+     */
+    private DrugConflictResult checkDrugSmokingConflict(String drug) {
+        if (drug == null || drug.trim().isEmpty()) {
+            return null;
+        }
+        String drugLower = drug.toLowerCase();
+
+        // 吸烟可诱导 CYP1A2，加快以下药物代谢，降低疗效
+        if (drugLower.contains("茶碱") || drugLower.contains("氨茶碱")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("吸烟习惯")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_SMOKING)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("吸烟可诱导肝药酶CYP1A2活性，加快茶碱代谢，降低茶碱血药浓度和疗效；戒烟后则可能导致茶碱浓度上升而中毒，需及时调整剂量。")
+                    .conflictExplanation("您吸烟，会加快茶碱在体内的清除，让药效变差；戒烟时也要注意调整剂量。")
+                    .riskWarning("吸烟会降低茶碱疗效，戒烟后可能出现茶碱过量。")
+                    .alternatives(java.util.Arrays.asList("告知医生您的吸烟史，由医生调整剂量", "戒烟是最好的选择", "戒烟后及时复查血药浓度"))
+                    .build();
+        }
+
+        if (drugLower.contains("氯丙嗪") || drugLower.contains("奋乃静") || drugLower.contains("氟哌啶醇")
+                || drugLower.contains("利培酮") || drugLower.contains("奥氮平")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("吸烟习惯")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_SMOKING)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("吸烟诱导CYP1A2代谢多种抗精神病药物（如氯丙嗪、奥氮平、氟哌啶醇等），降低血药浓度和疗效，戒烟后可能出现剂量过大。")
+                    .conflictExplanation("您吸烟，会加快抗精神病药代谢，让药效变差；如戒烟需及时调整剂量。")
+                    .riskWarning("吸烟会影响抗精神病药疗效，戒烟后需重新评估。")
+                    .alternatives(java.util.Arrays.asList("戒烟是最好的选择", "戒烟时及时复诊调整药物剂量"))
+                    .build();
+        }
+
+        if (drugLower.contains("安定") || drugLower.contains("地西泮") || drugLower.contains("唑仑")
+                || drugLower.contains("苯二氮") || drugLower.contains("阿普唑仑")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("吸烟习惯")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_SMOKING)
+                    .severity(DrugConflictResult.SeverityLevel.MILD)
+                    .conflictMechanism("吸烟可轻度诱导苯二氮卓类药物代谢，降低其镇静作用；与吸烟的呼吸系统影响叠加，吸烟者使用镇静药时呼吸抑制风险增加。")
+                    .conflictExplanation("您吸烟，会轻度降低安眠药效果；同时吸烟对呼吸系统有害，请尽量戒烟。")
+                    .riskWarning("吸烟可能影响镇静药效果，戒烟可获益更大。")
+                    .alternatives(java.util.Arrays.asList("戒烟并复诊评估", "如出现过度嗜睡需及时就医"))
+                    .build();
+        }
+
+        // 口服避孕药：吸烟增加血栓风险
+        if (drugLower.contains("避孕") || drugLower.contains("雌激素") || drugLower.contains("炔雌醇")) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("吸烟习惯")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_SMOKING)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("吸烟（尤其≥35岁）合并使用含雌激素的口服避孕药会显著增加心肌梗死、脑卒中等血栓栓塞风险。")
+                    .conflictExplanation("您吸烟又吃避孕药，血栓和心梗风险会大大增加，非常危险！")
+                    .riskWarning("吸烟合并口服避孕药显著增加心血管风险，35岁以上吸烟者属禁忌！")
+                    .alternatives(java.util.Arrays.asList("强烈建议戒烟", "咨询医生改用非激素避孕方法", "35岁以上吸烟者禁用此类避孕药"))
+                    .build();
+        }
+
+        return null;
+    }
+
+    /**
+     * 检测药品-年龄/特殊人群冲突
+     */
+    private DrugConflictResult checkDrugAgeConflict(String drug, Integer age) {
+        if (drug == null || drug.trim().isEmpty() || age == null) {
+            return null;
+        }
+        String drugLower = drug.toLowerCase();
+
+        // 儿童禁用：氟喹诺酮类（影响软骨发育）
+        if (age < 18 && (drugLower.contains("沙星") || drugLower.contains("诺氟沙星") || drugLower.contains("氧氟沙星")
+                || drugLower.contains("环丙沙星") || drugLower.contains("左氧氟沙星"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("儿童（18岁以下）")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_AGE)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("氟喹诺酮类在动物实验中对幼年动物的承重关节软骨有毒性，18岁以下儿童使用可能影响骨骼发育。")
+                    .conflictExplanation("未满18岁不能吃沙星类药物，会影响骨骼发育！")
+                    .riskWarning("18岁以下儿童禁用！")
+                    .alternatives(java.util.Arrays.asList("咨询医生改用儿童安全的抗生素（如阿莫西林、头孢类）"))
+                    .build();
+        }
+
+        // 8岁以下儿童禁用四环素类
+        if (age < 8 && (drugLower.contains("四环素") || drugLower.contains("多西环素") || drugLower.contains("米诺环素"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("8岁以下儿童")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_AGE)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("8岁以下儿童使用四环素类药物会导致牙齿永久性黄染、牙釉质发育不全，并可能影响骨骼生长。")
+                    .conflictExplanation("8岁以下儿童不能吃四环素类药物，会让牙齿永久变黄！")
+                    .riskWarning("8岁以下儿童禁用！")
+                    .alternatives(java.util.Arrays.asList("咨询医生改用儿童安全的抗生素"))
+                    .build();
+        }
+
+        // 2岁以下儿童禁用可待因/右美沙芬
+        if (age < 2 && (drugLower.contains("可待因") || drugLower.contains("右美沙芬"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("2岁以下儿童")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_AGE)
+                    .severity(DrugConflictResult.SeverityLevel.SEVERE)
+                    .conflictMechanism("2岁以下儿童使用可待因/右美沙芬有呼吸抑制风险，甚至致死。")
+                    .conflictExplanation("2岁以下儿童不能吃这类止咳药，可能抑制呼吸，非常危险！")
+                    .riskWarning("2岁以下儿童禁用！")
+                    .alternatives(java.util.Arrays.asList("咨询儿科医生选择儿童安全的止咳药", "注意保持室内湿度、少量多次喂水"))
+                    .build();
+        }
+
+        // 老年人慎用：长半衰期苯二氮卓类
+        if (age >= 65 && (drugLower.contains("地西泮") || drugLower.contains("安定") || drugLower.contains("硝西泮")
+                || drugLower.contains("艾司唑仑"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("老年（65岁以上）")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_AGE)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("老年人对长半衰期苯二氮卓类药物敏感性增加、代谢减慢，容易出现过度镇静、跌倒、认知障碍等不良反应。")
+                    .conflictExplanation("您年纪较大，长效安眠药会让您白天嗜睡、容易摔倒，要谨慎！")
+                    .riskWarning("老年人慎用，易致跌倒和认知障碍。")
+                    .alternatives(java.util.Arrays.asList("咨询医生改用短效制剂（如唑吡坦）", "从最小有效剂量开始", "注意防跌倒"))
+                    .build();
+        }
+
+        // 老年人慎用：第一代抗组胺药（嗜睡/抗胆碱能）
+        if (age >= 65 && (drugLower.contains("扑尔敏") || drugLower.contains("苯海拉明")
+                || drugLower.contains("异丙嗪") || drugLower.contains("赛庚啶"))) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("老年（65岁以上）")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_AGE)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("第一代抗组胺药具有明显抗胆碱能作用和嗜睡作用，老年人使用增加跌倒、便秘、尿潴留、意识模糊风险。")
+                    .conflictExplanation("您年纪较大，这类老式抗过敏药会让您嗜睡、便秘，还可能迷糊！")
+                    .riskWarning("老年人慎用，Beers标准列入不适当用药。")
+                    .alternatives(java.util.Arrays.asList("咨询医生改用第二代抗组胺药（如氯雷他定、西替利嗪）"))
+                    .build();
+        }
+
+        return null;
+    }
+
+    /**
+     * 检测药品-体重/剂量冲突
+     */
+    private DrugConflictResult checkDrugWeightConflict(String drug, java.math.BigDecimal weightKg) {
+        if (drug == null || drug.trim().isEmpty() || weightKg == null) {
+            return null;
+        }
+        // 仅作辅助提示，不阻断用药；由医生评估剂量
+        // 这里只标记极端低体重（<40kg）或肥胖（BMI≥28，需配合身高，此处简化判断>90kg）
+        String drugLower = drug.toLowerCase();
+
+        // 化疗/免疫抑制剂、强效降糖药、强效降压药等需要按体重精确计量的药物
+        boolean needsWeightBasedDosing = drugLower.contains("甲氨蝶呤") || drugLower.contains("环磷酰胺")
+                || drugLower.contains("顺铂") || drugLower.contains("卡铂")
+                || drugLower.contains("胰岛素") || drugLower.contains("肝素");
+
+        if (!needsWeightBasedDosing) {
+            return null;
+        }
+
+        if (weightKg.compareTo(java.math.BigDecimal.valueOf(40)) < 0) {
+            return DrugConflictResult.builder()
+                    .drugA(drug)
+                    .drugB("低体重（" + weightKg + "kg）")
+                    .conflictType(DrugConflictResult.ConflictType.DRUG_WEIGHT)
+                    .severity(DrugConflictResult.SeverityLevel.MODERATE)
+                    .conflictMechanism("该药品需根据体重计算剂量，低体重患者按常规剂量给药可能导致剂量过大。")
+                    .conflictExplanation("您体重偏轻（" + weightKg + "kg），这个药通常按体重给药，请医生根据体重精确计算剂量！")
+                    .riskWarning("低体重患者需严格按体重调整剂量。")
+                    .alternatives(java.util.Arrays.asList("告知医生您准确的体重", "由医生精确计算剂量"))
+                    .build();
+        }
+
         return null;
     }
 

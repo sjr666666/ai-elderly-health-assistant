@@ -47,8 +47,17 @@ public class UserServiceImpl implements UserService {
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRealName(request.getRealName());
         user.setAge(request.getAge());
+        user.setGender(request.getGender());
+        user.setHeight(request.getHeight());
+        user.setWeight(request.getWeight());
         user.setAllergyHistory(request.getAllergyHistory());
         user.setChronicDiseases(request.getChronicDiseases());
+        user.setKidneyFunction(request.getKidneyFunction());
+        user.setLiverFunction(request.getLiverFunction());
+        user.setIsPregnant(request.getIsPregnant());
+        user.setIsBreastfeeding(request.getIsBreastfeeding());
+        user.setIsSmoking(request.getIsSmoking());
+        user.setIsDrinking(request.getIsDrinking());
         user.setRole(SysUser.Role.ELDER.getCode());
 
         userMapper.insert(user);
@@ -80,8 +89,17 @@ public class UserServiceImpl implements UserService {
                 .username(user.getUsername())
                 .realName(user.getRealName())
                 .age(user.getAge())
+                .gender(user.getGender())
+                .height(user.getHeight())
+                .weight(user.getWeight())
                 .allergyHistory(user.getAllergyHistory())
                 .chronicDiseases(user.getChronicDiseases())
+                .kidneyFunction(user.getKidneyFunction())
+                .liverFunction(user.getLiverFunction())
+                .isPregnant(user.getIsPregnant())
+                .isBreastfeeding(user.getIsBreastfeeding())
+                .isSmoking(user.getIsSmoking())
+                .isDrinking(user.getIsDrinking())
                 .role(user.getRole())
                 .build();
     }
@@ -99,17 +117,33 @@ public class UserServiceImpl implements UserService {
                 .userId(String.valueOf(user.getUserId()))  // 转换为 String
                 .realName(user.getRealName())
                 .age(user.getAge())
+                .gender(user.getGender())
+                .height(user.getHeight())
+                .weight(user.getWeight())
                 .allergyHistory(user.getAllergyHistory())
                 .chronicDiseases(user.getChronicDiseases())
+                .kidneyFunction(user.getKidneyFunction())
+                .liverFunction(user.getLiverFunction())
+                .isPregnant(user.getIsPregnant())
+                .isBreastfeeding(user.getIsBreastfeeding())
+                .isSmoking(user.getIsSmoking())
+                .isDrinking(user.getIsDrinking())
                 .role(user.getRole())
                 .build();
     }
 
     @Override
     public void updateUserProfile(Long userId, UserProfileUpdateRequest request) {
-        logger.info("更新用户档案信息 - userId: {}, realName: {}, age: {}, allergyHistory: {}, chronicDiseases: {}",
-                userId, request.getRealName(), request.getAge(), request.getAllergyHistory(), request.getChronicDiseases());
-        
+        logger.info("更新用户档案信息 - userId: {}, realName: {}, age: {}, gender: {}, height: {}, weight: {}, "
+                        + "allergyHistory: {}, chronicDiseases: {}, kidneyFunction: {}, liverFunction: {}, "
+                        + "isPregnant: {}, isBreastfeeding: {}, isSmoking: {}, isDrinking: {}",
+                userId, request.getRealName(), request.getAge(), request.getGender(),
+                request.getHeight(), request.getWeight(),
+                request.getAllergyHistory(), request.getChronicDiseases(),
+                request.getKidneyFunction(), request.getLiverFunction(),
+                request.getIsPregnant(), request.getIsBreastfeeding(),
+                request.getIsSmoking(), request.getIsDrinking());
+
         LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(SysUser::getUserId, userId);
         SysUser user = userMapper.selectOne(queryWrapper);
@@ -126,6 +160,18 @@ public class UserServiceImpl implements UserService {
         if (request.getAge() != null) {
             user.setAge(request.getAge());
         }
+        // 更新性别
+        if (request.getGender() != null && !request.getGender().trim().isEmpty()) {
+            user.setGender(request.getGender().trim().toLowerCase());
+        }
+        // 更新身高
+        if (request.getHeight() != null) {
+            user.setHeight(request.getHeight());
+        }
+        // 更新体重
+        if (request.getWeight() != null) {
+            user.setWeight(request.getWeight());
+        }
         // 更新过敏史
         if (request.getAllergyHistory() != null) {
             user.setAllergyHistory(request.getAllergyHistory());
@@ -133,6 +179,30 @@ public class UserServiceImpl implements UserService {
         // 更新慢性病史
         if (request.getChronicDiseases() != null) {
             user.setChronicDiseases(request.getChronicDiseases());
+        }
+        // 更新肾功能状态
+        if (request.getKidneyFunction() != null && !request.getKidneyFunction().trim().isEmpty()) {
+            user.setKidneyFunction(request.getKidneyFunction().trim().toLowerCase());
+        }
+        // 更新肝功能状态
+        if (request.getLiverFunction() != null && !request.getLiverFunction().trim().isEmpty()) {
+            user.setLiverFunction(request.getLiverFunction().trim().toLowerCase());
+        }
+        // 更新孕期状态
+        if (request.getIsPregnant() != null) {
+            user.setIsPregnant(request.getIsPregnant());
+        }
+        // 更新哺乳期状态
+        if (request.getIsBreastfeeding() != null) {
+            user.setIsBreastfeeding(request.getIsBreastfeeding());
+        }
+        // 更新吸烟状态
+        if (request.getIsSmoking() != null) {
+            user.setIsSmoking(request.getIsSmoking());
+        }
+        // 更新饮酒状态
+        if (request.getIsDrinking() != null) {
+            user.setIsDrinking(request.getIsDrinking());
         }
 
         int result = userMapper.updateById(user);

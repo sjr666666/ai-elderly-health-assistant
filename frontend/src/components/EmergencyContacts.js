@@ -16,8 +16,26 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedPrimaryId, setSelectedPrimaryId] = useState(null);
+  const [editingContact, setEditingContact] = useState(null);
 
-  const handleAddContact = async () => {
+  const closeContactForm = () => {
+    setShowAddForm(false);
+    setEditingContact(null);
+    setNewContact({ name: '', phone: '', email: '', relationship: '' });
+  };
+
+  const handleEditContact = (contact) => {
+    setEditingContact(contact);
+    setNewContact({
+      name: contact.name || '',
+      phone: contact.phone || '',
+      email: contact.email || '',
+      relationship: contact.relationship || ''
+    });
+    setShowAddForm(true);
+  };
+
+  const handleSubmitContact = async () => {
     if (!newContact.name || !newContact.phone) {
       showToast('请填写姓名和电话', 'warning');
       return;
@@ -31,7 +49,36 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
     setIsSubmitting(true);
 
     try {
-      console.log('添加联系人请求 - name:', newContact.name, 'phone:', newContact.phone, 'elderId:', userId);
+      if (editingContact) {
+        // 编辑模式：调用 PUT 更新联系人
+        const response = await fetch('/api/emergency/emergency-contact', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id: editingContact.id,
+            elderId: editingContact.elderId || userId,
+            name: newContact.name,
+            phone: newContact.phone,
+            email: newContact.email || '',
+            relationship: newContact.relationship || '',
+            isPrimary: editingContact.isPrimary
+          })
+        });
+
+        const result = await response.json();
+        if (result.code === 200) {
+          onAdd && onAdd();
+          closeContactForm();
+          showToast('修改成功', 'success');
+        } else {
+          showToast(result.message || '修改失败', 'error');
+        }
+        return;
+      }
+
+      // 新增模式：调用 POST 添加联系人
       const response = await fetch('/api/emergency/v1/contacts', {
         method: 'POST',
         headers: {
@@ -46,22 +93,18 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
         })
       });
 
-      console.log('添加联系人响应状态:', response.status);
       const result = await response.json();
-      console.log('添加联系人响应数据:', result);
 
       if (result.code === 200) {
         onAdd && onAdd();
-        setNewContact({ name: '', phone: '', email: '', relationship: '' });
-        setShowAddForm(false);
+        closeContactForm();
         showToast('添加成功', 'success');
       } else {
-        console.error('添加联系人失败，响应码:', result.code, '消息:', result.message);
         showToast(result.message || '添加失败', 'error');
       }
     } catch (error) {
-      console.error('添加联系人失败:', error);
-      showToast('添加失败，请检查网络连接', 'error');
+      console.error('保存联系人失败:', error);
+      showToast(editingContact ? '修改失败，请检查网络连接' : '添加失败，请检查网络连接', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -247,13 +290,33 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
                       {contact.relationship && <span className="contact-item">👨‍👩 {contact.relationship}</span>}
                     </div>
                   </div>
-                  <button
-                    className="btn-delete"
-                    onClick={() => handleDeleteContact(contact.id)}
-                    title="删除联系人"
-                  >
-                    🗑️
-                  </button>
+                  {!isEditMode && (
+                    <div className="contact-actions">
+                      <button
+                        className="btn-edit"
+                        onClick={() => handleEditContact(contact)}
+                        title="编辑联系人"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        className="btn-delete"
+                        onClick={() => handleDeleteContact(contact.id)}
+                        title="删除联系人"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  )}
+                  {isEditMode && (
+                    <button
+                      className="btn-delete"
+                      onClick={() => handleDeleteContact(contact.id)}
+                      title="删除联系人"
+                    >
+                      🗑️
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -261,6 +324,9 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
 
           {showAddForm ? (
             <div className="add-contact-form">
+              <h3 className="form-title">
+                {editingContact ? '✏️ 编辑联系人' : '➕ 添加紧急联系人'}
+              </h3>
               <div className="form-group">
                 <label className="form-label">姓名</label>
                 <input
@@ -313,24 +379,30 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
 
               <div className="form-actions">
                 <button
-                  onClick={() => setShowAddForm(false)}
+                  onClick={closeContactForm}
                   className="btn btn-secondary"
                 >
                   取消
                 </button>
                 <button
-                  onClick={handleAddContact}
+                  onClick={handleSubmitContact}
                   className="btn btn-primary"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? '添加中...' : '添加'}
+                  {isSubmitting
+                    ? (editingContact ? '保存中...' : '添加中...')
+                    : (editingContact ? '保存' : '添加')}
                 </button>
               </div>
             </div>
           ) : (
             <div className="button-group">
               <button
-                onClick={() => setShowAddForm(true)}
+                onClick={() => {
+                  setEditingContact(null);
+                  setNewContact({ name: '', phone: '', email: '', relationship: '' });
+                  setShowAddForm(true);
+                }}
                 className="btn btn-add-contact"
               >
                 ➕ 添加紧急联系人

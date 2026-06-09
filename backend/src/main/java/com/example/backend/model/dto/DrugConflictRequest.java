@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -48,6 +49,64 @@ public class DrugConflictRequest {
      * 如"高血压、糖尿病、心脏病"，用于检测药品与基础疾病的禁忌
      */
     private String chronicDiseases;
+
+    /**
+     * 性别：male/female（可选）
+     * 用于妊娠/性别相关用药风险评估
+     */
+    private String gender;
+
+    /**
+     * 年龄（可选）
+     * 用于老人/儿童等特殊人群用药风险评估
+     */
+    private Integer age;
+
+    /**
+     * 身高（cm）（可选）
+     * 用于BMI/剂量计算等用药评估
+     */
+    private BigDecimal height;
+
+    /**
+     * 体重（kg）（可选）
+     * 用于BMI/剂量计算等用药评估
+     */
+    private BigDecimal weight;
+
+    /**
+     * 肾功能状态（可选）
+     * normal/mild_impairment/moderate_impairment/severe_impairment/unknown
+     */
+    private String kidneyFunction;
+
+    /**
+     * 肝功能状态（可选）
+     * normal/mild_impairment/moderate_impairment/severe_impairment/unknown
+     */
+    private String liverFunction;
+
+    /**
+     * 是否孕期：0否/1是（可选）
+     */
+    private Integer isPregnant;
+
+    /**
+     * 是否哺乳期：0否/1是（可选）
+     */
+    private Integer isBreastfeeding;
+
+    /**
+     * 是否吸烟：0否/1是（可选）
+     * 用于吸烟相关用药风险评估
+     */
+    private Integer isSmoking;
+
+    /**
+     * 是否饮酒：0否/1是（可选）
+     * 用于酒精相关用药风险评估
+     */
+    private Integer isDrinking;
 
     /**
      * 是否需要详细解释
