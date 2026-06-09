@@ -541,7 +541,17 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                             .anyMatch(c -> c.getSeverity() == DrugConflictResult.SeverityLevel.SEVERE));
                         result.setStatistics(buildStatistics(result.getConflicts()));
                     }
-                    
+
+                    // 关键安全检查：基于健康档案的 7 个新维度本地规则必须强制生效
+                    // 孕期/哺乳/肾肝/吸烟/年龄/体重/饮食：这些是药学硬禁忌，不应被 AI 漏检
+                    result.getConflicts().addAll(collectProfileBasedConflicts(request));
+
+                    // 去重（按 drugA+drugB+conflictType 唯一）
+                    result.setConflicts(deduplicateConflicts(result.getConflicts()));
+                    result.setHasSevereConflict(result.getConflicts().stream()
+                        .anyMatch(c -> c.getSeverity() == DrugConflictResult.SeverityLevel.SEVERE));
+                    result.setStatistics(buildStatistics(result.getConflicts()));
+
                     return result;
                 } else {
                     logger.info("DeepSeek AI未能检测到有效冲突信息，使用本地规则检测");
@@ -2290,9 +2300,9 @@ public class DeepSeekServiceImpl implements DeepSeekService {
 
         // 直接使用本地规则检测
         DrugConflictResponse response = analyzeWithLocalRules(request);
-        
+
         // 调试日志：打印检测结果
-        logger.info("快速本地冲突检测完成 - 检测到 {} 个冲突", 
+        logger.info("快速本地冲突检测完成 - 检测到 {} 个冲突",
             response.getConflicts() != null ? response.getConflicts().size() : 0);
         if (response.getConflicts() != null && !response.getConflicts().isEmpty()) {
             for (DrugConflictResult conflict : response.getConflicts()) {
@@ -2300,8 +2310,98 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                     conflict.getDrugA(), conflict.getDrugB(), conflict.getSeverity());
             }
         }
-        
+
         return response;
+    }
+
+    /**
+     * 收集基于健康档案的 7 个新维度冲突检测结果
+     * 用于在 AI 路径之后强制补充关键安全检查，避免 AI 漏检
+     */
+    private List<DrugConflictResult> collectProfileBasedConflicts(DrugConflictRequest request) {
+        List<DrugConflictResult> profileConflicts = new java.util.ArrayList<>();
+        List<String> drugNames = request.getDrugNames();
+        if (drugNames == null || drugNames.isEmpty()) {
+            return profileConflicts;
+        }
+
+        // 孕期冲突（is_pregnant=1 时触发）
+        if (Integer.valueOf(1).equals(request.getIsPregnant())) {
+            for (String drug : drugNames) {
+                DrugConflictResult c = checkDrugPregnancyConflict(drug);
+                if (c != null) profileConflicts.add(c);
+            }
+        }
+        // 哺乳期冲突
+        if (Integer.valueOf(1).equals(request.getIsBreastfeeding())) {
+            for (String drug : drugNames) {
+                DrugConflictResult c = checkDrugLactationConflict(drug);
+                if (c != null) profileConflicts.add(c);
+            }
+        }
+        // 肾功能冲突
+        if (isOrganImpaired(request.getKidneyFunction())) {
+            for (String drug : drugNames) {
+                DrugConflictResult c = checkDrugKidneyConflict(drug, request.getKidneyFunction());
+                if (c != null) profileConflicts.add(c);
+            }
+        }
+        // 肝功能冲突
+        if (isOrganImpaired(request.getLiverFunction())) {
+            for (String drug : drugNames) {
+                DrugConflictResult c = checkDrugLiverConflict(drug, request.getLiverFunction());
+                if (c != null) profileConflicts.add(c);
+            }
+        }
+        // 吸烟冲突
+        if (Integer.valueOf(1).equals(request.getIsSmoking())) {
+            for (String drug : drugNames) {
+                DrugConflictResult c = checkDrugSmokingConflict(drug);
+                if (c != null) profileConflicts.add(c);
+            }
+        }
+        // 年龄/特殊人群冲突
+        if (request.getAge() != null) {
+            for (String drug : drugNames) {
+                DrugConflictResult c = checkDrugAgeConflict(drug, request.getAge());
+                if (c != null) profileConflicts.add(c);
+            }
+        }
+        // 体重/剂量冲突
+        if (request.getWeight() != null) {
+            for (String drug : drugNames) {
+                DrugConflictResult c = checkDrugWeightConflict(drug, request.getWeight());
+                if (c != null) profileConflicts.add(c);
+            }
+        }
+
+        if (!profileConflicts.isEmpty()) {
+            logger.info("基于健康档案补充检测到 {} 个冲突（孕期/哺乳/肾肝/吸烟/年龄/体重）",
+                profileConflicts.size());
+        }
+        return profileConflicts;
+    }
+
+    /**
+     * 冲突结果去重（按 drugA + drugB + conflictType）
+     */
+    private List<DrugConflictResult> deduplicateConflicts(List<DrugConflictResult> conflicts) {
+        if (conflicts == null) return new java.util.ArrayList<>();
+        java.util.Map<String, DrugConflictResult> map = new java.util.LinkedHashMap<>();
+        for (DrugConflictResult c : conflicts) {
+            if (c == null) continue;
+            String key = String.valueOf(c.getDrugA()) + "|" + String.valueOf(c.getDrugB()) + "|"
+                    + String.valueOf(c.getConflictType());
+            // 保留已有；如果新条目更严重（severity 数值更小=更严重）则替换
+            DrugConflictResult existing = map.get(key);
+            if (existing == null) {
+                map.put(key, c);
+            } else if (c.getSeverity() != null && existing.getSeverity() != null
+                    && c.getSeverity().compareTo(existing.getSeverity()) < 0) {
+                map.put(key, c);
+            }
+        }
+        return new java.util.ArrayList<>(map.values());
     }
 
     @Override
