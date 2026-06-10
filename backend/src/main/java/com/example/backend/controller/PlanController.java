@@ -8,6 +8,7 @@ import com.example.backend.model.dto.AddToPlanRequest;
 import com.example.backend.model.dto.MedicationActionRequest;
 import com.example.backend.service.PlanService;
 import com.example.backend.common.ResponseResult;
+import com.example.backend.task.ScheduledTask;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -18,6 +19,7 @@ import java.util.List;
 public class PlanController {
 
     private final PlanService planService;
+    private final ScheduledTask scheduledTask;
 
     // 原有接口保留不变
 
@@ -100,5 +102,15 @@ public class PlanController {
             return ResponseResult.fail("参数错误：userId 和 action 不能为空");
         }
         return ResponseResult.success(planService.executeMedicationAction(planId, request.getUserId(), request.getAction()));
+    }
+
+    /**
+     * 7.10 手动触发生成下一天用药计划（仅用于测试）
+     * 注意：此接口会立即执行定时任务逻辑，生产环境应删除或禁用
+     */
+    @PostMapping("/test/generate-next-day")
+    public ResponseResult<Void> testGenerateNextDayPlan() {
+        scheduledTask.generateNextDayMedicationPlan();
+        return ResponseResult.success("已手动触发生成下一天用药计划", null);
     }
 }

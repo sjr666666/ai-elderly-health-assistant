@@ -2,12 +2,14 @@ package com.example.backend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.example.backend.mapper.DrugBaseMapper;
 import com.example.backend.mapper.MedicationPlanMapper;
 import com.example.backend.mapper.UserMapper;
 import com.example.backend.mapper.UserMedicineBoxMapper;
 import com.example.backend.model.dto.AddMedicineRequest;
 import com.example.backend.model.dto.MedicineBoxResponse;
 import com.example.backend.model.dto.UpdateMedicineRequest;
+import com.example.backend.model.entity.DrugBase;
 import com.example.backend.model.entity.MedicationPlan;
 import com.example.backend.model.entity.SysUser;
 import com.example.backend.model.entity.UserMedicineBox;
@@ -32,14 +34,17 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
     private final UserMedicineBoxMapper userMedicineBoxMapper;
     private final UserMapper userMapper;
     private final MedicationPlanMapper medicationPlanMapper;
+    private final DrugBaseMapper drugBaseMapper;
 
     @Autowired
     public MedicineBoxServiceImpl(UserMedicineBoxMapper userMedicineBoxMapper, 
                                  UserMapper userMapper,
-                                 MedicationPlanMapper medicationPlanMapper) {
+                                 MedicationPlanMapper medicationPlanMapper,
+                                 DrugBaseMapper drugBaseMapper) {
         this.userMedicineBoxMapper = userMedicineBoxMapper;
         this.userMapper = userMapper;
         this.medicationPlanMapper = medicationPlanMapper;
+        this.drugBaseMapper = drugBaseMapper;
     }
 
     @Override
@@ -99,7 +104,8 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         }
 
         // 处理有效期
-        medicineBox.setExpiryDate(LocalDate.parse(request.getExpiryDate(), DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+        LocalDate expiryDate = LocalDate.parse(request.getExpiryDate(), DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        medicineBox.setExpiryDate(expiryDate);
 
         // 处理总数量和剩余数量
         if (request.getTotalQuantity() != null) {
@@ -135,6 +141,9 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         if (result <= 0) {
             throw new RuntimeException("药品添加失败");
         }
+
+        // 不再自动检查过期并修改status，允许用户手动丢弃过期药品
+        // 过期药品仍然保留在药箱中，显示红色边框，用户可以点击"我已丢弃"按钮进行处理
     }
 
     @Override
@@ -299,5 +308,109 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
                       .eq(MedicationPlan::getBoxItemId, boxId);
         int planResult = medicationPlanMapper.delete(planQueryWrapper);
         logger.info("删除药箱条目对应的用药计划 - boxId: {}, 删除数量: {}", boxId, planResult);
+    }
+
+    @Override
+    public List<MedicineBoxResponse> getTodayExpiredMedicines(Long userId) {
+        logger.info("获取所有已过期且未丢弃的药品列表 - userId (雪花算法ID): {}", userId);
+
+        // 根据雪花算法 user_id 查询实际的自增主键 id
+        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(SysUser::getUserId, userId);
+        SysUser user = userMapper.selectOne(queryWrapper);
+
+        if (user == null) {
+            logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
+            throw new RuntimeException("用户不存在");
+        }
+
+        Long actualUserId = user.getId();
+        LocalDate today = LocalDate.now();
+
+        // 查询条件：status=active 且 expiryDate < 今天（只查询未丢弃的药品）
+        LambdaQueryWrapper<UserMedicineBox> expiredWrapper = new LambdaQueryWrapper<>();
+        expiredWrapper.eq(UserMedicineBox::getUserId, actualUserId)
+                     .eq(UserMedicineBox::getStatus, UserMedicineBox.Status.ACTIVE.getCode())
+                     .lt(UserMedicineBox::getExpiryDate, today)
+                     .orderByDesc(UserMedicineBox::getExpiryDate);
+
+        List<UserMedicineBox> expiredMedicines = userMedicineBoxMapper.selectList(expiredWrapper);
+        
+        // 转换为 MedicineBoxResponse
+        List<MedicineBoxResponse> todayExpiredList = expiredMedicines.stream()
+                .map(this::convertToResponse)
+                .collect(java.util.stream.Collectors.toList());
+        
+        logger.info("查询到已过期且未丢弃的药品数量: {}", todayExpiredList.size());
+        return todayExpiredList;
+    }
+
+    /**
+     * 将 UserMedicineBox 转换为 MedicineBoxResponse
+     */
+    private MedicineBoxResponse convertToResponse(UserMedicineBox box) {
+        MedicineBoxResponse response = new MedicineBoxResponse();
+        response.setBoxItemId(box.getId());
+        response.setDrugId(box.getDrugId());
+        
+        // 提取药品名称：优先从数据库查询，其次从 note 字段提取
+        String drugName = "未知药品";
+        
+        if (box.getDrugId() != null && box.getDrugId() > 0) {
+            // 有 drugId，从数据库查询药品信息
+            try {
+                DrugBase drug = drugBaseMapper.selectById(box.getDrugId());
+                if (drug != null) {
+                    // 优先使用俗名/别名，其次使用通用名
+                    if (drug.getCommonName() != null && !drug.getCommonName().isEmpty()) {
+                        drugName = drug.getCommonName();
+                    } else if (drug.getGenericName() != null && !drug.getGenericName().isEmpty()) {
+                        drugName = drug.getGenericName();
+                    } else if (drug.getTradeName() != null && !drug.getTradeName().isEmpty()) {
+                        drugName = drug.getTradeName();
+                    }
+                    
+                    // 设置其他药品信息
+                    response.setGenericName(drug.getGenericName());
+                    response.setTradeName(drug.getTradeName());
+                    response.setCommonName(drug.getCommonName());
+                    response.setSpecification(drug.getSpecification());
+                }
+            } catch (Exception e) {
+                logger.warn("查询药品基础信息失败 - drugId: {}, error: {}", box.getDrugId(), e.getMessage());
+            }
+        }
+        
+        // 如果数据库查询失败或没有 drugId，尝试从 note 字段提取 AI 药品名称
+        if ("未知药品".equals(drugName)) {
+            String note = box.getNote();
+            if (note != null && note.contains("{AI药品:")) {
+                int start = note.indexOf("{AI药品:") + 9;
+                int end = note.indexOf("}", start);
+                if (end > start) {
+                    drugName = note.substring(start, end);
+                }
+            }
+        }
+        
+        response.setDrugName(drugName);
+        
+        // 如果还没有规格信息，设置为空字符串
+        if (response.getSpecification() == null) {
+            response.setSpecification("");
+        }
+        
+        response.setDosage(box.getDosage());
+        response.setFrequency(box.getFrequency());
+        response.setStartDate(box.getStartDate() != null ? box.getStartDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) : null);
+        response.setEndDate(box.getEndDate() != null ? box.getEndDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) : null);
+        response.setExpiryDate(box.getExpiryDate() != null ? box.getExpiryDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) : null);
+        response.setTotalQuantity(box.getTotalQuantity());
+        response.setRemainingQuantity(box.getRemainingQuantity());
+        response.setNote(box.getNote());
+        response.setStatus(box.getStatus());
+        response.setCreatedAt(box.getCreatedAt() != null ? box.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : null);
+        
+        return response;
     }
 }

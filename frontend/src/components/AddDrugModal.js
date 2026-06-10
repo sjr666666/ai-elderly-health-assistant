@@ -95,10 +95,10 @@ function AddDrugModal({ onClose, onAdd, userId }) {
     threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
     setEndDate(threeMonthsLater.toISOString().split('T')[0]);
     
-    // 设置默认有效期为一年后
-    const oneYearLater = new Date();
-    oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
-    setExpiryDate(oneYearLater.toISOString().split('T')[0]);
+    // 设置默认有效期为开始日期后12个月
+    const twelveMonthsLater = new Date();
+    twelveMonthsLater.setMonth(twelveMonthsLater.getMonth() + 12);
+    setExpiryDate(twelveMonthsLater.toISOString().split('T')[0]);
   }, []);
 
   // 提交表单
@@ -197,12 +197,31 @@ function AddDrugModal({ onClose, onAdd, userId }) {
           drugName: selectedDrug.genericName,
           spec: selectedDrug.specification,
           manufacturer: selectedDrug.manufacturer,
-          totalQuantity: parseFloat(totalQuantity) // 支持一位小数
+          totalQuantity: parseFloat(totalQuantity)
         });
         setIsSubmitting(false);
+        // 关闭弹窗
+        onClose();
       } else {
-        showToast(data.message || '添加失败，请重试', 'error');
-        setIsSubmitting(false);
+        // 检查是否是药品过期
+        if (data.message && data.message.includes('已过期')) {
+          // 通知父组件显示过期弹窗
+          onAdd({
+            ...drugData,
+            drugName: selectedDrug.genericName,
+            spec: selectedDrug.specification,
+            manufacturer: selectedDrug.manufacturer,
+            totalQuantity: parseFloat(totalQuantity),
+            expired: true,
+            errorMessage: data.message
+          });
+          setIsSubmitting(false);
+          // 关闭弹窗
+          onClose();
+        } else {
+          showToast(data.message || '添加失败，请重试', 'error');
+          setIsSubmitting(false);
+        }
       }
 
     } catch (err) {

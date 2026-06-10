@@ -144,4 +144,52 @@ public class MedicineController {
             return ResponseResult.fail("删除失败: " + e.getMessage());
         }
     }
+
+    /**
+     * 更新药箱条目状态（部分更新）
+     * PATCH /api/v1/box/{id}?userId=xxx
+     *
+     * @param id      药箱条目ID
+     * @param userId  用户ID（雪花算法ID，用于越权校验）
+     * @param request 更新请求（支持部分字段更新）
+     * @return 操作结果
+     */
+    @PatchMapping("/box/{id}")
+    public ResponseResult<Void> updateMedicineBoxEntryStatus(
+            @PathVariable Long id,
+            @RequestParam String userId,
+            @Valid @RequestBody UpdateMedicineRequest request) {
+        try {
+            // 将 String 转换为 Long
+            Long userIdLong = Long.parseLong(userId);
+            medicineBoxService.updateMedicineBoxEntry(userIdLong, id, request);
+            return ResponseResult.success("修改成功", null);
+        } catch (NumberFormatException e) {
+            return ResponseResult.fail("无效的用户ID格式");
+        } catch (Exception e) {
+            return ResponseResult.fail("修改失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取今日新过期的药品列表
+     * GET /api/v1/box/expired/today?userId=xxx
+     *
+     * @param userId 用户ID（雪花算法ID）
+     * @return 今日新过期的药品列表（status=stopped 且 expiryDate <= 今天）
+     */
+    @GetMapping("/box/expired/today")
+    public ResponseResult<List<MedicineBoxResponse>> getTodayExpiredMedicines(
+            @RequestParam String userId) {
+        try {
+            // 将 String 转换为 Long
+            Long userIdLong = Long.parseLong(userId);
+            List<MedicineBoxResponse> expiredList = medicineBoxService.getTodayExpiredMedicines(userIdLong);
+            return ResponseResult.success("success", expiredList);
+        } catch (NumberFormatException e) {
+            return ResponseResult.fail("无效的用户ID格式");
+        } catch (Exception e) {
+            return ResponseResult.fail("查询失败: " + e.getMessage());
+        }
+    }
 }

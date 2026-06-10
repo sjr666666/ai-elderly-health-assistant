@@ -6,9 +6,7 @@
 
 /* 隐藏浏览器自带的密码显示/清除按钮 */
 input[type="password"]::-ms-reveal,
-input[type="password"]::-ms-clear,
-input[type="password"]::-webkit-credentials-auto-fill-button,
-input[type="password"]::-webkit-textfield-decoration-container {
+input[type="password"]::-ms-clear {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -316,6 +314,9 @@ body {
   box-shadow: var(--shadow-soft);
   transition: var(--transition-medium);
   position: relative;
+  /* 确保卡片可以自然扩展 */
+  overflow: visible;
+  height: auto;
 }
 
 .card::before {
@@ -924,9 +925,19 @@ body {
   animation: expiringPulse 2s ease-in-out infinite;
 }
 
+.drug-bottle-card.expired {
+  border-color: #ef4444;
+  animation: expiredPulse 2s ease-in-out infinite;
+}
+
 @keyframes expiringPulse {
   0%, 100% { box-shadow: var(--shadow-soft); }
   50% { box-shadow: 0 0 30px rgba(245, 166, 35, 0.4); }
+}
+
+@keyframes expiredPulse {
+  0%, 100% { box-shadow: var(--shadow-soft); }
+  50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.5); }
 }
 
 .expiring-tag {
@@ -940,6 +951,19 @@ body {
   font-weight: 700;
   transform: rotate(45deg);
   box-shadow: 0 2px 10px rgba(245, 166, 35, 0.4);
+}
+
+.expired-tag {
+  position: absolute;
+  top: 20px;
+  right: -35px;
+  background: #ef4444;
+  color: white;
+  padding: 8px 50px;
+  font-size: 14px;
+  font-weight: 700;
+  transform: rotate(45deg);
+  box-shadow: 0 2px 10px rgba(239, 68, 68, 0.4);
 }
 
 .bottle-icon {
@@ -984,6 +1008,113 @@ body {
   background: linear-gradient(90deg, var(--tech-blue), var(--mint-green));
   border-radius: 7px;
   transition: width 1s ease;
+}
+
+/* ============ DRUG LIST VIEW ============ */
+.drug-list-container {
+  margin-top: 24px;
+  /* 移除所有高度和滚动限制，让内容完全展开 */
+  max-height: none !important;
+  overflow: visible !important;
+  height: auto !important;
+}
+
+.drug-list-wrapper {
+  margin-bottom: 8px;
+}
+
+.drug-list-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 8px;
+  border: 2px solid #e5e7eb;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  gap: 12px;
+}
+
+.drug-list-item:hover {
+  border-color: var(--mint-green);
+  background: #f9fafb;
+  transform: translateX(4px);
+}
+
+.drug-list-item.expiring {
+  border-color: var(--warning-orange);
+  background: #fffbeb;
+  animation: expiringPulse 2s ease-in-out infinite;
+}
+
+.drug-list-item.expired {
+  border-color: #ef4444;
+  background: #fef2f2;
+  animation: expiredPulse 2s ease-in-out infinite;
+}
+
+.drug-list-item.selected {
+  border-color: var(--tech-blue);
+  background: #eff6ff;
+}
+
+.drug-list-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.drug-list-name {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.drug-list-status {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.drug-list-status.normal {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.drug-list-status.expiring {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.drug-list-status.expired {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.drug-list-arrow {
+  font-size: 12px;
+  color: #9ca3af;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.drug-expanded-card {
+  margin-top: 8px;
+  padding: 0 8px;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ============ CHAT BUBBLE ============ */
@@ -2173,7 +2304,7 @@ body {
 /* 就地下钻的日详情 */
 .week-day-detail {
   background: var(--cream-white);
-  border: 1px solid var(--border-color, #E5DFD5);
+  border: 1px solid #E5DFD5;
   border-radius: var(--radius-medium);
   padding: 20px 22px 24px;
   animation: weekDayDetailIn 220ms ease-out;
@@ -2190,7 +2321,7 @@ body {
   justify-content: space-between;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-color, #E5DFD5);
+  border-bottom: 1px solid #E5DFD5;
 }
 
 .week-day-detail__title {
@@ -2216,7 +2347,7 @@ body {
 
 .week-day-detail__close {
   background: none;
-  border: 1px solid var(--border-color, #E5DFD5);
+  border: 1px solid #E5DFD5;
   color: var(--text-light);
   font-size: 14px;
   padding: 6px 14px;
@@ -3081,7 +3212,7 @@ body {
   }
   100% {
     opacity: 0;
-    transform: translate(var(--tx), var(--ty)) scale(0);
+    transform: translate(-100px, -100px) scale(0);
   }
 }
 
@@ -4356,7 +4487,7 @@ body {
 .drug-item-name {
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #3D3D3D;
   margin: 0 0 4px 0;
   white-space: nowrap;
   overflow: hidden;
@@ -4421,7 +4552,7 @@ body {
 
 .empty-drug-text {
   font-size: 20px;
-  color: var(--text-primary);
+  color: #3D3D3D;
   font-weight: 600;
   margin: 0 0 8px 0;
 }
