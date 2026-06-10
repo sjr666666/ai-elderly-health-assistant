@@ -257,9 +257,17 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             DrugBase drug = drugMap.get(boxItem.getDrugId());
             if (drug == null) continue;
 
-            // 关键修改：只有用户已经选择过时间段的药品才生成计划
+            // 关键修改1：只有用户已经选择过时间段的药品才生成计划
             if (!existingPlansByDrug.containsKey(boxItem.getDrugId())) {
                 continue; // 跳过未选择时间段的药品
+            }
+
+            // 关键修改2：检查药品是否过期，过期药品不生成用药计划
+            LocalDate expiryDate = boxItem.getExpiryDate();
+            if (expiryDate != null && !expiryDate.isAfter(today)) {
+                logger.info("药品已过期，跳过生成用药计划 - 药品ID: {}, 药品名称: {}, 有效期: {}",
+                        boxItem.getDrugId(), drug.getCommonName(), expiryDate);
+                continue; // 跳过已过期药品
             }
 
             String drugName = drug.getCommonName();

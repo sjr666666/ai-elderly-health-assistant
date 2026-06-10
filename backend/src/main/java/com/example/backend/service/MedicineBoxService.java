@@ -54,4 +54,12 @@ public interface MedicineBoxService {
      * @param boxId  药箱条目ID
      */
     void deleteMedicineBoxEntry(Long userId, Long boxId);
+
+    /**
+     * 获取今日新过期的药品列表
+     *
+     * @param userId 用户ID
+     * @return 今日新过期的药品列表（status=stopped 且 expiryDate <= 今天）
+     */
+    List<MedicineBoxResponse> getTodayExpiredMedicines(Long userId);
 }
