@@ -115,8 +115,8 @@ function AddDrugModal({ onClose, onAdd, userId }) {
       drugSelectRef.current.setCustomValidity('');
     }
 
-    if (!frequency.trim()) {
-      frequencyRef.current.setCustomValidity('请填写用药频率');
+    if (!frequency) {
+      frequencyRef.current.setCustomValidity('请选择用药频率');
       frequencyRef.current.reportValidity();
       frequencyRef.current.focus();
       return;
@@ -167,7 +167,7 @@ function AddDrugModal({ onClose, onAdd, userId }) {
       const drugData = {
         drugId: parseInt(selectedDrugId),
         dosage: `${dosageAmount}${dosageUnit}`, // 组合剂量和单位
-        frequency: frequency.trim(),
+        frequency: frequency,
         startDate: startDate,
         endDate: endDate,
         expiryDate: expiryDate,
@@ -482,18 +482,15 @@ function AddDrugModal({ onClose, onAdd, userId }) {
             }}>
                用药频率 <span style={{ color: '#E74C3C' }}>*</span>
             </label>
-            <input
+            <select
               ref={frequencyRef}
-              type="text"
               value={frequency}
               onChange={(e) => {
                 setFrequency(e.target.value);
-                // 输入内容后清除验证提示
-                if (e.target.value.trim()) {
+                if (e.target.value) {
                   frequencyRef.current.setCustomValidity('');
                 }
               }}
-              placeholder="例如：每日两次、每日三次、必要时服用"
               style={{
                 width: '100%',
                 padding: '20px 24px',
@@ -502,20 +499,38 @@ function AddDrugModal({ onClose, onAdd, userId }) {
                 borderRadius: '20px',
                 outline: 'none',
                 transition: 'all 0.3s ease',
-                background: '#FAF7F2',
-                fontFamily: 'inherit'
+                background: frequency ? '#FAF7F2' : 'white',
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                appearance: 'none',
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%236B6B6B' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 20px center'
               }}
               onFocus={(e) => {
                 e.target.style.borderColor = '#4A90E2';
                 e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
-                e.target.style.background = 'white';
               }}
               onBlur={(e) => {
                 e.target.style.borderColor = '#F0EBE3';
                 e.target.style.boxShadow = 'none';
-                e.target.style.background = '#FAF7F2';
               }}
-            />
+            >
+              <option value="">-- 请选择用药频率 --</option>
+              <option value="每日一次">每日一次</option>
+              <option value="每日两次">每日两次</option>
+              <option value="每日三次">每日三次</option>
+              <option value="每日四次">每日四次</option>
+              <option value="隔日一次">隔日一次</option>
+              <option value="每周一次">每周一次</option>
+              <option value="每周两次">每周两次</option>
+              <option value="每月一次">每月一次</option>
+              <option value="必要时服用">必要时服用</option>
+              <option value="睡前服用">睡前服用</option>
+              <option value="饭前服用">饭前服用</option>
+              <option value="饭后服用">饭后服用</option>
+              <option value="空腹服用">空腹服用</option>
+            </select>
           </div>
 
           {/* 开始服药日期 */}
