@@ -275,17 +275,44 @@ public class DrugServiceImpl implements DrugService {
     public DrugDetailResponse getDrugDetailByName(String drugName) {
         logger.info("查询药品详细信息 - drugName: {}", drugName);
 
-        // 首先尝试调用DeepSeek AI查询药品信息
-        DrugDetailResponse aiResponse = deepSeekService.queryDrugInfoWithAI(drugName);
-        if (aiResponse != null) {
-            logger.info("成功从DeepSeek AI获取药品信息");
-            // 如果AI返回了通用名，则使用AI的数据
-            return aiResponse;
+        // 第一级：优先查询数据库（稳定、快速、零成本，作为主数据源）
+        DrugBase drugInDb = queryDrugFromDatabase(drugName);
+        if (drugInDb != null) {
+            logger.info("数据库命中药品 - drugName: {}, id: {}", drugInDb.getGenericName(), drugInDb.getId());
+            DrugDetailResponse dbResponse = buildDrugDetailFromDatabase(drugName, drugInDb);
+            // 关键字段（成分/适应症/用法用量/注意事项/不良反应）任一为空时，再调 AI 补全（数据库优先、AI补充）
+            if (isDrugDetailComplete(dbResponse)) {
+                logger.info("数据库字段完整，直接返回 - drugName: {}", drugInDb.getGenericName());
+                return dbResponse;
+            }
+            logger.info("数据库字段不完整，调用 AI 补全缺失字段 - drugName: {}", drugInDb.getGenericName());
+            return enrichDrugDetailWithAI(drugName, dbResponse);
         }
 
-        logger.info("DeepSeek AI查询失败或未配置，回退到数据库查询");
-        
-        // AI查询失败或未配置，回退到数据库查询
+        // 第二级：数据库没有 → 调 AI 兜底（确保 AI 崩了/无网络时仍能返回友好提示，而不是空白）
+        logger.info("数据库未找到药品，尝试 AI 兜底 - drugName: {}", drugName);
+        try {
+            logger.info("即将调用 AI - 注入的 deepSeekService 类型: {}", deepSeekService.getClass().getName());
+            DrugDetailResponse aiResponse = deepSeekService.queryDrugInfoWithAI(drugName);
+            logger.info("AI 返回结果: null={}, genericName={}", aiResponse == null,
+                    aiResponse == null ? "(null)" : aiResponse.getGenericName());
+            if (aiResponse != null && aiResponse.getGenericName() != null && !aiResponse.getGenericName().isEmpty()) {
+                logger.info("成功从DeepSeek AI获取药品信息 - {}", aiResponse.getGenericName());
+                return fillEmptyFields(aiResponse);
+            }
+            logger.info("DeepSeek AI未返回有效药品信息，回退到友好 fallback");
+        } catch (Exception e) {
+            logger.warn("DeepSeek AI查询异常: {}，回退到友好 fallback", e.getMessage());
+        }
+
+        // 第三级：数据库没有、AI 也没有 → 返回基于 drugName 的友好 fallback 响应
+        return buildFallbackDrugDetail(drugName);
+    }
+
+    /**
+     * 从数据库查询药品（按通用名/商品名/俗名模糊匹配）
+     */
+    private DrugBase queryDrugFromDatabase(String drugName) {
         LambdaQueryWrapper<DrugBase> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.and(wrapper -> wrapper
                 .like(DrugBase::getGenericName, drugName)
@@ -294,70 +321,357 @@ public class DrugServiceImpl implements DrugService {
                 .or()
                 .like(DrugBase::getCommonName, drugName)
         );
-        // 按通用名精确匹配优先排序
         queryWrapper.orderByDesc(DrugBase::getGenericName);
 
-        // 使用 selectList 避免多条记录时抛异常
         List<DrugBase> drugList = drugBaseMapper.selectList(queryWrapper);
-
         if (drugList == null || drugList.isEmpty()) {
-            logger.warn("未找到药品: {}", drugName);
+            logger.warn("数据库未找到药品: {}", drugName);
             return null;
         }
-
-        // 优先选择通用名完全匹配的记录
-        DrugBase drug = drugList.stream()
+        // 优先返回通用名精确匹配的记录
+        return drugList.stream()
                 .filter(d -> d.getGenericName() != null && d.getGenericName().equals(drugName))
                 .findFirst()
                 .orElse(drugList.get(0));
+    }
 
-        // 从 description 字段中解析详细信息
+    /**
+     * 根据数据库实体构建 DrugDetailResponse
+     */
+    private DrugDetailResponse buildDrugDetailFromDatabase(String drugName, DrugBase drug) {
         String description = drug.getDescription();
+        boolean descriptionOk = description != null && !description.trim().isEmpty();
+
+        String ingredient = parseFieldOrFallback(description, "成分",
+                "该药品具体成分信息请以药品说明书或医生处方为准");
+        String indications = parseFieldOrFallback(description, "适应症",
+                buildFallbackIndications(drugName, drug.getCategory()));
+        String usage = parseFieldOrFallback(description, "用法用量",
+                "请遵医嘱或按药品说明书服用，通常为口服，一日 2-3 次");
+        String precautions = parseFieldOrFallback(description, "注意事项",
+                "用药前请仔细阅读药品说明书，如有过敏史、孕妇、哺乳期妇女、肝肾功能不全者请咨询医生或药师");
+        String adverseReactions = parseFieldOrFallback(description, "不良反应",
+                "如有皮疹、恶心、头晕等不适请及时停药并咨询医生或药师");
 
         return DrugDetailResponse.builder()
                 .id(drug.getId())
                 .approvalNumber(drug.getApprovalNumber())
-                .genericName(drug.getGenericName())
+                .genericName(drug.getGenericName() != null ? drug.getGenericName() : drugName)
                 .tradeName(drug.getTradeName())
                 .commonName(drug.getCommonName())
                 .specification(drug.getSpecification())
                 .manufacturer(drug.getManufacturer())
                 .category(drug.getCategory())
-                .ingredient(parseField(description, "成分", "主要成分", "有效成分"))
-                .indications(parseField(description, "适应症", "适应症/功能主治", "功能主治"))
-                .usage(parseField(description, "用法用量", "用法", "用量"))
-                .precautions(parseField(description, "注意事项", "禁忌", "慎用"))
-                .adverseReactions(parseField(description, "不良反应", "副作用", "不良反应"))
-                .description(description)
+                .ingredient(ingredient)
+                .indications(indications)
+                .usage(usage)
+                .precautions(precautions)
+                .adverseReactions(adverseReactions)
+                .description(descriptionOk ? description :
+                        buildFallbackDescription(drugName, drug.getCategory(), drug.getSpecification()))
                 .imageUrl(drug.getImageUrl())
                 .build();
     }
 
     /**
-     * 从药品说明原文中解析指定字段
-     *
-     * @param description 药品说明原文
-     * @param keywords    字段关键词（支持多个关键词）
-     * @return 解析出的字段内容
+     * 判断关键字段是否都完整（都非空且非兜底文案）
      */
-    private String parseField(String description, String... keywords) {
-        if (description == null || description.isEmpty()) {
+    private boolean isDrugDetailComplete(DrugDetailResponse response) {
+        if (response == null) return false;
+        String[] fields = {
+                response.getIngredient(),
+                response.getIndications(),
+                response.getUsage(),
+                response.getPrecautions(),
+                response.getAdverseReactions()
+        };
+        // 兜底文案关键词（包含这些说明是兜底数据，不是真正的药品信息）
+        String[] fallbackKeywords = {"暂无详细信息", "请以说明书", "以医生处方为准", "请遵医嘱", "请以药品说明书"};
+        for (String f : fields) {
+            if (f == null || f.trim().isEmpty()) {
+                return false;
+            }
+            // 检查是否是兜底文案
+            for (String keyword : fallbackKeywords) {
+                if (f.contains(keyword)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 用 AI 补全数据库返回的 DrugDetailResponse 中缺失的字段（数据库已有字段优先保留）
+     */
+    private DrugDetailResponse enrichDrugDetailWithAI(String drugName, DrugDetailResponse dbResponse) {
+        try {
+            DrugDetailResponse aiResponse = deepSeekService.queryDrugInfoWithAI(drugName);
+            // AI 返回有效信息的标准：genericName 非空且不是兜底文案
+            if (aiResponse == null || isBlank(aiResponse.getGenericName()) || aiResponse.getGenericName().contains("暂无") || aiResponse.getGenericName().contains("无法获取")) {
+                logger.info("AI 未返回有效信息，保留数据库结果 - drugName: {}", drugName);
+                return fillEmptyFields(dbResponse);
+            }
+            // AI 返回的字段只在数据库字段为空或为兜底文案时替换（数据库优先）
+            if (isFallbackText(dbResponse.getIngredient())) dbResponse.setIngredient(aiResponse.getIngredient());
+            if (isFallbackText(dbResponse.getIndications())) dbResponse.setIndications(aiResponse.getIndications());
+            if (isFallbackText(dbResponse.getUsage())) dbResponse.setUsage(aiResponse.getUsage());
+            if (isFallbackText(dbResponse.getPrecautions())) dbResponse.setPrecautions(aiResponse.getPrecautions());
+            if (isFallbackText(dbResponse.getAdverseReactions())) dbResponse.setAdverseReactions(aiResponse.getAdverseReactions());
+            if (isBlank(dbResponse.getDescription())) dbResponse.setDescription(aiResponse.getDescription());
+            logger.info("AI 补全完成 - drugName: {}, ingredient: {}", drugName, aiResponse.getIngredient());
+            return fillEmptyFields(dbResponse);
+        } catch (Exception e) {
+            logger.warn("AI 补全异常: {}，返回数据库结果 - drugName: {}", e.getMessage(), drugName);
+            return fillEmptyFields(dbResponse);
+        }
+    }
+
+    private boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
+    }
+
+    /**
+     * 判断字段值是否为兜底文案（非真实药品信息）
+     */
+    private boolean isFallbackText(String text) {
+        if (text == null || text.trim().isEmpty()) return true;
+        // 兜底文案关键词（覆盖所有兜底场景的标志性短语）
+        String[] fallbackKeywords = {
+            // DeepSeek 兜底关键词
+            "暂无", "无法获取",
+            // buildDrugDetailFromDatabase 兜底关键词
+            "请以说明书", "以医生处方为准", "请遵医嘱", "请以药品说明书",
+            "请仔细阅读药品说明书", "如有皮疹、恶心", "如有不适请及时",
+            "该药品具体", "或按药品说明书", "该药品具体用途",
+            // fillEmptyFields 兜底关键词
+            "暂无详细成分", "暂无详细适应症", "暂无详细",
+            // 通用兜底
+            "请以药品说明书或医生处方为准"
+        };
+        for (String keyword : fallbackKeywords) {
+            if (text.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 把响应里的空字段填充成"以说明书为准"等友好提示，避免前端展示成空白
+     */
+    private DrugDetailResponse fillEmptyFields(DrugDetailResponse response) {
+        if (response == null) return null;
+        if (isBlank(response.getIngredient())) {
+            response.setIngredient("暂无详细成分说明");
+        }
+        if (isBlank(response.getIndications())) {
+            response.setIndications("暂无详细适应症说明");
+        }
+        if (isBlank(response.getUsage())) {
+            response.setUsage("请遵医嘱或按药品说明书使用");
+        }
+        if (isBlank(response.getPrecautions())) {
+            response.setPrecautions("请仔细阅读药品说明书，或遵医嘱");
+        }
+        if (isBlank(response.getAdverseReactions())) {
+            response.setAdverseReactions("如有不适请及时咨询医生或药师");
+        }
+        return response;
+    }
+
+    /**
+     * 数据库完全没找到药品时，返回友好的 fallback 药品信息，不让用户看到"暂无详细信息"。
+     */
+    private DrugDetailResponse buildFallbackDrugDetail(String drugName) {
+        return DrugDetailResponse.builder()
+                .genericName(drugName)
+                .tradeName(drugName)
+                .ingredient("请以药品说明书为准")
+                .indications("该药品具体适应症请以药品说明书或医生处方为准")
+                .usage("请遵医嘱或按药品说明书服用")
+                .precautions("用药前请仔细阅读药品说明书，如有不适请咨询医生或药师")
+                .adverseReactions("如有不适请及时停药并咨询医生或药师")
+                .description("通用药品信息，具体请以药品说明书为准")
+                .build();
+    }
+
+    /**
+     * 根据药品类别生成 fallback 适应症说明，比固定的"暂无详细信息"更有帮助
+     */
+    private String buildFallbackIndications(String drugName, String category) {
+        if (category == null || category.isEmpty()) {
+            return "该药品具体用途请以药品说明书或医生处方为准，或咨询您的医生/药师";
+        }
+        String cat = category.trim();
+        if (cat.contains("感冒")) {
+            return "缓解普通感冒或流行性感冒引起的发热、头痛、鼻塞、咽痛等症状";
+        }
+        if (cat.contains("止痛") || cat.contains("退烧")) {
+            return "用于缓解轻至中度疼痛，如头痛、关节痛、牙痛、肌肉痛等，也可用于退热";
+        }
+        if (cat.contains("消炎") || cat.contains("抗生素")) {
+            return "用于敏感菌引起的呼吸道、泌尿道、皮肤软组织等感染，具体请遵医嘱";
+        }
+        if (cat.contains("胃")) {
+            return "用于缓解胃酸过多、胃痛、胃胀、消化不良等胃肠道不适";
+        }
+        if (cat.contains("降压")) {
+            return "用于高血压的治疗，请遵医嘱按时服药，定期监测血压";
+        }
+        if (cat.contains("降糖")) {
+            return "用于 2 型糖尿病的血糖控制，配合饮食运动，请遵医嘱";
+        }
+        if (cat.contains("抗过敏")) {
+            return "用于过敏性鼻炎、荨麻疹、皮肤瘙痒等过敏性疾病的缓解";
+        }
+        if (cat.contains("心脏") || cat.contains("心血管")) {
+            return "用于冠心病、心绞痛、高血压等心血管疾病的治疗或预防，请遵医嘱";
+        }
+        return "该药品具体用途请以药品说明书或医生处方为准";
+    }
+
+    /**
+     * 生成 description 字段的 fallback 文本
+     */
+    private String buildFallbackDescription(String drugName, String category, String spec) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("药品名称：").append(drugName);
+        if (category != null && !category.isEmpty()) sb.append("；类别：").append(category);
+        if (spec != null && !spec.isEmpty()) sb.append("；规格：").append(spec);
+        sb.append("。详细用药信息请以药品说明书或医生处方为准。");
+        return sb.toString();
+    }
+
+    /**
+     * 从 description 中智能解析字段，失败则返回 fallbackText
+     * （比原来的"暂无详细信息"更有帮助，也避免前端看到大片空白）
+     */
+    private String parseFieldOrFallback(String description, String fieldType, String fallbackText) {
+        String parsed = smartParseField(description, fieldType);
+        if (parsed == null || parsed.isEmpty() || "暂无详细信息".equals(parsed)) {
+            return fallbackText;
+        }
+        return parsed;
+    }
+
+    /**
+     * 智能解析 description 文本中的字段。
+     * 支持多种写法："成分：xxx", "主要成分：xxx", "【成分】xxx", "成分 xxx" 等。
+     */
+    private String smartParseField(String description, String fieldType) {
+        if (description == null || description.trim().isEmpty()) {
             return "暂无详细信息";
         }
+        String desc = description.trim();
 
-        for (String keyword : keywords) {
-            // 使用正则表达式匹配字段内容
-            // 匹配格式: 关键词：内容（直到下一个关键词或换行）
-            String pattern = keyword + "[：:]\\s*([^。；；\\n]+)[。；；\\n]";
-            Pattern regex = Pattern.compile(pattern);
-            Matcher matcher = regex.matcher(description);
+        // 为每个字段类型准备一组常见关键词（含中文全角冒号、英文冒号、【】等写法）
+        String[][] keywordGroups;
+        switch (fieldType) {
+            case "成分":
+                keywordGroups = new String[][]{
+                        {"成分", "主要成分", "有效成分", "活性成分", "成份", "主要成份"},
+                        {"本品", "本品为", "组分为"}
+                };
+                break;
+            case "适应症":
+                keywordGroups = new String[][]{
+                        {"适应症", "适应症/功能主治", "功能主治", "适用于", "用于"},
+                        {"主治", "治"},
+                        {"功效", "作用"}
+                };
+                break;
+            case "用法用量":
+                keywordGroups = new String[][]{
+                        {"用法用量", "用法", "用量", "口服", "服用方法"},
+                        {"一次", "一日", "每次", "每日"}
+                };
+                break;
+            case "注意事项":
+                keywordGroups = new String[][]{
+                        {"注意事项", "禁忌", "慎用", "禁用", "忌用", "注意"},
+                        {"孕妇", "哺乳期", "儿童", "老年", "过敏"}
+                };
+                break;
+            case "不良反应":
+                keywordGroups = new String[][]{
+                        {"不良反应", "副作用", "副反应", "可能引起"},
+                        {"偶见", "可见", "少见", "常见"}
+                };
+                break;
+            default:
+                keywordGroups = new String[][]{{fieldType}};
+        }
 
-            if (matcher.find()) {
-                return matcher.group(1).trim();
+        // 第一轮：精确匹配 "关键词：内容" 形式（支持全角/半角冒号、空格）
+        for (String[] group : keywordGroups) {
+            for (String keyword : group) {
+                String result = tryExtractByKeyword(desc, keyword);
+                if (result != null && !result.isEmpty()) {
+                    return result;
+                }
             }
         }
 
+        // 第二轮：退而求其次 —— 如果 description 本身很短（一句话），则直接返回整段
+        if (desc.length() <= 200) {
+            return desc;
+        }
+
         return "暂无详细信息";
+    }
+
+    /**
+     * 尝试从 description 中提取 "keyword：内容" 格式的字段值
+     * 内容截止到下一个字段的关键词（如 "用法用量" / "不良反应" 等）。
+     * 注意：不再按单个 "。" 截断，因为"注意事项"等字段本身可能跨越多个句子（如 "1. ... 2. ... 3. ..."）。
+     */
+    private String tryExtractByKeyword(String description, String keyword) {
+        int idx = description.indexOf(keyword);
+        if (idx < 0) return null;
+
+        int start = idx + keyword.length();
+        int len = description.length();
+
+        // 跳过紧随其后的冒号/空格/：等分隔符
+        while (start < len) {
+            char c = description.charAt(start);
+            if (c == ':' || c == '：' || c == ' ' || c == '\t' || c == '\n') {
+                start++;
+                continue;
+            }
+            break;
+        }
+        if (start >= len) return null;
+
+        // 寻找内容结束位置：下一个字段的关键词
+        String[] nextStopKeywords = {"用法用量", "适应症", "成分", "注意事项", "不良反应", "规格", "禁忌", "功能主治", "性状", "贮藏", "包装"};
+        int endPos = len;
+        for (String next : nextStopKeywords) {
+            // 跳过 keyword 自身（防止和当前 keyword 的位置比较）
+            if (next.equals(keyword)) continue;
+            int nextIdx = description.indexOf(next, start);
+            if (nextIdx > start && nextIdx < endPos) {
+                endPos = nextIdx;
+            }
+        }
+
+        // 限制最大长度，避免返回过长文本
+        int maxLen = 500;
+        if (endPos - start > maxLen) {
+            endPos = start + maxLen;
+        }
+
+        String value = description.substring(start, endPos).trim();
+
+        // 清除尾部多余的分隔符/标点
+        while (!value.isEmpty() && (value.endsWith("，") || value.endsWith(",") || value.endsWith("：") || value.endsWith(":")
+                || value.endsWith("。") || value.endsWith("；") || value.endsWith(";"))) {
+            value = value.substring(0, value.length() - 1).trim();
+        }
+
+        if (value.isEmpty() || value.length() < 2) return null;
+        return value;
     }
 
     @Override

@@ -1,8 +1,11 @@
 -- =====================================================
 -- 老年人用药管理系统 - 完整药品测试数据初始化脚本
 -- =====================================================
--- 版本: 2.0
--- 更新内容: 补充常见药品关键词数据，确保AI查询功能可用
+-- 版本: 3.0
+-- 更新内容:
+--   1. 改用 INSERT IGNORE 替代 REPLACE INTO，避免 AUTO_INCREMENT ID 漂移
+--   2. 保持与 init_database.sql 的兼容性（已存在的不重复插入）
+--   3. 修复脚本可重复执行不报错
 -- =====================================================
 
 USE elderly_medication;
@@ -11,10 +14,12 @@ USE elderly_medication;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ==================== 药品基础数据 ====================
--- 注意：使用 REPLACE INTO 处理可能存在的重复数据
+-- 使用 INSERT IGNORE 处理可能存在的重复数据
+-- 已存在于 drug_base 表的（按 approval_number UNIQUE 判定）记录会被跳过
+-- 这样可避免 AUTO_INCREMENT 主键漂移，保证 drug_conflict_rules 等外键引用稳定
 
 -- 插入完整药品数据（覆盖各类常见药品）
-REPLACE INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `common_name`, `specification`, `manufacturer`, `category`, `description`) VALUES
+INSERT IGNORE INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `common_name`, `specification`, `manufacturer`, `category`, `description`) VALUES
 
 -- =====================================================
 -- 感冒药类 (6种)
@@ -172,7 +177,10 @@ SET FOREIGN_KEY_CHECKS = 1;
 
 -- 输出插入结果
 SELECT '药品数据插入完成！' AS result;
-SELECT COUNT(*) AS total_drugs FROM drug_base;
+SELECT COUNT(*) AS '药品总数' FROM drug_base;
 
 -- 按类别统计药品数量
-SELECT category AS '药品类别', COUNT(*) AS '药品数量' FROM drug_base GROUP BY category ORDER BY COUNT(*) DESC;
+SELECT category AS '药品类别', COUNT(*) AS '药品数量'
+FROM drug_base
+GROUP BY category
+ORDER BY COUNT(*) DESC;

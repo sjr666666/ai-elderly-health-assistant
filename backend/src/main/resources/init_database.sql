@@ -1,8 +1,12 @@
 -- =====================================================
 -- 老年人用药管理系统 - 数据库初始化脚本
 -- =====================================================
--- 版本: 2.0
--- 更新内容: 补充完整测试数据，支持所有功能模块
+-- 版本: 2.1
+-- 更新内容:
+--   1. sys_user/drug_category_keywords/drug_aliases 改用 INSERT IGNORE
+--      实现真正的脚本幂等（可重复执行不报错）
+--   2. 保留原有的 add_col_if_missing 存储过程兼容老库
+--   3. 其余业务表仍使用 DROP+CREATE，确保数据干净
 -- =====================================================
 
 -- 创建数据库（如果不存在）
@@ -324,12 +328,15 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- =============== 插入测试数据 ===============
 
 -- ---------------- 用户测试数据 ----------------
-INSERT INTO `sys_user` (`user_id`, `username`, `password`, `real_name`, `age`, `gender`, `height`, `weight`, `allergy_history`, `chronic_diseases`, `kidney_function`, `liver_function`, `is_pregnant`, `is_breastfeeding`, `is_smoking`, `is_drinking`, `role`) VALUES
-(10001, 'laowang', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '王阿姨', 68, 'female', 160.0, 62.5, '无药物过敏史', '高血压、糖尿病', 'mild_impairment', 'normal', 0, 0, 0, 0, 'elder'),
-(10002, 'zhangsan', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '张三', 35, 'male', 175.0, 72.0, NULL, NULL, 'normal', 'normal', 0, 0, 0, 1, 'family'),
-(10003, 'laoli', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '李大爷', 72, 'male', 168.0, 68.0, '青霉素过敏', '冠心病、脑梗死后遗症', 'moderate_impairment', 'mild_impairment', 0, 0, 1, 0, 'elder'),
-(10004, 'zhaosi', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '赵四', 42, 'male', 178.0, 80.0, NULL, NULL, 'normal', 'normal', 0, 0, 0, 0, 'family'),
-(10005, 'xiaomei', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '小美', 28, 'female', 165.0, 55.0, '磺胺过敏', NULL, 'normal', 'normal', 1, 0, 0, 0, 'family');
+-- 密码统一为: 123456 (BCrypt 哈希，$2a$ 10 轮)
+-- 使用 INSERT IGNORE 避免 sys_user 已存在时 UNIQUE(user_id)/UNIQUE(username) 冲突
+-- 这样脚本可重复执行不报错：首次插入，重复执行时跳过已存在的用户
+INSERT IGNORE INTO `sys_user` (`user_id`, `username`, `password`, `real_name`, `age`, `gender`, `height`, `weight`, `allergy_history`, `chronic_diseases`, `kidney_function`, `liver_function`, `is_pregnant`, `is_breastfeeding`, `is_smoking`, `is_drinking`, `role`) VALUES
+(10001, 'laowang', '$2a$10$VCrz02JzMVmFN2p56zcxR.gSlItx/Cn4kgx817j1q1UXrUJXDOHfu', '王阿姨', 68, 'female', 160.0, 62.5, '无药物过敏史', '高血压、糖尿病', 'mild_impairment', 'normal', 0, 0, 0, 0, 'elder'),
+(10002, 'zhangsan', '$2a$10$VCrz02JzMVmFN2p56zcxR.gSlItx/Cn4kgx817j1q1UXrUJXDOHfu', '张三', 35, 'male', 175.0, 72.0, NULL, NULL, 'normal', 'normal', 0, 0, 0, 1, 'family'),
+(10003, 'laoli', '$2a$10$VCrz02JzMVmFN2p56zcxR.gSlItx/Cn4kgx817j1q1UXrUJXDOHfu', '李大爷', 72, 'male', 168.0, 68.0, '青霉素过敏', '冠心病、脑梗死后遗症', 'moderate_impairment', 'mild_impairment', 0, 0, 1, 0, 'elder'),
+(10004, 'zhaosi', '$2a$10$VCrz02JzMVmFN2p56zcxR.gSlItx/Cn4kgx817j1q1UXrUJXDOHfu', '赵四', 42, 'male', 178.0, 80.0, NULL, NULL, 'normal', 'normal', 0, 0, 0, 0, 'family'),
+(10005, 'xiaomei', '$2a$10$VCrz02JzMVmFN2p56zcxR.gSlItx/Cn4kgx817j1q1UXrUJXDOHfu', '小美', 28, 'female', 165.0, 55.0, '磺胺过敏', NULL, 'normal', 'normal', 1, 0, 0, 0, 'family');
 
 -- ---------------- 药品基础数据（完整版84种） ----------------
 -- 注意：实际生产中应通过 init_drug_data.sql 导入完整药品数据
@@ -347,7 +354,6 @@ INSERT INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `commo
 ('国药准字H10910058', '奥美拉唑肠溶胶囊', '洛赛克', '奥美拉唑', '20mg*14粒', '阿斯利康制药有限公司', '胃药', '成分：奥美拉唑。适应症：用于胃溃疡、十二指肠溃疡、应激性溃疡、反流性食管炎和卓-艾综合征。用法用量：口服，一次1粒，一日1-2次。'),
 ('国药准字H10950010', '苯磺酸氨氯地平片', '络活喜', '氨氯地平', '5mg*7片', '辉瑞制药有限公司', '降压药', '成分：苯磺酸氨氯地平。适应症：用于高血压的治疗，以及冠心病心绞痛的治疗。用法用量：口服，初始剂量为5mg，一日1次。'),
 ('国药准字H10910085', '盐酸二甲双胍肠溶片', '格华止', '二甲双胍', '500mg*48片', '中美上海施贵宝制药有限公司', '降糖药', '成分：盐酸二甲双胍。适应症：用于单纯饮食控制不满意的2型糖尿病患者。用法用量：口服，成人一次500mg，一日2-3次。'),
-('国药准字H19991358', '氯雷他定片', '开瑞坦', '氯雷他定', '10mg*6片', '上海先灵葆雅制药有限公司', '抗过敏药', '成分：氯雷他定。适应症：用于缓解过敏性鼻炎有关的症状。用法用量：口服，成人一次1片，一日1次。'),
 ('国药准字Z53020609', '云南白药气雾剂', '云南白药', '白药气雾剂', '60g+60g', '云南白药集团股份有限公司', '跌打损伤药', '成分：三七等中药提取物。适应症：活血散瘀，消肿止痛。用于跌打损伤，瘀血肿痛，肌肉酸痛及风湿疼痛。用法用量：外用，喷于伤患处，一日3-5次。'),
 ('国药准字H20093817', '盐酸氨溴索口服溶液', '沐舒坦', '氨溴索', '100ml:0.6g', '勃林格殷格翰制药有限公司', '止咳化痰药', '成分：盐酸氨溴索。适应症：用于急、慢性支气管炎引起的痰液粘稠、咳痰困难。用法用量：口服，成人一次10ml，一日3次。');
 
@@ -355,7 +361,7 @@ INSERT INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `commo
 INSERT INTO `user_medicine_box` (`user_id`, `drug_id`, `dosage`, `frequency`, `start_date`, `expiry_date`, `total_quantity`, `remaining_quantity`, `note`, `status`) VALUES
 (1, 2, '1片', '每日2次', '2024-01-01', '2025-06-30', 60, 45, '血压控制', 'active'),
 (1, 3, '1片', '每日1次', '2024-01-01', '2025-12-31', 30, 20, '预防心梗', 'active'),
-(1, 13, '1袋', '发热时服用', '2024-02-01', '2025-02-01', 9, 6, '感冒灵备用', 'active'),
+(1, 1, '1袋', '发热时服用', '2024-02-01', '2025-02-01', 9, 6, '感冒灵备用', 'active'),
 (3, 2, '1片', '每日2次', '2023-06-01', '2025-06-01', 60, 15, '冠心病用药', 'active');
 
 -- ---------------- OCR识别记录测试数据 ----------------
@@ -407,7 +413,9 @@ INSERT INTO `drug_conflict_rules` (`drug_a_id`, `drug_b_id`, `conflict_level`, `
 (10, 12, 'low', '奥美拉唑可能影响二甲双胍的吸收', '胃药可能会影响糖尿病药物的效果，必要时请错开服用时间', '临床经验');
 
 -- ---------------- 药品类别关键词数据 ----------------
-INSERT INTO `drug_category_keywords` (`category`, `keyword`) VALUES
+-- 使用 INSERT IGNORE：drug_category_keywords 在该脚本中用 CREATE TABLE IF NOT EXISTS 创建，
+-- 重复执行时 UNIQUE(category,keyword) 冲突会被静默跳过，保证幂等性
+INSERT IGNORE INTO `drug_category_keywords` (`category`, `keyword`) VALUES
 -- 感冒药类
 ('感冒药', '感冒'), ('感冒药', '流感'), ('感冒药', '发烧'), ('感冒药', '咳嗽'), ('感冒药', '鼻塞'), ('感冒药', '流涕'), ('感冒药', '咽痛'), ('感冒药', '打喷嚏'), ('感冒药', '风寒'), ('感冒药', '风热'), ('感冒药', '感冒灵'),
 -- 退烧药类
@@ -444,7 +452,9 @@ INSERT INTO `drug_category_keywords` (`category`, `keyword`) VALUES
 ('晕车药', '晕车'), ('晕车药', '晕船'), ('晕车药', '晕机'), ('晕车药', '恶心'), ('晕车药', '眩晕');
 
 -- ---------------- 药品别名映射数据 ----------------
-INSERT INTO `drug_aliases` (`alias_name`, `generic_name`) VALUES
+-- 使用 INSERT IGNORE：drug_aliases 在该脚本中用 CREATE TABLE IF NOT EXISTS 创建，
+-- 重复执行时 UNIQUE(alias_name) 冲突会被静默跳过，保证幂等性
+INSERT IGNORE INTO `drug_aliases` (`alias_name`, `generic_name`) VALUES
 -- 对乙酰氨基酚
 ('扑热息痛', '对乙酰氨基酚'), ('泰诺', '对乙酰氨基酚'), ('泰诺林', '对乙酰氨基酚'), ('百服宁', '对乙酰氨基酚'), ('必理通', '对乙酰氨基酚'),
 -- 布洛芬

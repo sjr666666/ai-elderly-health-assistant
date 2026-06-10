@@ -140,6 +140,9 @@ public class OcrServiceImpl implements OcrService {
     @Override
     public OcrUploadResponse uploadAndRecognize(MultipartFile file, Long userId) {
         try {
+            // 入口校验：文件类型+大小，杜绝无效请求
+            validateImageFile(file);
+
             String fileId = String.valueOf(snowflakeIdGenerator.nextId());
             logger.info("开始处理OCR识别任务 - fileId: {}, userId: {}, fileName: {}",
                     fileId, userId, file.getOriginalFilename());
@@ -263,6 +266,9 @@ public class OcrServiceImpl implements OcrService {
             BatchRecognizeResponse.RecognizeItem item = new BatchRecognizeResponse.RecognizeItem();
 
             try {
+                // 入口校验：文件类型+大小
+                validateImageFile(file);
+
                 String fileId = String.valueOf(snowflakeIdGenerator.nextId());
                 String imageUrl = saveFileLocally(file, fileId);
                 item.setImageId(fileId);
@@ -366,5 +372,31 @@ public class OcrServiceImpl implements OcrService {
             return null;
         }
         return entry.response;
+    }
+
+    /**
+     * 校验上传的图片文件：大小、扩展名、内容类型。
+     * 不符合则抛 IllegalArgumentException，由上层统一捕获转成 400 响应。
+     */
+    private void validateImageFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("上传文件为空，请选择图片后再上传");
+        }
+        long maxSize = 10L * 1024 * 1024; // 10MB
+        if (file.getSize() > maxSize) {
+            throw new IllegalArgumentException("图片大小不能超过 10MB，当前文件：" + (file.getSize() / 1024) + "KB");
+        }
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename != null) {
+            String lower = originalFilename.toLowerCase();
+            if (!(lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")
+                    || lower.endsWith(".bmp") || lower.endsWith(".webp"))) {
+                throw new IllegalArgumentException("图片格式不支持，请使用 JPG/PNG/BMP/WEBP 格式");
+            }
+        }
+        String contentType = file.getContentType();
+        if (contentType != null && !contentType.startsWith("image/")) {
+            throw new IllegalArgumentException("请上传图片文件（当前文件类型：" + contentType + "）");
+        }
     }
 }
