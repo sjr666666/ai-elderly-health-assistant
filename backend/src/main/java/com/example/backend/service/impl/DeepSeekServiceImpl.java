@@ -148,10 +148,18 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             return null;
         }
 
+        // 诊断日志：仅记录 API key 是否注入及其长度，不打印任何 key 内容
+        logger.info("queryDrugInfoWithAI 入口 - drugName: {}, apiKey是否为空: {}, key长度: {}",
+                drugName, apiKey == null || apiKey.isEmpty(),
+                apiKey == null ? 0 : apiKey.length());
+
         if (apiKey == null || apiKey.isEmpty()) {
             logger.warn("DeepSeek API Key未配置，跳过AI查询");
             return null;
         }
+
+        // 清理 key 中可能存在的空白字符
+        String cleanKey = apiKey.trim();
 
         try {
             logger.info("开始调用DeepSeek AI查询药品信息 - 药品名称: {}", drugName);
@@ -159,8 +167,8 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             // 构建请求体
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
-            requestBody.put("temperature", 0.3);
-            requestBody.put("max_tokens", 1000);
+            requestBody.put("temperature", 0.5);  // 提高温度让AI更愿意提供详细信息
+            requestBody.put("max_tokens", 1500);  // 增加token限制以容纳更详细的注意事项
 
             // 构建消息
             String systemPrompt = "你是一个专业的药品信息查询助手。请提供完整的药品详细信息，以JSON格式输出。\n" +
@@ -177,9 +185,14 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                     "  \"precautions\": \"注意事项\",\n" +
                     "  \"adverseReactions\": \"不良反应\"\n" +
                     "}\n" +
-                    "如果某个字段不确定，请填写\"暂无详细信息\"。";
+                    "重要要求：\n" +
+                    "1. genericName 必须填写查询的药品名称，不能为空\n" +
+                    "2. 对于成分、适应症、用法用量、注意事项、不良反应等字段，请根据药品知识尽力填写\n" +
+                    "3. 如果确实不知道某个字段的信息，可以填写\"尚不明确\"或\"请以药品说明书为准\"\n" +
+                    "4. 注意事项应列出具体的用药禁忌和注意事项，不要只写一句话\n" +
+                    "5. 不良反应如果未知，填写\"尚不明确\"";
 
-            String userPrompt = "请查询以下药品的详细信息：" + drugName;
+            String userPrompt = "请查询以下药品的详细信息：" + drugName + "。请根据你的医药知识提供尽可能详细的信息，特别是成分、适应症、用法用量、注意事项和不良反应。";
 
             Map<String, String> systemMessage = new HashMap<>();
             systemMessage.put("role", "system");
@@ -194,7 +207,9 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             // 设置请求头
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Authorization", "Bearer " + apiKey);
+            String authHeader = "Bearer " + cleanKey;
+            logger.info("Authorization Header 长度: {}", authHeader.length());
+            headers.set("Authorization", authHeader);
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
 
@@ -239,11 +254,14 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                     JsonNode content = message.get("content");
                     if (content != null) {
                         String jsonContent = content.asText().trim();
-                        
-                        // 尝试解析JSON
+
+                        // 记录原始响应，便于排查 AI 返回格式问题
+                        logger.info("DeepSeek AI 药品详情原始响应: {}", jsonContent);
+
+                        // 优先尝试解析 JSON
                         try {
                             JsonNode drugJson = objectMapper.readTree(jsonContent);
-                            
+
                             return DrugDetailResponse.builder()
                                     .genericName(getJsonValue(drugJson, "genericName"))
                                     .tradeName(getJsonValue(drugJson, "tradeName"))
@@ -258,17 +276,8 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                                     .description(jsonContent)
                                     .build();
                         } catch (Exception e) {
-                            logger.warn("解析药品信息JSON失败，尝试直接提取内容: {}", e.getMessage());
-                            // 如果不是JSON格式，直接返回解析后的文本
-                            return DrugDetailResponse.builder()
-                                    .genericName(jsonContent)
-                                    .ingredient("暂无详细信息")
-                                    .indications("暂无详细信息")
-                                    .usage("暂无详细信息")
-                                    .precautions("暂无详细信息")
-                                    .adverseReactions("暂无详细信息")
-                                    .description(jsonContent)
-                                    .build();
+                            logger.warn("AI 回答非 JSON 格式，尝试从纯文本中提取字段: {}", e.getMessage());
+                            return extractDrugInfoFromPlainText(jsonContent);
                         }
                     }
                 }
@@ -280,14 +289,91 @@ public class DeepSeekServiceImpl implements DeepSeekService {
     }
 
     /**
-     * 获取JSON节点值，不存在则返回默认值
+     * 获取JSON节点值，不存在或为空则返回null（不返回兜底文案）
+     * 让上层决定如何处理缺失字段
      */
     private String getJsonValue(JsonNode node, String fieldName) {
         if (node != null && node.has(fieldName)) {
             String value = node.get(fieldName).asText();
-            return value != null && !value.isEmpty() && !"null".equalsIgnoreCase(value) ? value : "暂无详细信息";
+            // 只过滤掉 null 和空字符串，保留"尚不明确"等AI返回的有效信息
+            if (value != null && !value.isEmpty() && !"null".equalsIgnoreCase(value)) {
+                return value;
+            }
         }
-        return "暂无详细信息";
+        return null;
+    }
+
+    /**
+     * 当 AI 回答为纯文本（非 JSON）时，按关键词逐段提取字段。
+     * 解决 "AI 回答了但被硬编码成暂无详细信息" 的问题。
+     */
+    private DrugDetailResponse extractDrugInfoFromPlainText(String text) {
+        if (text == null || text.isEmpty()) {
+            return null;
+        }
+        String genericName = extractFieldFromText(text, "通用名", "名称");
+        String tradeName = extractFieldFromText(text, "商品名", "品牌");
+        String specification = extractFieldFromText(text, "规格");
+        String manufacturer = extractFieldFromText(text, "生产厂家", "厂家", "生产企业");
+        String category = extractFieldFromText(text, "分类", "类别", "类型");
+        String ingredient = extractFieldFromText(text, "成分", "主要成分", "有效成分");
+        String indications = extractFieldFromText(text, "适应症", "功能主治", "用于", "主治");
+        String usage = extractFieldFromText(text, "用法用量", "用法", "用量", "服用方法");
+        String precautions = extractFieldFromText(text, "注意事项", "禁忌", "慎用", "禁用");
+        String adverseReactions = extractFieldFromText(text, "不良反应", "副作用", "副反应");
+
+        return DrugDetailResponse.builder()
+                .genericName(genericName)
+                .tradeName(tradeName)
+                .specification(specification)
+                .manufacturer(manufacturer)
+                .category(category)
+                .ingredient(ingredient)
+                .indications(indications)
+                .usage(usage)
+                .precautions(precautions)
+                .adverseReactions(adverseReactions)
+                .description(text)
+                .build();
+    }
+
+    /**
+     * 从纯文本中按关键词提取某个字段的值，文本截至下一个关键词或句末。
+     */
+    private String extractFieldFromText(String text, String... keywords) {
+        for (String keyword : keywords) {
+            int idx = text.indexOf(keyword);
+            if (idx < 0) continue;
+            int start = idx + keyword.length();
+            // 跳过冒号/空格
+            while (start < text.length()) {
+                char c = text.charAt(start);
+                if (c == ':' || c == '：' || c == ' ' || c == '\t' || c == '\n' || c == ',') {
+                    start++;
+                    continue;
+                }
+                break;
+            }
+            // 找下一个常见字段作为终止
+            String[] stops = {"通用名", "名称", "商品名", "品牌", "规格", "生产厂家", "厂家", "生产企业",
+                    "分类", "类别", "类型", "成分", "主要成分", "有效成分", "适应症", "功能主治",
+                    "用于", "主治", "用法用量", "用法", "用量", "服用方法", "注意事项", "禁忌",
+                    "慎用", "禁用", "不良反应", "副作用", "副反应", "贮藏", "包装", "性状"};
+            int end = text.length();
+            for (String stop : stops) {
+                if (stop.equals(keyword)) continue;
+                int next = text.indexOf(stop, start);
+                if (next > start && next < end) end = next;
+            }
+            String value = text.substring(start, Math.min(end, start + 300)).trim();
+            // 清理尾部标点
+            while (!value.isEmpty() && (value.endsWith("，") || value.endsWith(",") || value.endsWith("：")
+                    || value.endsWith(":") || value.endsWith("。") || value.endsWith("；") || value.endsWith(";"))) {
+                value = value.substring(0, value.length() - 1).trim();
+            }
+            if (value.length() >= 2) return value;
+        }
+        return null; // 提取失败时返回 null，由调用方决定兜底逻辑
     }
 
     @Override
@@ -526,7 +612,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                         logger.info("补充检测到 {} 个药品-酒精冲突", alcoholConflicts.size());
                         // 将酒精冲突合并到结果中
                         if (result.getConflicts() == null) {
-                            result.setConflicts(new java.util.ArrayList<>());
+                            result.setConflicts(new ArrayList<>());
                         }
                         for (DrugConflictResult alcoholConflict : alcoholConflicts) {
                             boolean exists = result.getConflicts().stream()
@@ -536,10 +622,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                                 result.getConflicts().add(alcoholConflict);
                             }
                         }
-                        // 更新统计信息
-                        result.setHasSevereConflict(result.getConflicts().stream()
-                            .anyMatch(c -> c.getSeverity() == DrugConflictResult.SeverityLevel.SEVERE));
-                        result.setStatistics(buildStatistics(result.getConflicts()));
+                        // 统计信息将在所有冲突（含健康档案）合并并去重后统一更新
                     }
 
                     // 关键安全检查：基于健康档案的 7 个新维度本地规则必须强制生效
@@ -737,7 +820,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                         try {
                             JsonNode resultJson = objectMapper.readTree(jsonContent);
                             
-                            List<DrugConflictResult> conflicts = new java.util.ArrayList<>();
+                            List<DrugConflictResult> conflicts = new ArrayList<>();
                             JsonNode conflictsNode = resultJson.get("conflicts");
                             
                             if (conflictsNode != null && conflictsNode.isArray()) {
@@ -783,7 +866,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             DrugConflictResult.ConflictType conflictType = parseConflictType(conflictTypeStr);
             DrugConflictResult.SeverityLevel severity = DrugConflictResult.SeverityLevel.fromString(severityStr);
             
-            List<String> alternatives = new java.util.ArrayList<>();
+            List<String> alternatives = new ArrayList<>();
             JsonNode alternativesNode = node.get("alternatives");
             if (alternativesNode != null && alternativesNode.isArray()) {
                 for (JsonNode altNode : alternativesNode) {
@@ -915,11 +998,11 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         return DrugConflictResponse.builder()
                 .reportId(java.util.UUID.randomUUID().toString())
                 .checkTime(java.time.LocalDateTime.now())
-                .drugsChecked(drugs != null ? drugs : new java.util.ArrayList<>())
-                .supplementsChecked(supplements != null ? supplements : new java.util.ArrayList<>())
-                .beveragesChecked(beverages != null ? beverages : new java.util.ArrayList<>())
-                .foodsChecked(foods != null ? foods : new java.util.ArrayList<>())
-                .conflicts(new java.util.ArrayList<>())
+                .drugsChecked(drugs != null ? drugs : new ArrayList<>())
+                .supplementsChecked(supplements != null ? supplements : new ArrayList<>())
+                .beveragesChecked(beverages != null ? beverages : new ArrayList<>())
+                .foodsChecked(foods != null ? foods : new ArrayList<>())
+                .conflicts(new ArrayList<>())
                 .hasSevereConflict(false)
                 .statistics(DrugConflictResponse.ConflictStatistics.builder()
                         .totalConflicts(0)
@@ -938,7 +1021,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
     private DrugConflictResponse analyzeWithLocalRules(DrugConflictRequest request) {
         logger.info("使用本地规则进行药品冲突检测");
         
-        List<DrugConflictResult> conflicts = new java.util.ArrayList<>();
+        List<DrugConflictResult> conflicts = new ArrayList<>();
         List<String> drugNames = request.getDrugNames();
         
         // 检测药品-药品冲突
@@ -1499,7 +1582,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
      * 检测药品与酒精的冲突（独立方法，用于AI检测后的补充检测）
      */
     private List<DrugConflictResult> detectAlcoholConflicts(List<String> drugNames) {
-        List<DrugConflictResult> conflicts = new java.util.ArrayList<>();
+        List<DrugConflictResult> conflicts = new ArrayList<>();
         for (String drug : drugNames) {
             DrugConflictResult conflict = checkAlcoholConflict(drug);
             if (conflict != null) {
@@ -2319,7 +2402,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
      * 用于在 AI 路径之后强制补充关键安全检查，避免 AI 漏检
      */
     private List<DrugConflictResult> collectProfileBasedConflicts(DrugConflictRequest request) {
-        List<DrugConflictResult> profileConflicts = new java.util.ArrayList<>();
+        List<DrugConflictResult> profileConflicts = new ArrayList<>();
         List<String> drugNames = request.getDrugNames();
         if (drugNames == null || drugNames.isEmpty()) {
             return profileConflicts;
@@ -2386,7 +2469,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
      * 冲突结果去重（按 drugA + drugB + conflictType）
      */
     private List<DrugConflictResult> deduplicateConflicts(List<DrugConflictResult> conflicts) {
-        if (conflicts == null) return new java.util.ArrayList<>();
+        if (conflicts == null) return new ArrayList<>();
         java.util.Map<String, DrugConflictResult> map = new java.util.LinkedHashMap<>();
         for (DrugConflictResult c : conflicts) {
             if (c == null) continue;
@@ -2401,7 +2484,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                 map.put(key, c);
             }
         }
-        return new java.util.ArrayList<>(map.values());
+        return new ArrayList<>(map.values());
     }
 
     @Override

@@ -1446,7 +1446,7 @@ function App() {
       const formData = new FormData();
       files.forEach(file => formData.append('files', file));
 
-      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/v1/drug/recognize/batch-upload`, {
+      const response = await fetch('/api/v1/drug/recognize/batch-upload', {
         method: 'POST',
         headers: { 'X-User-Id': user?.userId || '1' },
         body: formData
@@ -1579,20 +1579,69 @@ function App() {
       return;
     }
 
+    const file = fileInputRef.current.files[0];
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    const MIN_PX = 15;
+    const MAX_PX = 4096;
+
+    if (file.size === 0) {
+      showToast('上传文件为空，请选择图片后再上传', 'error');
+      return;
+    }
+
+    if (file.size > MAX_SIZE) {
+      showToast('图片大小不能超过 10MB', 'error');
+      return;
+    }
+
+    let imgUrl = null;
+    try {
+      imgUrl = URL.createObjectURL(file);
+      const imgObj = new Image();
+      const sizeOk = await new Promise((resolve) => {
+        imgObj.onload = () => {
+          if (imgObj.width < MIN_PX || imgObj.height < MIN_PX) {
+            showToast('图片太小，无法识别（最小 15×15 像素）', 'error');
+            resolve(false);
+          } else if (imgObj.width > MAX_PX || imgObj.height > MAX_PX) {
+            showToast('图片尺寸过大，请使用不超过 4096×4096 像素的图片', 'error');
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        };
+        imgObj.onerror = () => {
+          showToast('无法读取图片，请换一张试试', 'error');
+          resolve(false);
+        };
+        imgObj.src = imgUrl;
+      });
+      if (!sizeOk) return;
+    } catch (e) {
+      console.error('图片校验失败', e);
+      showToast('图片校验失败，请换一张试试', 'error');
+      setIsLoading(false);
+      return;
+    } finally {
+      if (imgUrl) {
+        URL.revokeObjectURL(imgUrl);
+      }
+    }
+
     setIsLoading(true);
     setOcrTaskId(null);
 
     try {
       // 将WebP图片转换为JPEG格式
-      const file = await convertToJpeg(fileInputRef.current.files[0]);
+      const convertedFile = await convertToJpeg(fileInputRef.current.files[0]);
       
       console.log('=== 准备上传 ===');
-      console.log('文件名:', file.name);
-      console.log('文件类型:', file.type);
-      console.log('文件大小:', file.size);
+      console.log('文件名:', convertedFile.name);
+      console.log('文件类型:', convertedFile.type);
+      console.log('文件大小:', convertedFile.size);
       
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', convertedFile);
       
       // 调试：检查FormData内容
       console.log('FormData内容:');
@@ -1601,8 +1650,8 @@ function App() {
       }
 
       // 不设置Content-Type，让浏览器自动处理
-      // 直接调用后端API，绕过代理的multipart问题
-      const response = await fetch('http://localhost:8080/api/v1/drug/recognize/upload', {
+      // 通过代理转发到后端
+      const response = await fetch('/api/v1/drug/recognize/upload', {
         method: 'POST',
         headers: {
           'X-User-Id': user?.userId || '1'
@@ -1684,7 +1733,8 @@ function App() {
               showToast('未能识别出匹配的药品，请尝试手动输入', 'warning');
             } else if (result.status === 'failed') {
               setIsLoading(false);
-              showToast('识别失败，请重试', 'error');
+              const detail = result.rawText && result.rawText.trim() ? result.rawText : '识别失败，请重试';
+              showToast(detail, 'error');
             }
           } else if (pollingCount < maxPollingCount) {
             pollingCount++;
@@ -2281,6 +2331,8 @@ function App() {
             </h3>
             <button
               onClick={() => {
+                // 释放所有预览URL，避免内存泄漏
+                batchRecognizeItems.forEach(item => URL.revokeObjectURL(item.previewUrl));
                 setBatchRecognizeItems([]);
                 setBatchSelectedForAdd(new Set());
               }}
