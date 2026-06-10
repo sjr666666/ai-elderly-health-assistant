@@ -1440,7 +1440,7 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDrug?.name, selectedDrug?.usage, selectedDrug?.precautions]);
 
-  // 调用AI生成老年友好用药指导
+  // 调用AI生成老年友好用药指导（三层保障策略）
   const fetchElderlyGuide = async (drugInfo) => {
     if (!drugInfo || !drugInfo.name) return;
     
@@ -1463,6 +1463,9 @@ function App() {
         description: drugInfo.description || ''
       };
 
+      console.log('=== 尝试调用后端 AI 服务 ===');
+      
+      // 第一层：尝试调用后端 AI 服务
       const response = await fetch('/api/ai/elderly-guide', {
         method: 'POST',
         headers: {
@@ -1477,61 +1480,327 @@ function App() {
         // 将<br/>标签替换为换行符，方便阅读
         const guideText = data.data.replace(/<br\/>/g, '\n');
         setElderlyGuide(guideText);
-        console.log('老年友好用药指导生成成功:', guideText);
+        console.log('✅ 后端 AI 服务成功:', guideText.substring(0, 100));
+        return; // 成功则直接返回
       } else {
-        console.error('生成老年友好指导失败:', data.message);
-        // 生成默认指导
-        setElderlyGuide(generateFallbackGuide(drugInfo));
+        console.error('❌ 后端 AI 服务失败:', data.message);
+        throw new Error(data.message || '后端 AI 服务异常');
       }
     } catch (error) {
-      console.error('调用AI服务失败:', error);
-      // 生成默认指导
-      setElderlyGuide(generateFallbackGuide(drugInfo));
+      console.error('️ 后端 AI 服务异常，尝试 DeepSeek 兜底:', error);
+      
+      // 第二层：使用 DeepSeek API 作为兜底
+      try {
+        await callDeepSeekForGuide(drugInfo);
+        console.log('✅ DeepSeek 兜底成功');
+        return;
+      } catch (deepseekError) {
+        console.error('❌ DeepSeek 兜底也失败，使用本地规则集:', deepseekError);
+        
+        // 第三层：使用本地扩充的规则集生成
+        const fallbackGuide = generateFallbackGuide(drugInfo);
+        setElderlyGuide(fallbackGuide);
+        showToast('已使用本地用药指导（AI服务暂时不可用）', 'info');
+      }
     } finally {
       setIsLoadingGuide(false);
     }
   };
 
+  // DeepSeek 兜底函数
+  const callDeepSeekForGuide = async (drugInfo) => {
+    try {
+      const prompt = `你是一位专业的药师，专门为老年人提供用药指导。请用通俗易懂、温暖亲切的语言，为一位老年患者解释以下药品的使用方法。
+
+药品信息：
+- 药品名称：${drugInfo.name}
+- 商品名：${drugInfo.tradeName || '无'}
+- 规格：${drugInfo.spec || drugInfo.specification || '无'}
+- 生产厂家：${drugInfo.manufacturer || '无'}
+- 药品类别：${drugInfo.category || '无'}
+- 主要成分：${drugInfo.ingredient || '无'}
+- 适应症：${drugInfo.indications || '无'}
+- 用法用量：${drugInfo.usage || drugInfo.dosage || '无'}
+- 注意事项：${drugInfo.precautions || '无'}
+- 不良反应：${drugInfo.adverseReactions || '无'}
+- 详细说明：${drugInfo.description || '无'}
+
+请按照以下格式生成用药指导（每个部分都要有）：
+
+1. 【这是什么药】：简单说明这个药是治什么病的
+2. 【怎么吃】：详细说明用法用量，用老年人能听懂的话
+3. 【什么时候吃】：说明最佳服用时间
+4. 【特别要注意】：列出重要的注意事项和禁忌
+5. 【可能出现的不舒服】：说明可能的不良反应，但要让老人不要过度担心
+6. 【保存方法】：如何正确保存药品
+7. 【温馨提醒】：给老人的贴心建议
+
+要求：
+- 语言要通俗易懂，避免专业术语
+- 语气要温暖亲切，像跟家里长辈说话一样
+- 重点内容要用强调的语气
+- 适当使用表情符号增加亲和力
+- 控制在500字以内
+- 用中文回答`;
+
+      console.log('正在调用 DeepSeek API...');
+      
+      const response = await fetch('/api/deepseek/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }],
+          model: 'deepseek-chat',
+          temperature: 0.7,
+          max_tokens: 800
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.choices && data.choices[0]) {
+        const aiResponse = data.choices[0].message.content;
+        setElderlyGuide(aiResponse);
+        console.log('DeepSeek 生成用药指导成功，长度:', aiResponse.length);
+      } else {
+        throw new Error('DeepSeek API 返回异常');
+      }
+    } catch (error) {
+      console.error('DeepSeek API 调用失败:', error);
+      throw error; // 向上抛出错误，让外层捕获并使用本地规则集
+    }
+  };
+
   // 生成备用老年友好指导（当AI不可用时使用）
+  // 采用三层保障策略：后端AI -> DeepSeek兜底 -> 本地规则集
   const generateFallbackGuide = (drugInfo) => {
+    // ========== 配置区域 ==========
+    
+    // 1. 药品分类关键词映射
+    const drugCategories = {
+      '降压药': ['硝苯地平', '氨氯地平', '沙坦', '厄贝沙坦', '卡托普利', '缬沙坦', '氯沙坦'],
+      '降糖药': ['二甲双', '格列美脲', '阿卡波糖', '胰岛素', '格列齐特', '罗格列酮'],
+      '抗生素': ['阿莫西林', '头孢', '罗红霉素', '左氧氟沙星', '青霉素', '阿奇霉素'],
+      '止痛药': ['布洛芬', '对乙酰氨基酚', '阿司匹林', '双氯芬酸', '塞来昔布'],
+      '感冒药': ['感康', '白加黑', '泰诺', '999感冒灵', '快克', '新康泰克'],
+      '胃药': ['奥美拉唑', '雷尼替丁', '铝碳酸镁', '多潘立酮', '泮托拉唑'],
+      '安眠药': ['艾司唑仑', '佐匹克隆', '劳拉西泮', '地西泮'],
+      '心脏病药': ['硝酸甘油', '速效救心丸', '地高辛', '单硝酸异山梨酯']
+    };
+    
+    // 2. 服用时间关键词规则
+    const timingRules = [
+      { keywords: ['空腹', '饭前1小时', '清晨'], text: '建议在早上起床后空腹吃，这样吸收效果最好' },
+      { keywords: ['饭前', '餐前', '吃饭前半小时'], text: '建议在吃饭前半个小时吃，这样药效会更好' },
+      { keywords: ['饭后', '餐后', '吃完饭'], text: '建议在吃完饭半小时后吃，这样可以减少对胃的刺激' },
+      { keywords: ['睡前', '临睡', '晚上睡觉前'], text: '建议在晚上睡觉前30分钟吃' },
+      { keywords: ['晨起', '早晨'], text: '建议在早上起床后吃' },
+      { keywords: ['中午', '午餐'], text: '建议在中午午饭后吃' }
+    ];
+    
+    // 3. 禁忌事项关键词库（扩展版）
+    const contraindications = {
+      '饮酒': {
+        keywords: ['酒', '酒精', '啤酒', '白酒', '红酒', '黄酒'],
+        warning: '服药期间千万不要喝酒，包括啤酒、白酒、红酒等所有含酒精的饮料',
+        severity: 'high'
+      },
+      '驾驶': {
+        keywords: ['开车', '驾驶', '操作机械', '高空作业'],
+        warning: '吃完药后最好不要开车或操作机器，因为可能会犯困或头晕',
+        severity: 'high'
+      },
+      '孕妇禁用': {
+        keywords: ['孕妇禁用', '妊娠禁用', '孕妇不宜'],
+        warning: '如果您怀孕了，这个药千万不能吃，一定要告诉医生',
+        severity: 'critical'
+      },
+      '哺乳期禁用': {
+        keywords: ['哺乳期禁用', '哺乳禁用'],
+        warning: '如果您正在喂奶，这个药不能吃，会影响宝宝',
+        severity: 'critical'
+      },
+      '肝肾功能': {
+        keywords: ['肝功能', '肾功能', '肝肾损害'],
+        warning: '如果您的肝脏或肾脏不好，吃这个药要小心，最好先问问医生',
+        severity: 'medium'
+      },
+      '过敏': {
+        keywords: ['过敏', '过敏反应'],
+        warning: '如果您对这种药或以前吃过类似的药有过敏反应，千万不能再吃',
+        severity: 'critical'
+      },
+      '儿童禁用': {
+        keywords: ['儿童禁用', '小儿禁用', '18岁以下禁用'],
+        warning: '这个药不适合小孩子吃，如果是给孩子用药一定要咨询医生',
+        severity: 'high'
+      },
+      '老人慎用': {
+        keywords: ['老年', '老人慎用', '65岁以上'],
+        warning: '年纪大了吃这个药要特别小心，剂量可能需要调整',
+        severity: 'medium'
+      },
+      '相互作用': {
+        keywords: ['药物相互作用', '不能同服', '避免合用'],
+        warning: '这个药不能和其他某些药一起吃，如果您同时在吃别的药，一定要告诉医生',
+        severity: 'high'
+      }
+    };
+    
+    // 4. 常见不良反应模板
+    const commonSideEffects = {
+      '胃肠道反应': ['恶心', '呕吐', '胃痛', '腹泻', '便秘', '腹胀'],
+      '神经系统': ['头晕', '头痛', '嗜睡', '失眠', '乏力'],
+      '皮肤反应': ['皮疹', '瘙痒', '红肿', '荨麻疹'],
+      '心血管': ['心慌', '心跳加快', '血压变化'],
+      '其他': ['口干', '口苦', '食欲下降', '体重变化']
+    };
+    
+    // ========== 生成逻辑 ==========
+    
     const usage = drugInfo.usage || drugInfo.dosage || '';
     const precautions = drugInfo.precautions || '';
     const adverseReactions = drugInfo.adverseReactions || '';
+    const indications = drugInfo.indications || '';
+    const category = drugInfo.category || '';
     
-    let guide = `您好，您查询的药品是${drugInfo.name}。\n\n`;
+    let guide = `您好，您查询的药品是【${drugInfo.name}】。\n\n`;
     
-    // 用法用量
+    // 1. 药品用途说明
+    if (indications) {
+      guide += `【治什么病】：${indications}\n\n`;
+    } else if (category) {
+      guide += `【药品类型】：这是${category}类药物\n\n`;
+    }
+    
+    // 2. 用法用量
     if (usage) {
-      guide += `【吃多少】：${usage}\n\n`;
-    }
-    
-    // 服用时间
-    if (usage.includes('饭前') || usage.includes('空腹')) {
-      guide += `【什么时候吃】：建议在饭前半个小时吃，这样药效会更好。\n\n`;
-    } else if (usage.includes('饭后')) {
-      guide += `【什么时候吃】：建议在吃完饭半小时后吃，这样可以减少对胃的刺激。\n\n`;
-    } else if (usage.includes('睡前')) {
-      guide += `【什么时候吃】：建议在晚上睡觉前吃。\n\n`;
+      guide += `【怎么吃】：${usage}\n\n`;
     } else {
-      guide += `【什么时候吃】：按照医生说的时间吃就好。\n\n`;
+      guide += `【怎么吃】：请按照医生说的剂量来吃，不要自己随便增减\n\n`;
     }
     
-    // 注意事项
-    if (precautions) {
-      const warnings = [];
-      if (precautions.includes('酒')) warnings.push('服药期间千万不要喝酒');
-      if (precautions.includes('开车')) warnings.push('吃完药后最好不要开车');
-      if (warnings.length > 0) {
-        guide += `【特别提醒您】：${warnings.join('；')}。\n\n`;
+    // 3. 服用时间智能判断
+    let timingFound = false;
+    for (const rule of timingRules) {
+      if (rule.keywords.some(kw => usage.includes(kw))) {
+        guide += `【什么时候吃】：${rule.text}\n\n`;
+        timingFound = true;
+        break;
+      }
+    }
+    if (!timingFound) {
+      guide += `【什么时候吃】：按照医生说的时间吃就好，一般是早中晚各一次\n\n`;
+    }
+    
+    // 4. 检测药品类别并给出针对性建议
+    let detectedCategory = null;
+    for (const [catName, keywords] of Object.entries(drugCategories)) {
+      if (keywords.some(kw => drugInfo.name.includes(kw) || (drugInfo.genericName && drugInfo.genericName.includes(kw)))) {
+        detectedCategory = catName;
+        break;
       }
     }
     
-    // 不良反应
-    if (adverseReactions && adverseReactions !== '暂无详细信息') {
-      guide += `【可能出现的不舒服】：有的人吃了这个药可能会有点${adverseReactions}，如果感觉很难受，一定要去找医生看看。\n\n`;
+    if (detectedCategory) {
+      guide += `【药品类别】：这是${detectedCategory}\n\n`;
+      
+      // 根据类别给出特殊提醒
+      switch(detectedCategory) {
+        case '降压药':
+          guide += `【特别提醒】：降压药要坚持每天吃，不能随便停药。最好在固定时间吃，比如每天早上起床后。记得定期量血压哦。\n\n`;
+          break;
+        case '降糖药':
+          guide += `【特别提醒】：降糖药一定要按时吃，特别是饭前吃的药，要在吃饭前半小时就准备好。平时要注意监测血糖。\n\n`;
+          break;
+        case '抗生素':
+          guide += `【特别提醒】：抗生素要吃够疗程，即使症状好了也不能提前停药，否则容易复发。一般要吃5-7天。\n\n`;
+          break;
+        case '止痛药':
+          guide += `【特别提醒】：止痛药不要长期大量吃，连续吃超过3天就要去看医生了。饭后吃可以减少对胃的刺激。\n\n`;
+          break;
+        case '安眠药':
+          guide += `【特别提醒】：安眠药要在睡前30分钟吃，吃了之后就不要再做别的事情了，直接准备睡觉。第二天早上起来可能会觉得有点晕，这是正常的。\n\n`;
+          break;
+        case '心脏病药':
+          guide += `【特别提醒】：心脏病的药一定要随身携带，特别是硝酸甘油这类急救药。如果出现胸痛胸闷要立即含服。\n\n`;
+          break;
+      }
     }
     
-    guide += `请您一定按照医生说的剂量和时间来吃药。\n祝您早日康复！`;
+    // 5. 注意事项和禁忌（扩展版）
+    const importantWarnings = [];
+    const mediumWarnings = [];
+    const criticalWarnings = [];
+    
+    for (const [key, data] of Object.entries(contraindications)) {
+      if (data.keywords.some(kw => precautions.includes(kw) || indications.includes(kw))) {
+        if (data.severity === 'critical') {
+          criticalWarnings.push(data.warning);
+        } else if (data.severity === 'high') {
+          importantWarnings.push(data.warning);
+        } else {
+          mediumWarnings.push(data.warning);
+        }
+      }
+    }
+    
+    if (criticalWarnings.length > 0) {
+      guide += `️ 【重要警告】：\n`;
+      criticalWarnings.forEach(w => guide += `• ${w}\n`);
+      guide += `\n`;
+    }
+    
+    if (importantWarnings.length > 0) {
+      guide += `【特别注意】：\n`;
+      importantWarnings.forEach(w => guide += `• ${w}\n`);
+      guide += `\n`;
+    }
+    
+    if (mediumWarnings.length > 0) {
+      guide += `【温馨提示】：\n`;
+      mediumWarnings.forEach(w => guide += `• ${w}\n`);
+      guide += `\n`;
+    }
+    
+    // 6. 不良反应说明（更友好）
+    if (adverseReactions && adverseReactions !== '暂无详细信息') {
+      guide += `【可能出现的不舒服】：\n`;
+      
+      // 尝试匹配常见不良反应
+      let matchedEffects = [];
+      for (const [catName, effects] of Object.entries(commonSideEffects)) {
+        const found = effects.filter(effect => adverseReactions.includes(effect));
+        if (found.length > 0) {
+          matchedEffects.push({ category: catName, effects: found });
+        }
+      }
+      
+      if (matchedEffects.length > 0) {
+        matchedEffects.forEach(({ category, effects }) => {
+          guide += `• ${category}：可能会有${effects.join('、')}等情况\n`;
+        });
+      } else {
+        guide += `${adverseReactions}\n`;
+      }
+      
+      guide += `\n如果出现这些情况不要太紧张，大多数都是轻微的。但如果感觉很难受或者持续不好转，一定要去找医生看看。\n\n`;
+    }
+    
+    // 7. 保存和丢弃提醒
+    guide += `【保存方法】：放在阴凉干燥的地方，避免阳光直射。注意看有效期，过期的药就不能吃了。\n\n`;
+    
+    // 8. 结尾关怀语
+    guide += `【最后提醒您】：\n`;
+    guide += `• 一定要按照医生说的剂量和时间来吃药\n`;
+    guide += `• 不要自己随便停药或换药\n`;
+    guide += `• 如果同时吃好几种药，要问清楚能不能一起吃\n`;
+    guide += `• 吃药后感觉不舒服要及时告诉家人或医生\n`;
+    guide += `• 定期去医院复查，让医生看看药效怎么样\n\n`;
+    
+    guide += `祝您早日康复，身体健康！🙏`;
     
     return guide;
   };
