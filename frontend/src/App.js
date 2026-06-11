@@ -96,6 +96,10 @@ function App() {
   const screenshotContainerRef = useRef(null); // 隐藏的截图容器引用
   const [showScreenshotContainer, setShowScreenshotContainer] = useState(false); // 控制隐藏截图容器显示
 
+  // 缺药预警相关状态
+  const [shortageWarnings, setShortageWarnings] = useState([]); // 缺药预警列表
+  const [showShortageDetail, setShowShortageDetail] = useState(false); // 缺药预警详情弹窗
+
   const expiringDrugsResult = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -176,6 +180,22 @@ function App() {
       }
     } catch (err) {
       console.error('获取药箱列表异常:', err);
+    }
+  };
+
+  // 加载缺药预警列表
+  const loadShortageWarnings = async (userId) => {
+    if (!userId) return;
+    try {
+      const response = await fetch(`/api/v1/box/shortage-warnings?userId=${userId}`);
+      const data = await response.json();
+      if (response.ok && data.code === 200) {
+        setShortageWarnings(data.data || []);
+      } else {
+        console.error('获取缺药预警失败:', data.message);
+      }
+    } catch (err) {
+      console.error('获取缺药预警异常:', err);
     }
   };
 
@@ -543,6 +563,7 @@ function App() {
     // 登录成功后加载药箱列表和紧急联系人
     if (loginData.userId) {
       loadMedicineBoxList(loginData.userId);
+      loadShortageWarnings(loginData.userId);
       // 不在登录时预加载日历，避免阻塞其他页面
       // 只有当用户真正切换到日历页面时才加载
       
@@ -690,6 +711,7 @@ function App() {
     // 重新加载列表（后台刷新，不影响当前详情显示）
     if (user && user.userId) {
       await loadMedicineBoxList(user.userId);
+      loadShortageWarnings(user.userId);
     }
   };
 
@@ -829,6 +851,7 @@ function App() {
     // 重新加载药箱列表
     if (user && user.userId) {
       await loadMedicineBoxList(user.userId);
+      loadShortageWarnings(user.userId);
       
       // 如果当前在用药日历页面，同时刷新用药计划
       if (activeTab === 'calendar') {
@@ -1166,6 +1189,7 @@ function App() {
           setIsLoggedIn(true);
           // 自动加载药箱列表和紧急联系人
           loadMedicineBoxList(userData.userId);
+          loadShortageWarnings(userData.userId);
           if (userData.id) {
             loadEmergencyContacts(userData.id);
           }
@@ -2432,6 +2456,11 @@ function App() {
       loadCalendarPlans(),
       typeof loadWeeklyMedication === 'function' ? loadWeeklyMedication() : Promise.resolve()
     ]);
+
+    // 服药后刷新缺药预警
+    if (user?.userId) {
+      loadShortageWarnings(user.userId);
+    }
   };
 
   // 调用后端统一幂等用药操作接口
@@ -2618,6 +2647,11 @@ function App() {
       loadCalendarPlans(),
       typeof loadWeeklyMedication === 'function' ? loadWeeklyMedication() : Promise.resolve()
     ]);
+
+    // 撤销服药后刷新缺药预警
+    if (user?.userId) {
+      loadShortageWarnings(user.userId);
+    }
   };
 
   const takenCount = calendarPlans.filter(r => r.taken).length;
@@ -2658,6 +2692,51 @@ function App() {
 
   const renderHomeTab = () => (
     <div>
+      {/* 缺药预警横幅 */}
+      {shortageWarnings.length > 0 && (
+        <div className="shortage-warning-banner" onClick={() => setShowShortageDetail(true)}>
+          <div className="shortage-warning-header">
+            <span className="shortage-warning-icon">
+              {shortageWarnings.some(w => w.warningLevel === 'critical') ? '🚨' : '⚠️'}
+            </span>
+            <div className="shortage-warning-text">
+              <span className="shortage-warning-title">
+                {shortageWarnings.some(w => w.warningLevel === 'critical')
+                  ? `${shortageWarnings.filter(w => w.warningLevel === 'critical').length}种药品已用尽`
+                  : shortageWarnings.length === 1
+                    ? `${shortageWarnings[0].drugName}即将用尽`
+                    : `${shortageWarnings.length}种药品即将用尽`}
+              </span>
+              <span className="shortage-warning-subtitle">
+                {shortageWarnings.some(w => w.warningLevel === 'critical')
+                  ? '请尽快补充药品'
+                  : `最近${shortageWarnings[0].remainingDays}天将用完，建议提前购买`}
+              </span>
+            </div>
+          </div>
+          <div className="shortage-warning-actions">
+            <button
+              className="shortage-action-btn shortage-action-pharmacy"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveTab('drugs');
+              }}
+            >
+              🏪 去购药
+            </button>
+            <button
+              className="shortage-action-btn shortage-action-hospital"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveTab('emergency');
+              }}
+            >
+              🏥 在线问诊
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="dashboard-grid">
         <div className="dashboard-card" onClick={() => setActiveTab('upload')}>
           <div className="upload-card-icon">
@@ -5181,6 +5260,134 @@ function App() {
               >
                 我知道了
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 缺药预警详情弹窗 */}
+      {showShortageDetail && shortageWarnings.length > 0 && (
+        <div className="modal-overlay" onClick={() => setShowShortageDetail(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ color: '#e67e22' }}>⚠️ 缺药预警</h3>
+              <button className="modal-close-btn" onClick={() => setShowShortageDetail(false)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ padding: '20px' }}>
+              <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                <div style={{ fontSize: '40px', marginBottom: '8px' }}>
+                  {shortageWarnings.some(w => w.warningLevel === 'critical') ? '🚨' : '⚠️'}
+                </div>
+                <p style={{ fontSize: '16px', color: '#333', fontWeight: '600' }}>
+                  您有 <span style={{ color: '#e74c3c', fontSize: '20px' }}>{shortageWarnings.length}</span> 种药品即将用尽
+                </p>
+                <p style={{ fontSize: '13px', color: '#888', marginTop: '4px' }}>
+                  建议尽快补充，避免断药影响治疗
+                </p>
+              </div>
+
+              {/* 预警药品列表 */}
+              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                {shortageWarnings.map((warning, index) => (
+                  <div
+                    key={warning.boxItemId || index}
+                    style={{
+                      background: warning.warningLevel === 'critical'
+                        ? 'linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%)'
+                        : warning.warningLevel === 'urgent'
+                          ? 'linear-gradient(135deg, #fff8f0 0%, #ffe8cc 100%)'
+                          : 'linear-gradient(135deg, #fffff0 0%, #fff8dc 100%)',
+                      borderRadius: '10px',
+                      padding: '12px 14px',
+                      marginBottom: '10px',
+                      borderLeft: `4px solid ${
+                        warning.warningLevel === 'critical' ? '#e74c3c'
+                          : warning.warningLevel === 'urgent' ? '#e67e22' : '#f39c12'
+                      }`
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <span style={{ fontWeight: '600', fontSize: '15px', color: '#333' }}>
+                          {warning.drugName}
+                        </span>
+                        {warning.specification && (
+                          <span style={{ fontSize: '12px', color: '#999', marginLeft: '6px' }}>
+                            {warning.specification}
+                          </span>
+                        )}
+                      </div>
+                      <span style={{
+                        fontSize: '12px',
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        fontWeight: '600',
+                        color: 'white',
+                        background: warning.warningLevel === 'critical' ? '#e74c3c'
+                          : warning.warningLevel === 'urgent' ? '#e67e22' : '#f39c12'
+                      }}>
+                        {warning.warningLevelDesc}
+                      </span>
+                    </div>
+                    <div style={{ marginTop: '6px', fontSize: '13px', color: '#666', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                      <span>用量：{warning.dosage}</span>
+                      <span>频率：{warning.frequency}</span>
+                      <span>剩余：{warning.remainingQuantity ?? 0}份</span>
+                    </div>
+                    <div style={{ marginTop: '4px', fontSize: '14px', fontWeight: '600',
+                      color: warning.remainingDays <= 0 ? '#e74c3c' : '#e67e22'
+                    }}>
+                      {warning.remainingDays <= 0
+                        ? '药品已用尽，请立即补充'
+                        : `预计还可服用${warning.remainingDays}天`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 快捷操作按钮 */}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                <button
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    fontSize: '15px',
+                    fontWeight: '600',
+                    background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => {
+                    setShowShortageDetail(false);
+                    setActiveTab('drugs');
+                  }}
+                >
+                  🏪 去购药
+                </button>
+                <button
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    fontSize: '15px',
+                    fontWeight: '600',
+                    background: 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => {
+                    setShowShortageDetail(false);
+                    setActiveTab('emergency');
+                  }}
+                >
+                  🏥 在线问诊
+                </button>
+              </div>
             </div>
           </div>
         </div>

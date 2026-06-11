@@ -3,6 +3,7 @@ package com.example.backend.controller;
 import com.example.backend.common.ResponseResult;
 import com.example.backend.model.dto.AddMedicineRequest;
 import com.example.backend.model.dto.MedicineBoxResponse;
+import com.example.backend.model.dto.MedicineShortageWarningDTO;
 import com.example.backend.model.dto.UpdateMedicineRequest;
 import com.example.backend.service.MedicineBoxService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -190,6 +191,30 @@ public class MedicineController {
             return ResponseResult.fail("无效的用户ID格式");
         } catch (Exception e) {
             return ResponseResult.fail("查询失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取缺药预警列表
+     * GET /api/v1/box/shortage-warnings?userId=xxx
+     *
+     * 基于服用频率、每次剂量和剩余药量计算剩余天数，
+     * 返回剩余天数小于7天的活跃药品预警
+     *
+     * @param userId 用户ID（雪花算法ID）
+     * @return 缺药预警列表，按剩余天数升序排列
+     */
+    @GetMapping("/box/shortage-warnings")
+    public ResponseResult<List<MedicineShortageWarningDTO>> getShortageWarnings(
+            @RequestParam String userId) {
+        try {
+            Long userIdLong = Long.parseLong(userId);
+            List<MedicineShortageWarningDTO> warnings = medicineBoxService.getShortageWarnings(userIdLong);
+            return ResponseResult.success("success", warnings);
+        } catch (NumberFormatException e) {
+            return ResponseResult.fail("无效的用户ID格式");
+        } catch (Exception e) {
+            return ResponseResult.fail("查询缺药预警失败: " + e.getMessage());
         }
     }
 }
