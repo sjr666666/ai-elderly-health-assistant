@@ -120,6 +120,29 @@ public class GuardianController {
         }
     }
 
+    @GetMapping("/notifications/unread-count")
+    public ResponseResult<Integer> getUnreadCount(@RequestParam Long guardianId) {
+        log.info("获取未读通知数量 - guardianId: {}", guardianId);
+        try {
+            return ResponseResult.success(smsNotificationService.getUnreadCount(guardianId));
+        } catch (Exception e) {
+            log.error("获取未读通知数量失败 - guardianId: {}", guardianId, e);
+            return ResponseResult.fail("获取未读通知数量失败：" + e.getMessage());
+        }
+    }
+
+    @PutMapping("/notifications/read-all")
+    public ResponseResult<Void> markAllAsRead(@RequestParam Long guardianId) {
+        log.info("标记所有通知为已读 - guardianId: {}", guardianId);
+        try {
+            smsNotificationService.markAllAsRead(guardianId);
+            return ResponseResult.success("标记成功", null);
+        } catch (Exception e) {
+            log.error("标记已读失败 - guardianId: {}", guardianId, e);
+            return ResponseResult.fail("标记已读失败：" + e.getMessage());
+        }
+    }
+
     @GetMapping("/elders/{elderId}/expiring-drugs")
     public ResponseResult<List<ExpiringDrugDTO>> getExpiringDrugs(@RequestParam Long guardianId, @PathVariable Long elderId) {
         log.info("获取老人临期药品 - guardianId: {}, elderId: {}", guardianId, elderId);

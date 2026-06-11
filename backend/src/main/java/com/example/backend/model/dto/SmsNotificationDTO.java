@@ -60,4 +60,9 @@ public class SmsNotificationDTO {
      * 创建时间
      */
     private LocalDateTime createdAt;
+
+    /**
+     * 是否已读
+     */
+    private Boolean isRead;
 }

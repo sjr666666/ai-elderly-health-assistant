@@ -83,6 +83,19 @@ public class MissedDoseMonitorServiceImpl implements MissedDoseMonitorService {
     }
 
     /**
+     * 时段英文标识转中文
+     */
+    private String getTimeSlotLabel(String timeSlot) {
+        switch (timeSlot) {
+            case "morning": return "早晨";
+            case "noon": return "中午";
+            case "evening": return "傍晚";
+            case "before_bed": return "睡前";
+            default: return timeSlot;
+        }
+    }
+
+    /**
      * 通知家属漏服情况
      */
     private void notifyGuardians(MedicationPlan plan) {
@@ -96,7 +109,7 @@ public class MissedDoseMonitorServiceImpl implements MissedDoseMonitorService {
         SysUser elder = userMapper.selectById(plan.getUserId());
         String elderName = elder != null ? elder.getRealName() : "老人";
 
-        String message = String.format("【用药提醒】%s今日%s时段的药物未按时服用，请关注！", elderName, plan.getTimeSlot());
+        String message = String.format("【用药提醒】%s今日%s时段的药物未按时服用，请关注！", elderName, getTimeSlotLabel(plan.getTimeSlot()));
 
         for (GuardianElderRelation relation : relations) {
             // 查询监护人手机号

@@ -77,4 +77,10 @@ public class SmsNotificationLog extends BaseEntity {
      */
     @TableField("error_message")
     private String errorMessage;
+
+    /**
+     * 是否已读：0-未读 1-已读
+     */
+    @TableField("is_read")
+    private Integer isRead;
 }

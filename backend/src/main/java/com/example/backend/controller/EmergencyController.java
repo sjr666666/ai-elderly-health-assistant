@@ -1,18 +1,27 @@
 package com.example.backend.controller;
 
 import com.example.backend.common.ResponseResult;
+import com.example.backend.mapper.GuardianElderRelationMapper;
+import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.dto.AddContactRequest;
 import com.example.backend.model.dto.AddContactResponse;
 import com.example.backend.model.entity.AiConversationLog;
 import com.example.backend.model.entity.EmergencyContact;
+import com.example.backend.model.entity.EmergencyEvent;
+import com.example.backend.model.entity.GuardianElderRelation;
+import com.example.backend.model.entity.SysUser;
 import com.example.backend.service.AiConversationLogService;
 import com.example.backend.service.EmergencyContactService;
+import com.example.backend.service.EmergencyEventService;
+import com.example.backend.service.SmsNotificationService;
 import com.example.backend.service.impl.AiEmergencyServiceImpl;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,13 +39,25 @@ public class EmergencyController {
     private final AiEmergencyServiceImpl aiEmergencyService;
     private final AiConversationLogService conversationLogService;
     private final EmergencyContactService emergencyContactService;
+    private final EmergencyEventService emergencyEventService;
+    private final SmsNotificationService smsNotificationService;
+    private final GuardianElderRelationMapper guardianElderRelationMapper;
+    private final UserMapper userMapper;
 
     public EmergencyController(AiEmergencyServiceImpl aiEmergencyService,
                                AiConversationLogService conversationLogService,
-                               EmergencyContactService emergencyContactService) {
+                               EmergencyContactService emergencyContactService,
+                               EmergencyEventService emergencyEventService,
+                               SmsNotificationService smsNotificationService,
+                               GuardianElderRelationMapper guardianElderRelationMapper,
+                               UserMapper userMapper) {
         this.aiEmergencyService = aiEmergencyService;
         this.conversationLogService = conversationLogService;
         this.emergencyContactService = emergencyContactService;
+        this.emergencyEventService = emergencyEventService;
+        this.smsNotificationService = smsNotificationService;
+        this.guardianElderRelationMapper = guardianElderRelationMapper;
+        this.userMapper = userMapper;
     }
 
     /**
@@ -83,6 +104,67 @@ public class EmergencyController {
                                                     : aiEmergencyService.isEmergencyQuestion(question);
 
         return aiEmergencyService.handleEmergencyQuestion(userId, question, emergencyFlag, history);
+    }
+
+    /**
+     * 触发紧急模式
+     * 老人开启紧急模式时调用，创建紧急事件并通知所有关联家属
+     *
+     * @param request 包含elderId的请求体
+     * @return 操作结果
+     */
+    @PostMapping("/trigger")
+    public ResponseResult<Map<String, Object>> triggerEmergencyMode(@RequestBody Map<String, Long> request) {
+        Long elderId = request.get("elderId");
+        if (elderId == null) {
+            return ResponseResult.fail("缺少elderId参数");
+        }
+
+        logger.info("老人触发紧急模式 - elderId: {}", elderId);
+
+        // 查询老人信息
+        SysUser elder = userMapper.selectById(elderId);
+        String elderName = elder != null ? elder.getRealName() : "老人";
+
+        // 创建紧急事件
+        EmergencyEvent event = new EmergencyEvent();
+        event.setElderId(elderId);
+        event.setEventType("sos");
+        event.setSeverity("high");
+        event.setDescription(elderName + "开启了紧急求助模式");
+        event.setEventTime(LocalDateTime.now());
+        event.setIsResolved(0);
+        emergencyEventService.createEvent(event);
+
+        logger.info("紧急事件已创建 - eventId: {}", event.getId());
+
+        // 查询所有关联家属
+        LambdaQueryWrapper<GuardianElderRelation> relationQuery = new LambdaQueryWrapper<>();
+        relationQuery.eq(GuardianElderRelation::getElderId, elderId)
+                .eq(GuardianElderRelation::getStatus, "active");
+        List<GuardianElderRelation> relations = guardianElderRelationMapper.selectList(relationQuery);
+
+        // 通知每位家属
+        int notifyCount = 0;
+        for (GuardianElderRelation relation : relations) {
+            SysUser guardian = userMapper.selectById(relation.getGuardianId());
+            String phone = guardian != null ? guardian.getRealName() : "";
+            try {
+                String message = String.format("【紧急求助】%s开启了紧急求助模式，请立即关注！", elderName);
+                smsNotificationService.sendNotification(
+                        relation.getGuardianId(), elderId, "emergency_alert", message, phone);
+                notifyCount++;
+            } catch (Exception e) {
+                logger.error("通知家属失败 - guardianId: {}", relation.getGuardianId(), e);
+            }
+        }
+
+        logger.info("紧急模式触发完成 - 通知家属数: {}", notifyCount);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("eventId", event.getId());
+        result.put("notifiedGuardians", notifyCount);
+        return ResponseResult.success(result);
     }
 
     /**

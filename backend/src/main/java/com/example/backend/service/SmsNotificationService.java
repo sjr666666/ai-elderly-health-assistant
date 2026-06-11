@@ -28,4 +28,19 @@ public interface SmsNotificationService {
      * @param phone      接收手机号
      */
     void sendNotification(Long guardianId, Long elderId, String eventType, String message, String phone);
+
+    /**
+     * 获取未读通知数量
+     *
+     * @param guardianId 监护人ID
+     * @return 未读数量
+     */
+    int getUnreadCount(Long guardianId);
+
+    /**
+     * 标记所有通知为已读
+     *
+     * @param guardianId 监护人ID
+     */
+    void markAllAsRead(Long guardianId);
 }
