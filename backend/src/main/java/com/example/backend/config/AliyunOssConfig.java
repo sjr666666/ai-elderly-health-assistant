@@ -2,12 +2,15 @@ package com.example.backend.config;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 @ConfigurationProperties(prefix = "aliyun.oss")
+@ConditionalOnExpression("'${aliyun.oss.access-key-id:}' != ''")
 public class AliyunOssConfig {
 
     private String endpoint;
