@@ -4,6 +4,24 @@
   box-sizing: border-box;
 }
 
+/* 完全隐藏并禁用所有数字输入框的上下箭头 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield !important;
+  appearance: none !important;
+}
+
 /* 隐藏浏览器自带的密码显示/清除按钮 */
 input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {
@@ -6075,6 +6093,164 @@ body {
   to {
     opacity: 1;
   }
+}
+
+/* ============ BATCH RECOGNIZE STYLES ============ */
+.batch-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.batch-preview-item {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: white;
+  aspect-ratio: 1 / 1; /* 固定正方形比例 */
+}
+
+.batch-preview-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.batch-preview-item.success {
+  border: 3px solid #4CAF50;
+}
+
+.batch-preview-item.failed {
+  border: 3px solid #E74C3C;
+}
+
+.batch-preview-item.pending {
+  border: 3px solid #9E9E9E;
+}
+
+.batch-preview-item.selected {
+  border: 4px solid var(--tech-blue);
+  box-shadow: 0 0 0 4px rgba(74, 144, 226, 0.2);
+}
+
+.batch-preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* 保持图片填充容器，裁剪多余部分 */
+  display: block;
+}
+
+/* 状态标签 - 左上角（仅识别中显示） */
+.batch-preview-status-label {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  animation: labelFadeIn 0.3s ease;
+}
+
+@keyframes labelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.batch-preview-status-label.recognizing {
+  background: linear-gradient(135deg, #F39C12, #e67e22);
+}
+
+/* 选择状态标签 - 左下角 */
+.batch-preview-selection-label {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  animation: labelFadeIn 0.3s ease;
+}
+
+.batch-preview-selection-label.selected {
+  background: linear-gradient(135deg, var(--tech-blue), #357abd);
+  color: white;
+}
+
+.batch-preview-selection-label.unselected {
+  background: rgba(255, 255, 255, 0.9);
+  color: #6B6B6B;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* 删除按钮 - 右上角 */
+.batch-preview-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+.batch-preview-delete-btn:hover {
+  background: #E74C3C;
+  transform: scale(1.1) rotate(90deg);
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+}
+
+.batch-preview-delete-btn:active {
+  transform: scale(0.95);
+}
+
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  margin-top: 16px;
+}
+
+.batch-count {
+  font-size: 16px;
+  color: var(--text-dark);
+  font-weight: 500;
+}
+
+.batch-count strong {
+  color: var(--tech-blue);
+  font-weight: 700;
 }
 
 /* 弹窗主体动画 */
