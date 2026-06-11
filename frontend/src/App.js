@@ -4976,7 +4976,7 @@ function App() {
             {activeTab === 'drugs' && renderDrugsTab()}
             {activeTab === 'emergency' && (
               <div className="card emergency-card">
-                <EmergencyAssistant emergencyContacts={emergencyContacts} />
+                <EmergencyAssistant emergencyContacts={emergencyContacts} elderId={user?.id} />
               </div>
             )}
           </div>

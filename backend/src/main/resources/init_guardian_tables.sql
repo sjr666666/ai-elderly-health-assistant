@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS `sms_notification_log` (
   `retry_count` int NOT NULL DEFAULT 0 COMMENT '重试次数',
   `sent_at` datetime NULL COMMENT '发送时间',
   `error_message` varchar(500) NULL COMMENT '错误信息',
+  `is_read` tinyint NOT NULL DEFAULT 0 COMMENT '是否已读：0-未读 1-已读',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除标记',

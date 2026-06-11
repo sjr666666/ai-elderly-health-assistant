@@ -8,11 +8,13 @@ import com.example.backend.model.dto.GuardianDashboardDTO;
 import com.example.backend.model.dto.GuardianRelationRequest;
 import com.example.backend.model.entity.*;
 import com.example.backend.service.GuardianService;
+import com.example.backend.service.SmsNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,6 +32,7 @@ public class GuardianServiceImpl implements GuardianService {
     private final EmergencyEventMapper emergencyEventMapper;
     private final UserMedicineBoxMapper userMedicineBoxMapper;
     private final DrugBaseMapper drugBaseMapper;
+    private final SmsNotificationService smsNotificationService;
 
     @Override
     public GuardianDashboardDTO getDashboard(Long guardianId) {
@@ -46,7 +49,7 @@ public class GuardianServiceImpl implements GuardianService {
         return GuardianDashboardDTO.builder()
                 .elderCount(elderList.size())
                 .activeAlertCount(activeAlertCount)
-                .unreadNotificationCount(0)
+                .unreadNotificationCount(smsNotificationService.getUnreadCount(guardianId))
                 .elders(elderList)
                 .build();
     }
@@ -255,6 +258,21 @@ public class GuardianServiceImpl implements GuardianService {
                 .eq(UserMedicineBox::getStatus, "active");
         Long medicationCount = userMedicineBoxMapper.selectCount(boxQuery);
 
+        // 最后活跃时间：使用用户最后更新时间
+        String lastActiveTime = null;
+        if (elder.getUpdatedAt() != null) {
+            LocalDateTime updated = elder.getUpdatedAt();
+            LocalDateTime now = LocalDateTime.now();
+            long minutes = java.time.Duration.between(updated, now).toMinutes();
+            if (minutes < 60) {
+                lastActiveTime = minutes + "分钟前";
+            } else if (minutes < 1440) {
+                lastActiveTime = (minutes / 60) + "小时前";
+            } else {
+                lastActiveTime = (minutes / 1440) + "天前";
+            }
+        }
+
         return ElderSummaryDTO.builder()
                 .elderId(elder.getId())
                 .realName(elder.getRealName())
@@ -265,6 +283,7 @@ public class GuardianServiceImpl implements GuardianService {
                 .todayTakenCount(takenCount)
                 .todayMissedCount(missedCount)
                 .activeAlertCount(alertCount.intValue())
+                .lastActiveTime(lastActiveTime)
                 .build();
     }
 }

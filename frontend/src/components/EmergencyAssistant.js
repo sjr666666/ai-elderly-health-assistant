@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import ContactModal from './ContactModal';
 
-const EmergencyAssistant = ({ emergencyContacts }) => {
+const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -102,6 +102,22 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
       };
     }
   }, [showContactModal]);
+
+  // 切换紧急模式
+  const handleEmergencyModeChange = async (checked) => {
+    setEmergencyMode(checked);
+    if (checked && elderId) {
+      try {
+        await fetch('/api/emergency/trigger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ elderId }),
+        });
+      } catch (e) {
+        console.error('触发紧急模式通知失败:', e);
+      }
+    }
+  };
 
   // 发送消息
   const sendMessage = async () => {
@@ -360,7 +376,7 @@ const EmergencyAssistant = ({ emergencyContacts }) => {
           <input
             type="checkbox"
             checked={emergencyMode}
-            onChange={(e) => setEmergencyMode(e.target.checked)}
+            onChange={(e) => handleEmergencyModeChange(e.target.checked)}
             style={{
               width: '64px',
               height: '36px',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import GuardianLogin from './GuardianLogin';
 import GuardianDashboard from './GuardianDashboard';
 import GuardianElderDetail from './GuardianElderDetail';
@@ -9,8 +9,17 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
   const [localUser, setLocalUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedElderId, setSelectedElderId] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const user = propUser || localUser;
+
+  const fetchUnreadCount = useCallback(() => {
+    if (!user) return;
+    fetch(`/api/v1/guardian/notifications/unread-count?guardianId=${user.id}`)
+      .then(res => res.json())
+      .then(data => { if (data.code === 200) setUnreadCount(data.data); })
+      .catch(() => {});
+  }, [user]);
 
   useEffect(() => {
     if (!propUser) {
@@ -24,12 +33,21 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
     }
   }, [propUser]);
 
+  // 登录后轮询未读数
+  useEffect(() => {
+    if (!user) return;
+    fetchUnreadCount();
+    const timer = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(timer);
+  }, [user, fetchUnreadCount]);
+
   const handleLogin = (userData) => { setLocalUser(userData); };
 
   const handleLogout = () => {
     setLocalUser(null);
     setActiveTab('dashboard');
     setSelectedElderId(null);
+    setUnreadCount(0);
     localStorage.removeItem('guardianUser');
     if (propOnLogout) propOnLogout();
   };
@@ -44,6 +62,15 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
     setActiveTab('dashboard');
   };
 
+  const handleTabNotification = () => {
+    setActiveTab('notification');
+  };
+
+  // 通知页标记已读后的回调
+  const handleNotificationsRead = () => {
+    setUnreadCount(0);
+  };
+
   if (!user) return <GuardianLogin onLogin={handleLogin} />;
 
   const renderContent = () => {
@@ -53,7 +80,7 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
       case 'elderDetail':
         return <GuardianElderDetail guardianId={user.id} elderId={selectedElderId} onBack={handleBackToDashboard} />;
       case 'notification':
-        return <GuardianNotification guardianId={user.id} />;
+        return <GuardianNotification guardianId={user.id} onRead={handleNotificationsRead} />;
       default:
         return <GuardianDashboard guardianId={user.id} onViewElder={handleViewElder} />;
     }
@@ -81,13 +108,10 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
           <span>首页</span>
         </button>
         <button className={`g-tab-item ${activeTab === 'notification' ? 'active' : ''}`}
-          onClick={() => setActiveTab('notification')}>
+          onClick={handleTabNotification} style={{ position: 'relative' }}>
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
           <span>通知</span>
-        </button>
-        <button className="g-tab-item" onClick={handleLogout}>
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
-          <span>退出</span>
+          {unreadCount > 0 && <span className="g-tab-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
         </button>
       </div>
     </div>

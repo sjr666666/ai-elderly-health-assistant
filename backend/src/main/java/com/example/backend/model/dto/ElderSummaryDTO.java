@@ -58,4 +58,9 @@ public class ElderSummaryDTO {
      * 活跃告警数量
      */
     private Integer activeAlertCount;
+
+    /**
+     * 最后活跃时间
+     */
+    private String lastActiveTime;
 }

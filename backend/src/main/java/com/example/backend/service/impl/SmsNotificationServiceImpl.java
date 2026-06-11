@@ -1,6 +1,7 @@
 package com.example.backend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.backend.mapper.SmsNotificationLogMapper;
 import com.example.backend.model.dto.SmsNotificationDTO;
 import com.example.backend.model.entity.SmsNotificationLog;
@@ -45,6 +46,7 @@ public class SmsNotificationServiceImpl implements SmsNotificationService {
                     .sendStatus(logEntry.getStatus())
                     .sentAt(logEntry.getSentAt())
                     .createdAt(logEntry.getCreatedAt())
+                    .isRead(logEntry.getIsRead() != null && logEntry.getIsRead() == 1)
                     .build());
         }
 
@@ -64,6 +66,7 @@ public class SmsNotificationServiceImpl implements SmsNotificationService {
         notificationLog.setPhone(phone);
         notificationLog.setStatus("pending");
         notificationLog.setRetryCount(0);
+        notificationLog.setIsRead(0);
 
         smsNotificationLogMapper.insert(notificationLog);
 
@@ -75,5 +78,23 @@ public class SmsNotificationServiceImpl implements SmsNotificationService {
         smsNotificationLogMapper.updateById(notificationLog);
 
         log.info("短信通知发送成功 - id: {}", notificationLog.getId());
+    }
+
+    @Override
+    public int getUnreadCount(Long guardianId) {
+        LambdaQueryWrapper<SmsNotificationLog> query = new LambdaQueryWrapper<>();
+        query.eq(SmsNotificationLog::getGuardianId, guardianId)
+                .and(w -> w.eq(SmsNotificationLog::getIsRead, 0).or().isNull(SmsNotificationLog::getIsRead));
+        return Math.toIntExact(smsNotificationLogMapper.selectCount(query));
+    }
+
+    @Override
+    public void markAllAsRead(Long guardianId) {
+        log.info("标记所有通知为已读 - guardianId: {}", guardianId);
+        LambdaUpdateWrapper<SmsNotificationLog> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(SmsNotificationLog::getGuardianId, guardianId)
+                .and(w -> w.eq(SmsNotificationLog::getIsRead, 0).or().isNull(SmsNotificationLog::getIsRead))
+                .set(SmsNotificationLog::getIsRead, 1);
+        smsNotificationLogMapper.update(null, updateWrapper);
     }
 }

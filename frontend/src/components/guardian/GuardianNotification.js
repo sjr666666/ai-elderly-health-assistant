@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import './guardian.css';
 
-function GuardianNotification({ guardianId }) {
+function GuardianNotification({ guardianId, onRead }) {
   const [notifications, setNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => { loadNotifications(); }, [guardianId]);
+  useEffect(() => { loadNotifications(); markAsRead(); }, [guardianId]);
+
+  const markAsRead = async () => {
+    try {
+      await fetch(`/api/v1/guardian/notifications/read-all?guardianId=${guardianId}`, { method: 'PUT' });
+      if (onRead) onRead();
+    } catch {}
+  };
 
   const loadNotifications = async () => {
     setIsLoading(true); setError('');
@@ -21,8 +28,36 @@ function GuardianNotification({ guardianId }) {
 
   const getEventTypeLabel = (type) => ({
     fall: '跌倒报警', sos: '紧急求助', abnormal: '异常行为',
-    medication_missed: '漏服药物', expiring_drug: '药品临期', other: '其他',
+    medication_missed: '漏服药物', missed_dose: '漏服药物', missed_dose_alert: '漏服药物',
+    emergency_alert: '紧急报警', expiring_drug: '药品临期',
+    expiring_drug_reminder: '药品临期', other: '其他',
   }[type] || type);
+
+  const translateMessage = (msg) => {
+    if (!msg) return msg;
+    return msg
+      .replace(/morning/g, '早晨')
+      .replace(/noon/g, '中午')
+      .replace(/evening/g, '傍晚')
+      .replace(/before_bed/g, '睡前');
+  };
+
+  const formatTime = (timeStr) => {
+    if (!timeStr) return '';
+    const date = new Date(timeStr);
+    if (isNaN(date.getTime())) return timeStr;
+    const now = new Date();
+    const diff = Math.floor((now - date) / 1000);
+    if (diff < 60) return '刚刚';
+    if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+    if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+    if (diff < 172800) return '昨天 ' + date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
+    const m = date.getMonth() + 1;
+    const d = date.getDate();
+    const h = date.getHours().toString().padStart(2, '0');
+    const min = date.getMinutes().toString().padStart(2, '0');
+    return m + '月' + d + '日 ' + h + ':' + min;
+  };
 
   const getSendStatus = (status) => {
     switch (status) {
@@ -60,8 +95,8 @@ function GuardianNotification({ guardianId }) {
                   <span className="g-notif-type">{getEventTypeLabel(n.eventType)}</span>
                   <span className={`g-notif-send ${send.cls}`}>{send.text}</span>
                 </div>
-                <p className="g-notif-msg">{n.message}</p>
-                <span className="g-notif-time">{n.sentAt || n.createdAt}</span>
+                <p className="g-notif-msg">{translateMessage(n.message)}</p>
+                <span className="g-notif-time">{formatTime(n.sentAt || n.createdAt)}</span>
               </div>
             );
           })}
