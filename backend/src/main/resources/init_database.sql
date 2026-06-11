@@ -10,11 +10,14 @@
 -- =====================================================
 
 -- 创建数据库（如果不存在）
-CREATE DATABASE IF NOT EXISTS `elderly_medication` 
-  DEFAULT CHARACTER SET utf8mb4 
+CREATE DATABASE IF NOT EXISTS `elderly_medication`
+  DEFAULT CHARACTER SET utf8mb4
   DEFAULT COLLATE utf8mb4_unicode_ci;
 
 USE `elderly_medication`;
+
+-- 设置客户端字符集
+SET NAMES utf8mb4;
 
 -- 关闭外键检查
 SET FOREIGN_KEY_CHECKS = 0;
@@ -293,34 +296,44 @@ CREATE TABLE `drug_aliases` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='药品别名映射表';
 
 -- =============== 添加外键约束 ===============
-ALTER TABLE `user_medicine_box`
-ADD CONSTRAINT `fk_box_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE,
-ADD CONSTRAINT `fk_box_drug` FOREIGN KEY (`drug_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE;
+-- 使用存储过程安全添加外键（避免重复执行报错）
+DROP PROCEDURE IF EXISTS add_fk_if_not_exists;
+DELIMITER $$
+CREATE PROCEDURE add_fk_if_not_exists(
+    IN p_table VARCHAR(64),
+    IN p_constraint VARCHAR(64),
+    IN p_definition TEXT
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = p_table
+          AND CONSTRAINT_NAME = p_constraint
+    ) THEN
+        SET @sql = CONCAT('ALTER TABLE `', p_table, '` ADD CONSTRAINT `', p_constraint, '` ', p_definition);
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END$$
+DELIMITER ;
 
-ALTER TABLE `ocr_record`
-ADD CONSTRAINT `fk_ocr_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE,
-ADD CONSTRAINT `fk_ocr_drug` FOREIGN KEY (`matched_drug_id`) REFERENCES `drug_base`(`id`) ON DELETE SET NULL;
+CALL add_fk_if_not_exists('user_medicine_box', 'fk_box_user', 'FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('user_medicine_box', 'fk_box_drug', 'FOREIGN KEY (`drug_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('ocr_record', 'fk_ocr_user', 'FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('ocr_record', 'fk_ocr_drug', 'FOREIGN KEY (`matched_drug_id`) REFERENCES `drug_base`(`id`) ON DELETE SET NULL');
+CALL add_fk_if_not_exists('drug_recognition_log', 'fk_rec_log_ocr', 'FOREIGN KEY (`ocr_record_id`) REFERENCES `ocr_record`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('medication_plan', 'fk_plan_user', 'FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('medication_plan', 'fk_plan_drug', 'FOREIGN KEY (`drug_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('medication_log', 'fk_log_plan', 'FOREIGN KEY (`plan_id`) REFERENCES `medication_plan`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('medication_log', 'fk_log_user', 'FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('reminder_log', 'fk_remind_user', 'FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('emergency_contact', 'fk_contact_elder', 'FOREIGN KEY (`elder_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('drug_conflict_rules', 'fk_conflict_drug_a', 'FOREIGN KEY (`drug_a_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('drug_conflict_rules', 'fk_conflict_drug_b', 'FOREIGN KEY (`drug_b_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE');
 
-ALTER TABLE `drug_recognition_log`
-ADD CONSTRAINT `fk_rec_log_ocr` FOREIGN KEY (`ocr_record_id`) REFERENCES `ocr_record`(`id`) ON DELETE CASCADE;
-
-ALTER TABLE `medication_plan`
-ADD CONSTRAINT `fk_plan_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE,
-ADD CONSTRAINT `fk_plan_drug` FOREIGN KEY (`drug_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE;
-
-ALTER TABLE `medication_log`
-ADD CONSTRAINT `fk_log_plan` FOREIGN KEY (`plan_id`) REFERENCES `medication_plan`(`id`) ON DELETE CASCADE,
-ADD CONSTRAINT `fk_log_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE;
-
-ALTER TABLE `reminder_log`
-ADD CONSTRAINT `fk_remind_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE;
-
-ALTER TABLE `emergency_contact`
-ADD CONSTRAINT `fk_contact_elder` FOREIGN KEY (`elder_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE;
-
-ALTER TABLE `drug_conflict_rules`
-ADD CONSTRAINT `fk_conflict_drug_a` FOREIGN KEY (`drug_a_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE,
-ADD CONSTRAINT `fk_conflict_drug_b` FOREIGN KEY (`drug_b_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE;
+DROP PROCEDURE IF EXISTS add_fk_if_not_exists;
 
 -- 重新启用外键检查
 SET FOREIGN_KEY_CHECKS = 1;
@@ -341,7 +354,7 @@ INSERT IGNORE INTO `sys_user` (`user_id`, `username`, `password`, `real_name`, `
 -- ---------------- 药品基础数据（完整版84种） ----------------
 -- 注意：实际生产中应通过 init_drug_data.sql 导入完整药品数据
 -- 此处仅保留少量代表性药品作为基础数据
-INSERT INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `common_name`, `specification`, `manufacturer`, `category`, `description`) VALUES
+INSERT IGNORE INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `common_name`, `specification`, `manufacturer`, `category`, `description`) VALUES
 ('国药准字Z44021856', '感冒灵颗粒', '999感冒灵', '三九感冒灵', '10g*9袋', '华润三九医药股份有限公司', '感冒药', '成分：三叉苦、金盏银盘、野菊花、岗梅、咖啡因、对乙酰氨基酚、马来酸氯苯那敏、薄荷油。适应症：解热镇痛。用于感冒引起的头痛、发热、鼻塞、流涕、咽痛。用法用量：开水冲服，一次1袋，一日3次。'),
 ('国药准字H10910052', '硝苯地平缓释片', '伲福达', '硝苯地平', '20mg*30片', '青岛黄海制药有限责任公司', '降压药', '成分：硝苯地平。适应症：用于治疗高血压、心绞痛。用法用量：口服，一次1片，一日2次。'),
 ('国药准字H11021309', '阿司匹林肠溶片', '拜阿司匹灵', '阿司匹林', '100mg*30片', '拜耳医药保健有限公司', '心脑血管药', '成分：阿司匹林。适应症：用于抑制血小板聚集，预防心肌梗死、脑梗死。用法用量：口服，一次1片，一日1次。'),

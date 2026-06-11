@@ -1,0 +1,695 @@
+/* ============ 家属端移动端样式 ============ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --primary: #3A7BC8;
+  --primary-light: #E8F1FB;
+  --primary-dark: #2D6AB5;
+  --bg: #F4F6F9;
+  --card: #FFFFFF;
+  --text: #1A1A1A;
+  --text-sub: #666;
+  --text-hint: #999;
+  --border: #EAEAEA;
+  --danger: #E74C3C;
+  --danger-light: #FFF1F0;
+  --warn: #FAAD14;
+  --warn-light: #FFFBE6;
+  --success: #52C41A;
+  --success-light: #F6FFED;
+  --radius: 12px;
+}
+
+/* 全屏App容器 */
+.g-app {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ 顶部导航栏 ============ */
+.g-header {
+  background: var(--primary);
+  color: white;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.g-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.g-header-icon { font-size: 20px; }
+
+.g-header-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.g-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.g-header-user {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.g-header-logout {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ============ 底部Tab栏 ============ */
+.g-tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  background: white;
+  display: flex;
+  border-top: 1px solid var(--border);
+  padding: 4px 0 env(safe-area-inset-bottom, 6px);
+  z-index: 100;
+}
+
+.g-tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-hint);
+  font-size: 10px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.g-tab-item svg { width: 22px; height: 22px; }
+
+.g-tab-item.active { color: var(--primary); }
+
+.g-tab-item span { font-weight: 500; }
+
+/* ============ 主内容区 ============ */
+.g-body {
+  flex: 1;
+  padding: 12px 14px;
+  padding-bottom: 64px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ============ 登录页 ============ */
+.g-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary);
+  padding: 24px;
+}
+
+.g-login-card {
+  background: white;
+  border-radius: 16px;
+  padding: 36px 24px 28px;
+  width: 100%;
+  max-width: 340px;
+}
+
+.g-login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.g-login-icon { font-size: 48px; margin-bottom: 12px; }
+
+.g-login-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
+.g-login-header p {
+  font-size: 13px;
+  color: var(--text-hint);
+  margin: 0;
+}
+
+.g-form-group { margin-bottom: 18px; }
+
+.g-form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-sub);
+  margin-bottom: 6px;
+}
+
+.g-required { color: var(--danger); }
+
+.g-form-group input {
+  width: 100%;
+  padding: 11px 14px;
+  font-size: 15px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+  background: #FAFAFA;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.g-form-group input:focus {
+  border-color: var(--primary);
+  background: white;
+}
+
+.g-pwd-wrapper { position: relative; }
+.g-pwd-wrapper input { padding-right: 44px; }
+
+.g-pwd-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+}
+
+.g-error-tip {
+  background: var(--danger-light);
+  color: var(--danger);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+/* ============ 按钮 ============ */
+.g-btn {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: opacity 0.15s;
+  font-family: inherit;
+}
+
+.g-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.g-btn-primary {
+  background: var(--primary);
+  color: white;
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  border-radius: 10px;
+}
+
+.g-btn-primary:active:not(:disabled) { opacity: 0.85; }
+
+.g-btn-danger {
+  background: var(--danger);
+  color: white;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 6px;
+}
+
+.g-btn-sm {
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.g-btn-text {
+  background: transparent;
+  color: var(--text-hint);
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+.g-btn-back {
+  background: white;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  padding: 7px 14px;
+  font-size: 13px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+/* ============ 加载/错误/空状态 ============ */
+.g-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 20px;
+  color: var(--text-hint);
+  font-size: 14px;
+}
+
+.g-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: g-spin 0.7s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes g-spin { to { transform: rotate(360deg); } }
+
+.g-error {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--danger);
+  font-size: 14px;
+}
+
+.g-error p { margin-bottom: 12px; }
+
+.g-empty {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--text-hint);
+}
+
+.g-empty-icon { font-size: 40px; margin-bottom: 10px; }
+.g-empty p { font-size: 15px; margin-bottom: 4px; }
+.g-empty-desc { font-size: 13px; color: #BBB; }
+
+.g-empty-sm {
+  text-align: center;
+  padding: 24px 16px;
+  color: #CCC;
+  font-size: 13px;
+}
+
+/* ============ 仪表盘 ============ */
+.g-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.g-stat-card {
+  background: white;
+  border-radius: var(--radius);
+  padding: 14px 6px;
+  text-align: center;
+}
+
+.g-stat-num {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1.2;
+}
+
+.g-stat-label {
+  font-size: 11px;
+  color: var(--text-hint);
+  margin-top: 2px;
+}
+
+.g-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.g-action-bar h2 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.g-bind-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ============ 绑定表单 ============ */
+.g-bind-form {
+  background: white;
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--primary-light);
+}
+
+.g-bind-form h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.g-bind-form-desc {
+  font-size: 12px;
+  color: var(--text-hint);
+  margin-bottom: 10px;
+}
+
+.g-bind-input {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.g-bind-input input {
+  flex: 1;
+  padding: 9px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  font-family: inherit;
+}
+
+.g-bind-input input:focus { border-color: var(--primary); }
+
+.g-bind-input .g-btn-primary {
+  width: auto;
+  padding: 9px 14px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ============ 老人卡片 ============ */
+.g-elder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.g-elder-card {
+  background: white;
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.g-elder-card:active { border-color: var(--primary); }
+
+.g-elder-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.g-elder-avatar { font-size: 32px; flex-shrink: 0; }
+
+.g-elder-info h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 1px;
+}
+
+.g-elder-info p { font-size: 12px; color: var(--text-hint); }
+
+.g-elder-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.g-elder-rows {
+  border-top: 1px solid #F5F5F5;
+  padding-top: 8px;
+}
+
+.g-elder-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.g-elder-label { font-size: 12px; color: #BBB; }
+
+.g-elder-value { font-size: 12px; font-weight: 500; color: var(--text-sub); }
+
+.g-elder-footer {
+  text-align: center;
+  padding-top: 8px;
+  border-top: 1px solid #F5F5F5;
+  margin-top: 6px;
+  color: var(--primary);
+  font-weight: 500;
+  font-size: 13px;
+}
+
+/* 状态颜色 */
+.s-ok { color: var(--success); }
+.s-warn { color: var(--warn); }
+.s-err { color: var(--danger); }
+
+/* ============ 老人详情 ============ */
+.g-detail-card {
+  background: white;
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.g-detail-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.g-detail-avatar { font-size: 40px; }
+
+.g-detail-info h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 1px;
+}
+
+.g-detail-info p { font-size: 12px; color: var(--text-hint); margin-bottom: 1px; }
+
+.g-detail-top .g-btn-danger { margin-left: auto; flex-shrink: 0; }
+
+.g-section {
+  background: white;
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.g-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #F5F5F5;
+}
+
+/* ============ 确认弹窗 ============ */
+.g-confirm-mask {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.g-confirm-box {
+  background: white;
+  border-radius: 16px;
+  padding: 22px;
+  max-width: 300px;
+  width: 100%;
+}
+
+.g-confirm-box h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.g-confirm-box p {
+  font-size: 14px;
+  color: var(--text-sub);
+  margin-bottom: 18px;
+  line-height: 1.6;
+}
+
+.g-confirm-actions { display: flex; gap: 10px; }
+
+.g-confirm-actions .g-btn {
+  flex: 1;
+  padding: 10px;
+  font-size: 14px;
+}
+
+/* ============ 紧急事件 ============ */
+.g-event-list { display: flex; flex-direction: column; gap: 8px; }
+
+.g-event-item {
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid;
+}
+
+.g-event-pending { background: var(--danger-light); border-color: #FDCCD3; }
+.g-event-resolved { background: var(--success-light); border-color: #C8E6C9; }
+
+.g-event-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.g-event-type { font-size: 14px; font-weight: 600; color: var(--text); }
+
+.g-event-status {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 8px;
+}
+
+.g-event-body p { font-size: 12px; color: var(--text-sub); margin-bottom: 2px; }
+.g-event-time { font-size: 11px; color: #BBB; }
+
+/* ============ 临期药品 ============ */
+.g-drug-list { display: flex; flex-direction: column; gap: 8px; }
+
+.g-drug-item {
+  background: var(--warn-light);
+  border: 1px solid #FFE58F;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.g-drug-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.g-drug-name { font-size: 14px; font-weight: 600; color: var(--text); }
+
+.g-drug-tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 8px;
+}
+
+.g-tag-warn { background: #FFF3E0; color: #E8960A; }
+.g-tag-err { background: var(--danger-light); color: var(--danger); }
+
+.g-drug-body p { font-size: 12px; color: var(--text-sub); margin-bottom: 1px; }
+.g-drug-body strong { color: var(--danger); }
+
+/* ============ 通知记录 ============ */
+.g-notif-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.g-notif-header h2 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.g-notif-list { display: flex; flex-direction: column; gap: 8px; }
+
+.g-notif-item {
+  background: white;
+  border-radius: var(--radius);
+  padding: 12px;
+  border-left: 3px solid var(--primary);
+}
+
+.g-notif-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.g-notif-type { font-size: 13px; font-weight: 600; color: var(--text); }
+.g-notif-send { font-size: 11px; font-weight: 500; }
+
+.g-notif-msg {
+  font-size: 13px;
+  color: var(--text-sub);
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.g-notif-time { font-size: 11px; color: #BBB; }

@@ -15,6 +15,7 @@ import AddToPlanModal from './components/AddToPlanModal';
 import ConfirmDrugModal from './components/ConfirmDrugModal';
 import MedicationReminderModal from './components/MedicationReminderModal';
 import DrugListView from './components/DrugListView';
+import GuardianApp from './components/guardian/GuardianApp';
 import { useToast } from './components/Toast';
 
 function App() {
@@ -553,29 +554,32 @@ function App() {
       ...loginData
     });
     setIsLoggedIn(true);
-    
+
     // 保存登录状态到 localStorage
     localStorage.setItem('user', JSON.stringify({
       username: loginData.username,
       ...loginData
     }));
-    
+
+    // 家属角色直接跳转家属端，不加载老人端数据
+    if (loginData.role === 'family') {
+      return;
+    }
+
     // 登录成功后加载药箱列表和紧急联系人
     if (loginData.userId) {
       loadMedicineBoxList(loginData.userId);
       loadShortageWarnings(loginData.userId);
-      // 不在登录时预加载日历，避免阻塞其他页面
-      // 只有当用户真正切换到日历页面时才加载
-      
+
       // 检查已过期且未丢弃的药品
       setTimeout(() => {
         checkTodayExpiredMedicines(loginData.userId);
-      }, 500); // 延迟500ms执行，确保药箱列表已加载
+      }, 500);
     }
     if (loginData.id) {
       loadEmergencyContacts(loginData.id);
     }
-    
+
     if (loginData.needProfile) {
       setShowProfileModal(true);
     }
@@ -1187,6 +1191,12 @@ function App() {
         if (userData && userData.userId) {
           setUser(userData);
           setIsLoggedIn(true);
+
+          // 家属角色不需要加载老人端数据
+          if (userData.role === 'family') {
+            return;
+          }
+
           // 自动加载药箱列表和紧急联系人
           loadMedicineBoxList(userData.userId);
           loadShortageWarnings(userData.userId);
@@ -4458,6 +4468,7 @@ function App() {
         onDiscardDrug={handleDiscardDrugFromCard}
         onDeleteDrug={handleDeleteDrug}
         onReloadDrugList={() => loadMedicineBoxList(user?.userId)}
+        user={user}
       />
     );
   };
@@ -4472,6 +4483,8 @@ function App() {
         <Register onRegister={handleRegister} />
       ) : !isLoggedIn ? (
         <Login onLogin={handleLogin} onShowRegister={() => setShowRegister(true)} />
+      ) : user?.role === 'family' ? (
+        <GuardianApp user={user} onLogout={() => { setUser(null); setIsLoggedIn(false); localStorage.removeItem('user'); }} />
       ) : (
         <div className="app-container">
           {renderHeader()}
