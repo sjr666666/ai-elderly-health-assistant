@@ -1,12 +1,103 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useToast } from './Toast';
+
+/**
+ * 批量操作确认弹窗组件
+ */
+const BatchConfirmModal = ({ type, count, drugNames, onConfirm, onCancel }) => {
+  const isDelete = type === 'delete';
+  const icon = isDelete ? '🗑️' : '📦';
+  const title = isDelete ? '确认批量删除' : '确认批量丢弃';
+  const desc = isDelete
+    ? `确定要删除选中的 ${count} 盒药品吗？`
+    : `确定要丢弃选中的 ${count} 盒药品吗？`;
+  const subDesc = isDelete
+    ? '删除后将不再显示这些药品，且关联的用药计划也会被删除'
+    : '丢弃后药品将标记为已停用';
+  const confirmText = isDelete ? '确认删除' : '确认丢弃';
+  const confirmBg = isDelete
+    ? 'linear-gradient(135deg, #E74C3C 0%, #C0392B 100%)'
+    : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+  const confirmShadow = isDelete
+    ? '0 4px 16px rgba(231, 76, 60, 0.3)'
+    : '0 4px 16px rgba(245, 158, 11, 0.3)';
+
+  return createPortal(
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      background: 'rgba(0, 0, 0, 0.5)', display: 'flex',
+      alignItems: 'center', justifyContent: 'center', zIndex: 2000,
+    }}>
+      <div style={{
+        background: 'white', padding: '40px 48px', borderRadius: '32px',
+        boxShadow: '0 16px 64px rgba(0, 0, 0, 0.2)',
+        width: '90%', maxWidth: '500px', textAlign: 'center',
+      }}>
+        <div style={{ fontSize: '64px', marginBottom: '24px' }}>{icon}</div>
+        <h3 style={{ fontSize: '24px', fontWeight: '700', color: '#3D3D3D', marginBottom: '16px' }}>
+          {title}
+        </h3>
+        <p style={{ fontSize: '18px', color: '#6B6B6B', marginBottom: '12px', lineHeight: '1.6' }}>
+          {desc}
+        </p>
+        {/* 药品名称列表，最多显示3个 */}
+        <div style={{
+          background: '#f9fafb', borderRadius: '12px', padding: '12px 16px',
+          marginBottom: '12px', maxHeight: '120px', overflowY: 'auto',
+        }}>
+          {drugNames.slice(0, 3).map((name, i) => (
+            <span key={i} style={{
+              display: 'inline-block', background: isDelete ? '#fef2f2' : '#fffbeb',
+              color: isDelete ? '#dc2626' : '#d97706', padding: '4px 12px',
+              borderRadius: '8px', fontSize: '14px', margin: '4px', fontWeight: '600',
+            }}>
+              {name}
+            </span>
+          ))}
+          {drugNames.length > 3 && (
+            <span style={{ fontSize: '14px', color: '#9ca3af', margin: '4px' }}>
+              等{drugNames.length}种药品
+            </span>
+          )}
+        </div>
+        <p style={{ fontSize: '16px', color: '#999', marginBottom: '36px' }}>{subDesc}</p>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <button onClick={onCancel} style={{
+            flex: 1, padding: '16px', fontSize: '18px', fontWeight: '700',
+            border: '3px solid #F0EBE3', borderRadius: '16px', cursor: 'pointer',
+            background: 'white', color: '#6B6B6B', transition: 'all 0.3s ease',
+          }}
+            onMouseEnter={(e) => { e.target.style.borderColor = '#4A90E2'; e.target.style.color = '#4A90E2'; }}
+            onMouseLeave={(e) => { e.target.style.borderColor = '#F0EBE3'; e.target.style.color = '#6B6B6B'; }}
+          >
+            取消
+          </button>
+          <button onClick={onConfirm} style={{
+            flex: 1, padding: '16px', fontSize: '18px', fontWeight: '700',
+            border: 'none', borderRadius: '16px', cursor: 'pointer',
+            background: confirmBg, color: 'white', transition: 'all 0.3s ease',
+            boxShadow: confirmShadow,
+          }}
+            onMouseEnter={(e) => { e.target.style.transform = 'translateY(-2px)'; e.target.style.boxShadow = confirmShadow.replace('0.3)', '0.5)'); }}
+            onMouseLeave={(e) => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = confirmShadow; }}
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
 
 /**
  * 药品列表视图组件
  * 支持紧凑列表显示、展开详情、多选批量操作
  */
-function DrugListView({ 
-  drugList, 
-  searchQuery, 
+function DrugListView({
+  drugList,
+  searchQuery,
   isSearching,
   filteredDrugList,
   calendarPlans,
@@ -16,14 +107,20 @@ function DrugListView({
   onOpenAddToPlanModal,
   onDiscardDrug,
   onDeleteDrug,
-  onReloadDrugList  // 新增：重新加载药品列表的回调
+  onReloadDrugList,
+  user
 }) {
+  const { showToast } = useToast();
   // 展开状态
   const [expandedDrugs, setExpandedDrugs] = useState({});
   // 选中状态
   const [selectedDrugs, setSelectedDrugs] = useState(new Set());
   // 多选模式
   const [isSelectMode, setIsSelectMode] = useState(false);
+  // 批量确认弹窗状态
+  const [batchConfirm, setBatchConfirm] = useState({ show: false, type: null }); // type: 'delete' | 'discard'
+  // 批量操作加载状态
+  const [batchLoading, setBatchLoading] = useState(false);
 
   // 检查药品是否已设置用药计划
   const hasPlan = (drug) => {
@@ -60,73 +157,82 @@ function DrugListView({
     }
   };
 
-  // 批量丢弃
-  const handleBatchDiscard = async () => {
-    if (selectedDrugs.size === 0) {
-      alert('请先选择要丢弃的药品');
-      return;
-    }
+  // 获取选中药品的名称列表
+  const getSelectedDrugNames = () => {
+    return drugList
+      .filter(d => selectedDrugs.has(d.boxItemId))
+      .map(d => d.name);
+  };
 
-    if (!window.confirm(`确定要丢弃选中的 ${selectedDrugs.size} 盒药品吗？`)) {
-      return;
-    }
+  // 打开批量丢弃确认弹窗
+  const handleBatchDiscard = () => {
+    if (selectedDrugs.size === 0) return;
+    setBatchConfirm({ show: true, type: 'discard' });
+  };
 
+  // 打开批量删除确认弹窗
+  const handleBatchDelete = () => {
+    if (selectedDrugs.size === 0) return;
+    setBatchConfirm({ show: true, type: 'delete' });
+  };
+
+  // 确认批量操作
+  const handleBatchConfirm = async () => {
+    const isDelete = batchConfirm.type === 'delete';
+    const userId = user?.userId;
+
+    if (!userId) return;
+
+    setBatchLoading(true);
     try {
-      const promises = Array.from(selectedDrugs).map(boxItemId =>
-        fetch(`http://localhost:8080/api/medicine-box/${boxItemId}/discard`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        })
-      );
+      const promises = Array.from(selectedDrugs).map(boxItemId => {
+        const headers = {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        };
+        if (isDelete) {
+          return fetch(`/api/v1/box/${boxItemId}?userId=${userId}`, {
+            method: 'DELETE',
+            headers: headers
+          });
+        } else {
+          headers['Content-Type'] = 'application/json';
+          return fetch(`/api/v1/box/${boxItemId}?userId=${userId}`, {
+            method: 'PATCH',
+            headers: headers,
+            body: JSON.stringify({ status: 'stopped' })
+          });
+        }
+      });
 
-      await Promise.all(promises);
-      alert(`成功丢弃 ${selectedDrugs.size} 盒药品`);
+      const results = await Promise.allSettled(promises);
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failCount = results.filter(r => r.status === 'rejected').length;
+
+      setBatchConfirm({ show: false, type: null });
       setSelectedDrugs(new Set());
       setIsSelectMode(false);
-      // 重新加载药品列表
+
       if (onReloadDrugList) {
         onReloadDrugList();
       }
+
+      if (failCount === 0) {
+        const action = isDelete ? '删除' : '丢弃';
+        showToast(`${action}成功 ${successCount} 盒药品`, 'success');
+      } else {
+        showToast(`操作完成，成功 ${successCount} 个，失败 ${failCount} 个`, 'warning');
+      }
     } catch (err) {
-      console.error('批量丢弃失败:', err);
-      alert('批量丢弃失败，请重试');
+      console.error('批量操作失败:', err);
+      showToast('批量操作失败，请重试', 'error');
+    } finally {
+      setBatchLoading(false);
     }
   };
 
-  // 批量删除
-  const handleBatchDelete = async () => {
-    if (selectedDrugs.size === 0) {
-      alert('请先选择要删除的药品');
-      return;
-    }
-
-    if (!window.confirm(`确定要删除选中的 ${selectedDrugs.size} 盒药品吗？此操作不可恢复！`)) {
-      return;
-    }
-
-    try {
-      const promises = Array.from(selectedDrugs).map(boxItemId =>
-        fetch(`http://localhost:8080/api/medicine-box/${boxItemId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        })
-      );
-
-      await Promise.all(promises);
-      alert(`成功删除 ${selectedDrugs.size} 盒药品`);
-      setSelectedDrugs(new Set());
-      setIsSelectMode(false);
-      if (onReloadDrugList) {
-        onReloadDrugList();
-      }
-    } catch (err) {
-      console.error('批量删除失败:', err);
-      alert('批量删除失败，请重试');
-    }
+  // 取消批量确认弹窗
+  const handleBatchCancel = () => {
+    setBatchConfirm({ show: false, type: null });
   };
 
   // 显示列表（过滤后或完整列表）
@@ -440,6 +546,17 @@ function DrugListView({
           <div className="stats-label">需关注</div>
         </div>
       </div>
+
+      {/* 批量操作确认弹窗 */}
+      {batchConfirm.show && (
+        <BatchConfirmModal
+          type={batchConfirm.type}
+          count={selectedDrugs.size}
+          drugNames={getSelectedDrugNames()}
+          onConfirm={handleBatchConfirm}
+          onCancel={handleBatchCancel}
+        />
+      )}
     </div>
   );
 }
