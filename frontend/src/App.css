@@ -355,6 +355,92 @@ body {
   font-size: 40px;
 }
 
+/* ============ 缺药预警横幅 ============ */
+.shortage-warning-banner {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+  border-radius: 16px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(238, 90, 36, 0.35);
+  animation: shortagePulse 3s ease-in-out infinite;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.shortage-warning-banner:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(238, 90, 36, 0.45);
+}
+
+.shortage-warning-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.shortage-warning-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.shortage-warning-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shortage-warning-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+}
+
+.shortage-warning-subtitle {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.shortage-warning-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.shortage-action-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+.shortage-action-btn:hover {
+  transform: scale(1.02);
+}
+
+.shortage-action-btn:active {
+  transform: scale(0.98);
+}
+
+.shortage-action-pharmacy {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  backdrop-filter: blur(4px);
+}
+
+.shortage-action-hospital {
+  background: rgba(255, 255, 255, 0.95);
+  color: #ee5a24;
+}
+
+@keyframes shortagePulse {
+  0%, 100% { box-shadow: 0 4px 20px rgba(238, 90, 36, 0.35); }
+  50% { box-shadow: 0 4px 30px rgba(238, 90, 36, 0.55); }
+}
+
 /* ============ DASHBOARD ============ */
 .dashboard-grid {
   display: grid;
