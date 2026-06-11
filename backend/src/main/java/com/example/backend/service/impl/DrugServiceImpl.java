@@ -385,19 +385,18 @@ public class DrugServiceImpl implements DrugService {
                 response.getPrecautions(),
                 response.getAdverseReactions()
         };
-        // 兜底文案关键词（包含这些说明是兜底数据，不是真正的药品信息）
-        String[] fallbackKeywords = {"暂无详细信息", "请以说明书", "以医生处方为准", "请遵医嘱", "请以药品说明书"};
+        // 只要有任何一个字段是空值或兜底文案，就认为不完整
         for (String f : fields) {
             if (f == null || f.trim().isEmpty()) {
+                logger.info("字段为空，认为不完整");
                 return false;
             }
-            // 检查是否是兜底文案
-            for (String keyword : fallbackKeywords) {
-                if (f.contains(keyword)) {
-                    return false;
-                }
+            if (isFallbackText(f)) {
+                logger.info("字段包含兜底文案，认为不完整: {}", f.substring(0, Math.min(20, f.length())));
+                return false;
             }
         }
+        logger.info("所有字段完整");
         return true;
     }
 
@@ -613,11 +612,7 @@ public class DrugServiceImpl implements DrugService {
             }
         }
 
-        // 第二轮：退而求其次 —— 如果 description 本身很短（一句话），则直接返回整段
-        if (desc.length() <= 200) {
-            return desc;
-        }
-
+        // 没有找到关键词，返回空标记让上层使用 fallback
         return "暂无详细信息";
     }
 
