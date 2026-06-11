@@ -91,6 +91,13 @@ function App() {
   const [isBatchAdding, setIsBatchAdding] = useState(false); // 是否正在添加到药箱
   const batchFileInputRef = useRef(null); // 批量文件输入引用
   
+  // 批量确认弹窗相关状态
+  const [showBatchConfirmModal, setShowBatchConfirmModal] = useState(false); // 批量确认弹窗
+  const [batchDrugIndex, setBatchDrugIndex] = useState(0); // 当前正在确认的药品索引
+  const [batchConfirmedDrugs, setBatchConfirmedDrugs] = useState([]); // 已确认的药品信息列表
+  const [isBatchAddingAll, setIsBatchAddingAll] = useState(false); // 是否正在批量添加所有药品
+  const batchConfirmModalRef = useRef(null); // 批量确认弹窗容器引用
+  
   const fileInputRef = useRef(null);
   const conflictReportRef = useRef(null); // 冲突报告卡片引用（用于弹窗显示）
   const screenshotContainerRef = useRef(null); // 隐藏的截图容器引用
@@ -1941,6 +1948,24 @@ function App() {
     e.target.value = '';
   };
 
+  // 移除单个图片
+  const removeImage = (imageId) => {
+    setBatchRecognizeItems(prev => {
+      const itemToRemove = prev.find(item => item.id === imageId);
+      if (itemToRemove?.previewUrl) {
+        URL.revokeObjectURL(itemToRemove.previewUrl); // 释放预览URL，避免内存泄漏
+      }
+      return prev.filter(item => item.id !== imageId);
+    });
+    
+    // 如果该图片已被选中，从选中列表中移除
+    setBatchSelectedForAdd(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(imageId);
+      return newSet;
+    });
+  };
+
   // 批量识别所有图片
   const handleBatchRecognize = async () => {
     if (batchRecognizeItems.length === 0) {
@@ -1948,6 +1973,9 @@ function App() {
       return;
     }
 
+    // 清空之前的选中状态
+    setBatchSelectedForAdd(new Set());
+    
     // 更新状态为识别中
     setBatchRecognizeItems(prev => prev.map(item => ({ ...item, status: 'recognizing' })));
 
@@ -1989,7 +2017,8 @@ function App() {
         batchRecognizeItems.forEach((item, index) => {
           const result = results[index] || {};
           if (result.status === 'matched' && result.matchedDrugId) {
-            newSelected.add(item.id);
+            // 使用药品ID而不是图片ID
+            newSelected.add(result.matchedDrugId);
             matchedDrugs.push({
               id: result.matchedDrugId,
               name: result.matchedDrugName,
@@ -2367,6 +2396,281 @@ function App() {
     } catch (error) {
       showToast('添加失败，请稍后重试', 'error');
       console.error('添加药品失败:', error);
+    }
+  };
+
+  // 批量添加所有确认的药品并检测冲突
+  const handleBatchAddAllDrugs = async () => {
+    console.log('=== 开始批量添加 ===');
+    console.log('batchConfirmedDrugs:', batchConfirmedDrugs);
+    console.log('待添加药品数量:', batchConfirmedDrugs.length);
+    
+    if (batchConfirmedDrugs.length === 0) {
+      showToast('没有需要添加的药品', 'warning');
+      return;
+    }
+    
+    setIsBatchAddingAll(true);
+    
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const addedDrugNames = []; // 记录成功添加的药品名称
+      let lastAddedDrugName = null; // 记录最后添加成功的药品名称（用于冲突检测）
+      
+      // 逐个添加药品，每次添加后刷新药箱列表
+      for (let i = 0; i < batchConfirmedDrugs.length; i++) {
+        const drug = batchConfirmedDrugs[i];
+        console.log(`正在添加第 ${i + 1}/${batchConfirmedDrugs.length} 个药品:`, drug);
+        
+        try {
+          const response = await fetch(`/api/v1/box?userId=${user?.userId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              drugId: drug.drugId,
+              dosage: drug.dosage,
+              frequency: drug.frequency,
+              startDate: drug.startDate,
+              endDate: drug.endDate,
+              expiryDate: drug.expiryDate,
+              totalQuantity: drug.totalQuantity,
+              status: drug.status
+            })
+          });
+          
+          const data = await response.json();
+          console.log(`第 ${i + 1} 个药品添加结果:`, data);
+          
+          if (data.code === 200) {
+            successCount++;
+            addedDrugNames.push(drug.name);
+            console.log(`✅ 第 ${i + 1} 个药品添加成功: ${drug.name}`);
+            
+            // 立即刷新药箱列表，确保数据同步
+            await loadMedicineBoxList(user?.userId);
+            
+            // 记录最后添加成功的药品（用于后续冲突检测）
+            lastAddedDrugName = drug.name;
+          } else {
+            failCount++;
+            console.error(`❌ 第 ${i + 1} 个药品添加失败:`, data.message);
+            showToast(`第 ${i + 1} 个药品添加失败: ${data.message}`, 'error');
+          }
+        } catch (err) {
+          console.error(`❌ 第 ${i + 1} 个药品添加异常:`, err);
+          failCount++;
+          showToast(`第 ${i + 1} 个药品添加失败: ${err.message}`, 'error');
+        }
+      }
+      
+      console.log('批量添加完成 - 成功:', successCount, ', 失败:', failCount);
+      console.log('成功添加的药品:', addedDrugNames);
+      
+      if (successCount > 0) {
+        showToast(`成功添加 ${successCount} 个药品到药箱`, 'success');
+        
+        // 只清空已确认的药品列表和索引，保留识别结果
+        setBatchConfirmedDrugs([]);
+        setBatchDrugIndex(0);
+        // 注意：不清空 recognizedDrugs 和 batchSelectedForAdd，让用户可以继续使用
+        
+        // 对最后添加的药品进行冲突检测
+        if (lastAddedDrugName && addedDrugNames.length > 0) {
+          console.log('开始对最后添加的药品进行冲突检测:', lastAddedDrugName);
+          showToast('正在进行冲突检测...', 'info');
+          
+          // 重要：重新获取最新的药箱列表，确保包含刚添加的所有药品
+          const latestDrugList = await fetch(`/api/v1/box/list?userId=${user?.userId}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.code === 200) {
+                return data.data.map(item => ({
+                  boxItemId: item.boxItemId,
+                  drugId: item.drugId,
+                  name: item.drugName,
+                  genericName: item.genericName,
+                  tradeName: item.tradeName,
+                  commonName: item.commonName,
+                  spec: item.specification,
+                  dosage: item.dosage,
+                  frequency: item.frequency,
+                  startDate: item.startDate,
+                  endDate: item.endDate,
+                  expiryDate: item.expiryDate,
+                  totalQuantity: item.totalQuantity,
+                  remaining: item.remainingQuantity || item.totalQuantity,
+                  note: item.note,
+                  status: item.status,
+                  createdAt: item.createdAt
+                }));
+              }
+              return [];
+            })
+            .catch(err => {
+              console.error('获取最新药箱列表失败:', err);
+              return drugList; // 如果失败，使用当前的 drugList
+            });
+          
+          console.log('最新药箱列表:', latestDrugList);
+          
+          // 使用最新的药箱列表进行冲突检测
+          const conflictResult = await checkConflictsForNewDrug(lastAddedDrugName, latestDrugList);
+          
+          if (conflictResult && !conflictResult.noConflict) {
+            showToast(`检测到 ${conflictResult.conflicts?.length || 0} 条冲突警告`, 'warning');
+            setConflictAlertResult(conflictResult);
+            setShowConflictAlert(true);
+          } else {
+            console.log('未检测到冲突');
+          }
+        }
+        
+        setConflictNeedsRecheck(true);
+        setConflictReport(null);
+      } else if (failCount > 0) {
+        showToast(`添加失败 ${failCount} 个药品`, 'error');
+      }
+    } catch (error) {
+      showToast('批量添加失败，请稍后重试', 'error');
+      console.error('批量添加药品失败:', error);
+    } finally {
+      setIsBatchAddingAll(false);
+    }
+  };
+
+  // 批量添加指定药品列表（不依赖状态）
+  const handleBatchAddAllDrugsWithList = async (drugList) => {
+    console.log('=== 开始批量添加（带参数） ===');
+    console.log('传入的药品列表:', drugList);
+    console.log('待添加药品数量:', drugList.length);
+    
+    if (!drugList || drugList.length === 0) {
+      showToast('没有需要添加的药品', 'warning');
+      return;
+    }
+    
+    setIsBatchAddingAll(true);
+    
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const addedDrugNames = []; // 记录成功添加的药品名称
+      let lastAddedDrugName = null; // 记录最后添加成功的药品名称（用于冲突检测）
+      
+      // 逐个添加药品，每次添加后刷新药箱列表
+      for (let i = 0; i < drugList.length; i++) {
+        const drug = drugList[i];
+        console.log(`正在添加第 ${i + 1}/${drugList.length} 个药品:`, drug);
+        
+        try {
+          const response = await fetch(`/api/v1/box?userId=${user?.userId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              drugId: drug.drugId,
+              dosage: drug.dosage,
+              frequency: drug.frequency,
+              startDate: drug.startDate,
+              endDate: drug.endDate,
+              expiryDate: drug.expiryDate,
+              totalQuantity: drug.totalQuantity,
+              status: drug.status
+            })
+          });
+          
+          const data = await response.json();
+          console.log(`第 ${i + 1} 个药品添加结果:`, data);
+          
+          if (data.code === 200) {
+            successCount++;
+            addedDrugNames.push(drug.name);
+            console.log(`✅ 第 ${i + 1} 个药品添加成功: ${drug.name}`);
+            
+            // 立即刷新药箱列表，确保数据同步
+            await loadMedicineBoxList(user?.userId);
+            
+            // 记录最后添加成功的药品（用于后续冲突检测）
+            lastAddedDrugName = drug.name;
+          } else {
+            failCount++;
+            console.error(`❌ 第 ${i + 1} 个药品添加失败:`, data.message);
+            showToast(`第 ${i + 1} 个药品添加失败: ${data.message}`, 'error');
+          }
+        } catch (err) {
+          console.error(`❌ 第 ${i + 1} 个药品添加异常:`, err);
+          failCount++;
+          showToast(`第 ${i + 1} 个药品添加失败: ${err.message}`, 'error');
+        }
+      }
+      
+      console.log('批量添加完成 - 成功:', successCount, ', 失败:', failCount);
+      console.log('成功添加的药品:', addedDrugNames);
+      
+      if (successCount > 0) {
+        showToast(`成功添加 ${successCount} 个药品到药箱`, 'success');
+        
+        // 对最后添加的药品进行冲突检测
+        if (lastAddedDrugName && addedDrugNames.length > 0) {
+          console.log('开始对最后添加的药品进行冲突检测:', lastAddedDrugName);
+          showToast('正在进行冲突检测...', 'info');
+          
+          // 重要：重新获取最新的药箱列表，确保包含刚添加的所有药品
+          const latestDrugList = await fetch(`/api/v1/box/list?userId=${user?.userId}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.code === 200) {
+                return data.data.map(item => ({
+                  boxItemId: item.boxItemId,
+                  drugId: item.drugId,
+                  name: item.drugName,
+                  genericName: item.genericName,
+                  tradeName: item.tradeName,
+                  commonName: item.commonName,
+                  spec: item.specification,
+                  dosage: item.dosage,
+                  frequency: item.frequency,
+                  startDate: item.startDate,
+                  endDate: item.endDate,
+                  expiryDate: item.expiryDate,
+                  totalQuantity: item.totalQuantity,
+                  remaining: item.remainingQuantity || item.totalQuantity,
+                  note: item.note,
+                  status: item.status,
+                  createdAt: item.createdAt
+                }));
+              }
+              return [];
+            })
+            .catch(err => {
+              console.error('获取最新药箱列表失败:', err);
+              return drugList; // 如果失败，使用传入的 drugList
+            });
+          
+          console.log('最新药箱列表:', latestDrugList);
+          
+          // 使用最新的药箱列表进行冲突检测
+          const conflictResult = await checkConflictsForNewDrug(lastAddedDrugName, latestDrugList);
+          
+          if (conflictResult && !conflictResult.noConflict) {
+            showToast(`检测到 ${conflictResult.conflicts?.length || 0} 条冲突警告`, 'warning');
+            setConflictAlertResult(conflictResult);
+            setShowConflictAlert(true);
+          } else {
+            console.log('未检测到冲突');
+          }
+        }
+        
+        setConflictNeedsRecheck(true);
+        setConflictReport(null);
+      } else if (failCount > 0) {
+        showToast(`添加失败 ${failCount} 个药品`, 'error');
+      }
+    } catch (error) {
+      showToast('批量添加失败，请稍后重试', 'error');
+      console.error('批量添加药品失败:', error);
+    } finally {
+      setIsBatchAddingAll(false);
     }
   };
 
@@ -2921,80 +3225,104 @@ function App() {
             <h3 style={{ fontSize: '20px', color: '#4A90E2', margin: 0 }}>
               📸 批量识别结果 ({batchRecognizeItems.filter(i => i.status === 'success').length} 成功)
             </h3>
-            <button
-              onClick={() => {
-                // 释放所有预览URL，避免内存泄漏
-                batchRecognizeItems.forEach(item => URL.revokeObjectURL(item.previewUrl));
-                setBatchRecognizeItems([]);
-                setBatchSelectedForAdd(new Set());
-              }}
-              style={{
-                padding: '8px 16px',
-                fontSize: '14px',
-                border: '2px solid #E0E0E0',
-                borderRadius: '8px',
-                background: 'white',
-                color: '#6B6B6B',
-                cursor: 'pointer'
-              }}
-            >
-              清空
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {/* 只有识别成功后才显示查看按钮 */}
+              {batchRecognizeItems.some(item => item.status === 'success') && (
+                <button
+                  onClick={() => setActiveTab('recognition')}
+                  style={{
+                    padding: '12px 24px',
+                    fontSize: '16px',
+                    border: '3px solid #FF6B35',
+                    borderRadius: '12px',
+                    background: '#FFF5F0',
+                    color: '#FF6B35',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    boxShadow: '0 2px 8px rgba(255, 107, 53, 0.2)',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = '#FF6B35';
+                    e.target.style.color = 'white';
+                    e.target.style.transform = 'scale(1.05)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = '#FFF5F0';
+                    e.target.style.color = '#FF6B35';
+                    e.target.style.transform = 'scale(1)';
+                  }}
+                >
+                  ️ 查看识别结果
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  // 释放所有预览URL，避免内存泄漏
+                  batchRecognizeItems.forEach(item => URL.revokeObjectURL(item.previewUrl));
+                  setBatchRecognizeItems([]);
+                  setBatchSelectedForAdd(new Set());
+                }}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '14px',
+                  border: '2px solid #E0E0E0',
+                  borderRadius: '8px',
+                  background: 'white',
+                  color: '#6B6B6B',
+                  cursor: 'pointer'
+                }}
+              >
+                清空
+              </button>
+            </div>
           </div>
 
           <div className="batch-preview-grid">
             {batchRecognizeItems.map((item) => (
               <div
                 key={item.id}
-                className={`batch-preview-item ${item.status === 'success' ? 'success' : item.status === 'failed' ? 'failed' : 'pending'} ${item.status === 'success' && item.result?.drugId && batchSelectedForAdd.has(item.id) ? 'selected' : ''}`}
-                onClick={() => {
-                  if (item.status === 'success' && item.result?.drugId) {
-                    setBatchSelectedForAdd(prev => {
-                      const newSet = new Set(prev);
-                      if (newSet.has(item.id)) {
-                        newSet.delete(item.id);
-                      } else {
-                        newSet.add(item.id);
-                      }
-                      return newSet;
-                    });
-                  }
-                }}
+                className={`batch-preview-item ${item.status === 'success' ? 'success' : item.status === 'failed' ? 'failed' : 'pending'}`}
               >
                 <img src={item.previewUrl} alt="预览" className="batch-preview-image" />
-                <div className="batch-preview-status">
-                  {item.status === 'success' ? '✓' : item.status === 'failed' ? '✗' : '⏳'}
-                </div>
-                {item.result?.drugName && (
-                  <div className="batch-preview-name">{item.result.drugName}</div>
+                {/* 状态标签 - 左上角 */}
+                {item.status === 'recognizing' && (
+                  <div className="batch-preview-status-label recognizing">
+                    识别中
+                  </div>
                 )}
-                {item.status === 'success' && item.result?.drugId && batchSelectedForAdd.has(item.id) && (
-                  <div className="batch-preview-check">✓</div>
-                )}
+                {/* 删除按钮 - 右上角 */}
+                <button
+                  className="batch-preview-delete-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeImage(item.id);
+                  }}
+                  title={batchRecognizeItems.some(img => img.status === 'recognizing') ? '识别中，无法删除' : '移除图片'}
+                  disabled={batchRecognizeItems.some(img => img.status === 'recognizing')}
+                  style={{
+                    opacity: batchRecognizeItems.some(img => img.status === 'recognizing') ? 0.5 : 1,
+                    cursor: batchRecognizeItems.some(img => img.status === 'recognizing') ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  ✕
+                </button>
               </div>
             ))}
           </div>
 
-          <div className="batch-actions">
-            <span className="batch-count">
-              已选择 <strong>{batchSelectedForAdd.size}</strong> 个药品
-            </span>
+          {/* 开始识别按钮 */}
+          <div style={{ marginTop: '24px', textAlign: 'center' }}>
             <button
-              className="btn btn-primary"
+              className="btn btn-primary btn-large"
               onClick={handleBatchRecognize}
               disabled={batchRecognizeItems.some(item => item.status === 'recognizing')}
-              style={{ marginRight: '12px' }}
+              style={{ minWidth: '200px' }}
             >
-              {batchRecognizeItems.some(item => item.status === 'recognizing') ? '⏳ 识别中...' : '🔍 开始识别'}
-            </button>
-            <button
-              className={`btn ${batchSelectedForAdd.size > 0 ? 'btn-success' : 'btn-disabled'}`}
-              onClick={handleBatchAddToMedicineBox}
-              disabled={batchSelectedForAdd.size === 0 || isBatchAdding}
-            >
-              {isBatchAdding ? '⏳ 添加中...' : `✅ 全部加入药箱 (${batchSelectedForAdd.size})`}
+              {batchRecognizeItems.some(item => item.status === 'recognizing') ? '⏳ 识别中...' : ' 开始识别'}
             </button>
           </div>
+
         </div>
       ) : (
         <>
@@ -3187,7 +3515,21 @@ function App() {
   );
 
   const renderRecognitionTab = () => (
-    <div className="card">
+    <div className="card" style={{ position: 'relative' }}>
+      {/* 加载动画覆盖层 */}
+      {isFetchingDrug && (
+        <div className="loading-overlay">
+          <div className="loading-spinner-container">
+            <div className="loading-spinner"></div>
+            <div className="loading-spinner-ring"></div>
+          </div>
+          <div className="loading-progress-bar">
+            <div className="loading-progress-fill"></div>
+          </div>
+          <p className="loading-text"> 正在查询药品详情，请稍候...</p>
+        </div>
+      )}
+      
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2 className="card-title" style={{ margin: 0 }}>
           <span className="card-title-icon">✅</span>
@@ -3198,46 +3540,157 @@ function App() {
             </span>
           )}
         </h2>
-        {recognizedDrugs.length > 0 && (
-          <button
-            className="btn btn-secondary"
-            onClick={() => setActiveTab('upload')}
-          >
-            ← 返回继续识别
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {/* 只有有识别结果时才显示全部加入药箱按钮 */}
+          {recognizedDrugs.length > 0 && (
+            <button
+              onClick={async () => {
+                // 获取所有选中的药品ID
+                const selectedDrugIds = Array.from(batchSelectedForAdd);
+                
+                if (selectedDrugIds.length === 0) {
+                  showToast('请先选择要加入药箱的药品', 'warning');
+                  return;
+                }
+                
+                // 筛选出选中的药品
+                const selectedDrugs = recognizedDrugs.filter(drug => selectedDrugIds.includes(drug.id));
+                
+                if (selectedDrugs.length === 0) {
+                  showToast('未找到选中的药品', 'error');
+                  return;
+                }
+                
+                // 清空之前的确认数据
+                setBatchConfirmedDrugs([]);
+                setBatchDrugIndex(0);
+                
+                // 打开第一个药品的确认弹窗
+                setShowBatchConfirmModal(true);
+              }}
+              disabled={isBatchAdding || batchSelectedForAdd.size === 0}
+              style={{
+                padding: '12px 24px',
+                fontSize: '16px',
+                border: 'none',
+                borderRadius: '12px',
+                background: isBatchAdding ? '#CCCCCC' : (batchSelectedForAdd.size === 0 ? '#E0E0E0' : '#4CAF50'),
+                color: 'white',
+                cursor: isBatchAdding || batchSelectedForAdd.size === 0 ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold',
+                boxShadow: '0 2px 8px rgba(76, 175, 80, 0.3)',
+                transition: 'all 0.3s ease'
+              }}
+              onMouseEnter={(e) => {
+                if (!isBatchAdding && batchSelectedForAdd.size > 0) {
+                  e.target.style.background = '#45a049';
+                  e.target.style.transform = 'scale(1.05)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isBatchAdding && batchSelectedForAdd.size > 0) {
+                  e.target.style.background = '#4CAF50';
+                  e.target.style.transform = 'scale(1)';
+                }
+              }}
+            >
+              {isBatchAdding ? '⏳ 添加中...' : `✅ 加入药箱 (${batchSelectedForAdd.size}/${recognizedDrugs.length})`}
+            </button>
+          )}
+          {recognizedDrugs.length > 0 && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => setActiveTab('upload')}
+            >
+              ← 返回继续识别
+            </button>
+          )}
+        </div>
       </div>
 
       {recognizedDrugs.length > 0 ? (
         <div className="drug-list">
-          {recognizedDrugs.map((drug, index) => (
-            <div key={index} className="drug-card" style={{ animationDelay: `${index * 0.15}s` }}>
-              <span className="drug-card-icon">💊</span>
-              <h4 className="drug-name">{drug.name}</h4>
-              <p className="drug-info">规格：{drug.spec}</p>
-              <p className="drug-info">生产厂家：{drug.manufacturer}</p>
-              <p className="drug-info">匹配度：<span className="drug-match">{drug.matchScore}%</span></p>
-              <button
-                className="btn btn-primary"
-                style={{ marginTop: '20px', width: '100%', minHeight: '56px' }}
+          {recognizedDrugs.map((drug, index) => {
+            const isSelected = batchSelectedForAdd.has(drug.id);
+            return (
+              <div 
+                key={index} 
+                className={`drug-card ${isSelected ? 'selected' : ''}`} 
+                style={{ 
+                  animationDelay: `${index * 0.15}s`,
+                  border: isSelected ? '3px solid #4CAF50' : '2px solid transparent',
+                  boxShadow: isSelected ? '0 8px 24px rgba(76, 175, 80, 0.3)' : '0 2px 8px rgba(0, 0, 0, 0.08)',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  transition: 'all 0.3s ease'
+                }}
                 onClick={() => {
-                  // 使用统一的药品信息获取函数
-                  fetchDrugDetail(drug.name, drug, {
-                    showLoading: false
+                  // 切换选中状态
+                  setBatchSelectedForAdd(prev => {
+                    const newSet = new Set(prev);
+                    if (newSet.has(drug.id)) {
+                      newSet.delete(drug.id);
+                    } else {
+                      newSet.add(drug.id);
+                    }
+                    return newSet;
                   });
                 }}
               >
-                📖 查看用药说明
-              </button>
-              <button
-                className="btn btn-success"
-                style={{ marginTop: '12px', width: '100%', minHeight: '56px' }}
-                onClick={() => addToMedicineBox(drug)}
-              >
-                ➕ 加入我的药箱
-              </button>
-            </div>
-          ))}
+                {/* 选中状态标签 - 右上角 */}
+                {isSelected && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '12px',
+                    right: '12px',
+                    background: 'linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%)',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '20px',
+                    fontSize: '15px',
+                    fontWeight: 'bold',
+                    boxShadow: '0 4px 12px rgba(76, 175, 80, 0.5)',
+                    zIndex: 10,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    animation: 'fadeInScale 0.3s ease-out'
+                  }}>
+                    <span style={{ fontSize: '18px' }}>✓</span>
+                    <span>已选择</span>
+                  </div>
+                )}
+                
+                <span className="drug-card-icon">💊</span>
+                <h4 className="drug-name">{drug.name}</h4>
+                <p className="drug-info">规格：{drug.spec}</p>
+                <p className="drug-info">生产厂家：{drug.manufacturer}</p>
+                <p className="drug-info">匹配度：<span className="drug-match">{drug.matchScore}%</span></p>
+                <button
+                  className="btn btn-primary"
+                  style={{ marginTop: '20px', width: '100%', minHeight: '56px' }}
+                  onClick={(e) => {
+                    e.stopPropagation(); // 阻止事件冒泡
+                    fetchDrugDetail(drug.name, drug, {
+                      showLoading: true
+                    });
+                  }}
+                >
+                   查看用药说明
+                </button>
+                <button
+                  className="btn btn-success"
+                  style={{ marginTop: '12px', width: '100%', minHeight: '56px' }}
+                  onClick={(e) => {
+                    e.stopPropagation(); // 阻止事件冒泡
+                    addToMedicineBox(drug);
+                  }}
+                >
+                  ➕ 加入我的药箱
+                </button>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="loading-container">
@@ -4669,6 +5122,524 @@ function App() {
           drugInfo={pendingDrugInfo}
           userId={user?.userId}
         />
+      )}
+
+      {/* 批量识别药品确认弹窗 - 逐个确认 */}
+      {showBatchConfirmModal && recognizedDrugs.length > 0 && batchDrugIndex < recognizedDrugs.length && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px',
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div 
+            ref={batchConfirmModalRef}
+            style={{
+            background: 'white',
+            borderRadius: '32px',
+            padding: '48px',
+            width: '100%',
+            maxWidth: '600px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+            position: 'relative'
+          }}>
+            {/* 关闭按钮 */}
+            <button
+              style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                border: 'none',
+                background: '#F5F5F5',
+                fontSize: '24px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.3s ease'
+              }}
+              onClick={() => {
+                setShowBatchConfirmModal(false);
+                setBatchConfirmedDrugs([]);
+                setBatchDrugIndex(0);
+              }}
+              onMouseEnter={(e) => e.target.style.background = '#E0E0E0'}
+              onMouseLeave={(e) => e.target.style.background = '#F5F5F5'}
+            >
+              ✕
+            </button>
+
+            {/* 进度提示 */}
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{
+                display: 'inline-block',
+                padding: '8px 20px',
+                background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
+                color: 'white',
+                borderRadius: '20px',
+                fontSize: '16px',
+                fontWeight: 'bold'
+              }}>
+                {(() => {
+                  // 计算当前步骤：找到当前药品在选中列表中的位置
+                  const selectedDrugIds = Array.from(batchSelectedForAdd);
+                  const currentIndexInSelected = selectedDrugIds.indexOf(recognizedDrugs[batchDrugIndex]?.id);
+                  const currentStep = currentIndexInSelected >= 0 ? currentIndexInSelected + 1 : batchDrugIndex + 1;
+                  const totalSteps = selectedDrugIds.length;
+                  return `步骤 ${currentStep} / ${totalSteps}`;
+                })()}
+              </div>
+            </div>
+
+            {/* 标题 */}
+            <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+              <div style={{ fontSize: '64px', marginBottom: '16px' }}>💊</div>
+              <h2 style={{
+                fontSize: '32px',
+                fontWeight: '800',
+                color: '#4A90E2',
+                marginBottom: '8px'
+              }}>
+                确认药品信息
+              </h2>
+              <p style={{ fontSize: '18px', color: '#6B6B6B' }}>
+                请完善以下药品的用药信息
+              </p>
+            </div>
+
+            {/* 当前药品信息 */}
+            <div style={{
+              padding: '24px',
+              background: 'linear-gradient(135deg, #E3F2FD 0%, #F1F8E9 100%)',
+              borderRadius: '16px',
+              border: '2px solid #4A90E2',
+              marginBottom: '32px'
+            }}>
+              <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px', color: '#3D3D3D' }}>
+                {recognizedDrugs[batchDrugIndex].name}
+              </h3>
+              <p style={{ fontSize: '16px', color: '#6B6B6B', marginBottom: '8px' }}>
+                <strong>规格：</strong>{recognizedDrugs[batchDrugIndex].spec || '未指定'}
+              </p>
+              <p style={{ fontSize: '16px', color: '#6B6B6B' }}>
+                <strong>匹配度：</strong><span style={{ color: '#4CAF50', fontWeight: 'bold' }}>{recognizedDrugs[batchDrugIndex].matchScore}%</span>
+              </p>
+            </div>
+
+            {/* 表单 - 使用key强制重新渲染 */}
+            <form 
+              key={`drug-form-${recognizedDrugs[batchDrugIndex]?.id || batchDrugIndex}`}
+              onSubmit={(e) => {
+              e.preventDefault();
+              
+              // 获取表单数据
+              const formData = new FormData(e.target);
+              const dosageAmount = formData.get('dosageAmount') || '1';
+              const dosageUnit = formData.get('dosageUnit') || '片';
+              const frequency = formData.get('frequency');
+              const startDate = formData.get('startDate');
+              const endDate = formData.get('endDate');
+              const expiryDate = formData.get('expiryDate');
+              const totalQuantity = formData.get('totalQuantity') || '30';
+              
+              // 验证必填项
+              if (!frequency || !startDate || !endDate || !expiryDate) {
+                showToast('请填写所有必填项', 'warning');
+                return;
+              }
+              
+              // 保存当前药品信息
+              const confirmedDrug = {
+                drugId: recognizedDrugs[batchDrugIndex].id,
+                name: recognizedDrugs[batchDrugIndex].name,
+                spec: recognizedDrugs[batchDrugIndex].spec,
+                dosage: `${dosageAmount}${dosageUnit}`,
+                frequency: frequency,
+                startDate: startDate,
+                endDate: endDate,
+                expiryDate: expiryDate,
+                totalQuantity: parseFloat(totalQuantity),
+                status: 'active'
+              };
+              
+              console.log('确认的药品信息:', confirmedDrug);
+              console.log('当前 batchConfirmedDrugs:', batchConfirmedDrugs);
+              
+              // 检查是否是最后一个选中的药品
+              const selectedDrugIds = Array.from(batchSelectedForAdd);
+              console.log('选中的药品ID列表:', selectedDrugIds);
+              console.log('当前药品索引 batchDrugIndex:', batchDrugIndex);
+              console.log('当前药品:', recognizedDrugs[batchDrugIndex]);
+              
+              const currentIndex = selectedDrugIds.indexOf(recognizedDrugs[batchDrugIndex].id);
+              console.log('在选中列表中的索引:', currentIndex, ', 选中总数:', selectedDrugIds.length);
+              
+              const isLastDrug = currentIndex >= selectedDrugIds.length - 1;
+              
+              if (!isLastDrug) {
+                // 不是最后一个，添加到列表并切换到下一个
+                setBatchConfirmedDrugs(prev => [...prev, confirmedDrug]);
+                
+                // 找到下一个选中药品的索引
+                const nextDrugId = selectedDrugIds[currentIndex + 1];
+                console.log('下一个药品ID:', nextDrugId);
+                const nextIndex = recognizedDrugs.findIndex(d => d.id === nextDrugId);
+                console.log('下一个药品在recognizedDrugs中的索引:', nextIndex);
+                setBatchDrugIndex(nextIndex);
+                // 延迟滚动到顶部，确保DOM已更新
+                setTimeout(() => {
+                  if (batchConfirmModalRef.current) {
+                    batchConfirmModalRef.current.scrollTop = 0;
+                  }
+                }, 100);
+              } else {
+                // 是最后一个药品，将所有药品一起添加
+                console.log('✅ 所有药品已确认，准备批量添加');
+                
+                // 重要：直接构建完整的药品列表，不依赖异步状态
+                const finalDrugList = [...batchConfirmedDrugs, confirmedDrug];
+                console.log('最终的药品列表:', finalDrugList);
+                console.log('总数量:', finalDrugList.length);
+                
+                // 关闭弹窗
+                setShowBatchConfirmModal(false);
+                
+                // 清空临时状态
+                setBatchConfirmedDrugs([]);
+                setBatchDrugIndex(0);
+                
+                // 使用 setTimeout 确保弹窗关闭后再执行批量添加
+                setTimeout(() => {
+                  console.log('开始执行批量添加...');
+                  // 直接传递完整的药品列表给批量添加函数
+                  handleBatchAddAllDrugsWithList(finalDrugList);
+                }, 100);
+              }
+            }}>
+              {/* 每次用量 */}
+              <div style={{ marginBottom: '28px' }}>
+                <label style={{
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  marginBottom: '12px',
+                  display: 'block',
+                  color: '#3D3D3D'
+                }}>
+                  💉 每次用量 <span style={{ color: '#E74C3C' }}>*</span>
+                </label>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    name="dosageAmount"
+                    defaultValue="1"
+                    placeholder="输入剂量"
+                    style={{
+                      flex: 1,
+                      padding: '20px 24px',
+                      fontSize: '20px',
+                      border: '3px solid #F0EBE3',
+                      borderRadius: '20px',
+                      outline: 'none',
+                      background: '#FAF7F2',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                  <select
+                    name="dosageUnit"
+                    defaultValue="片"
+                    style={{
+                      flex: 1,
+                      padding: '20px 24px',
+                      fontSize: '20px',
+                      border: '3px solid #F0EBE3',
+                      borderRadius: '20px',
+                      outline: 'none',
+                      background: '#FAF7F2',
+                      fontFamily: 'inherit',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {/* 固体剂型 */}
+                    <option value="片">片</option>
+                    <option value="粒">粒</option>
+                    <option value="丸">丸</option>
+                    <option value="颗">颗</option>
+                    <option value="胶囊">胶囊</option>
+                    <option value="锭">锭</option>
+                    
+                    {/* 包装单位 */}
+                    <option value="瓶">瓶</option>
+                    <option value="支">支</option>
+                    <option value="盒">盒</option>
+                    <option value="袋">袋</option>
+                    
+                    {/* 液体剂型 */}
+                    <option value="ml">ml</option>
+                    <option value="L">L</option>
+                    <option value="滴">滴</option>
+                    <option value="喷">喷</option>
+                    <option value="口服液">口服液</option>
+                    <option value="糖浆">糖浆</option>
+                    <option value="溶液">溶液</option>
+                    <option value="混悬液">混悬液</option>
+                    <option value="乳剂">乳剂</option>
+                    
+                    {/* 外用剂型 */}
+                    <option value="贴">贴</option>
+                    <option value="膏">膏</option>
+                    <option value="霜">霜</option>
+                    <option value="软膏">软膏</option>
+                    <option value="凝胶">凝胶</option>
+                    <option value="栓">栓</option>
+                    <option value="洗剂">洗剂</option>
+                    <option value="搽剂">搽剂</option>
+                    
+                    {/* 注射剂型 */}
+                    <option value="针">针</option>
+                    <option value="安瓿">安</option>
+                    <option value="粉针">粉针</option>
+                    <option value="水针">水针</option>
+                    
+                    {/* 重量单位 */}
+                    <option value="g">g</option>
+                    <option value="mg">mg</option>
+                    <option value="μg">μg</option>
+                    <option value="ng">ng</option>
+                    <option value="kg">kg</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 用药频率 */}
+              <div style={{ marginBottom: '28px' }}>
+                <label style={{
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  marginBottom: '12px',
+                  display: 'block',
+                  color: '#3D3D3D'
+                }}>
+                   用药频率 <span style={{ color: '#E74C3C' }}>*</span>
+                </label>
+                <select
+                  name="frequency"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '20px 24px',
+                    fontSize: '20px',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    outline: 'none',
+                    background: 'white',
+                    fontFamily: 'inherit',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="">-- 请选择用药频率 --</option>
+                  <option value="每日一次">每日一次</option>
+                  <option value="每日两次">每日两次</option>
+                  <option value="每日三次">每日三次</option>
+                  <option value="每日四次">每日四次</option>
+                  <option value="隔日一次">隔日一次</option>
+                  <option value="每周一次">每周一次</option>
+                  <option value="必要时服用">必要时服用</option>
+                  <option value="睡前服用">睡前服用</option>
+                  <option value="饭前服用">饭前服用</option>
+                  <option value="饭后服用">饭后服用</option>
+                </select>
+              </div>
+
+              {/* 开始服药日期 */}
+              <div style={{ marginBottom: '28px' }}>
+                <label style={{
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  marginBottom: '12px',
+                  display: 'block',
+                  color: '#3D3D3D'
+                }}>
+                   开始服药日期 <span style={{ color: '#E74C3C' }}>*</span>
+                </label>
+                <input
+                  type="date"
+                  name="startDate"
+                  required
+                  defaultValue={new Date().toISOString().split('T')[0]}
+                  style={{
+                    width: '100%',
+                    padding: '20px 24px',
+                    fontSize: '20px',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    outline: 'none',
+                    background: '#FAF7F2',
+                    fontFamily: 'inherit'
+                  }}
+                />
+              </div>
+
+              {/* 结束服药日期 */}
+              <div style={{ marginBottom: '28px' }}>
+                <label style={{
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  marginBottom: '12px',
+                  display: 'block',
+                  color: '#3D3D3D'
+                }}>
+                  📅 结束服药日期 <span style={{ color: '#E74C3C' }}>*</span>
+                </label>
+                <input
+                  type="date"
+                  name="endDate"
+                  required
+                  defaultValue={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                  style={{
+                    width: '100%',
+                    padding: '20px 24px',
+                    fontSize: '20px',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    outline: 'none',
+                    background: '#FAF7F2',
+                    fontFamily: 'inherit'
+                  }}
+                />
+              </div>
+
+              {/* 有效期 */}
+              <div style={{ marginBottom: '28px' }}>
+                <label style={{
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  marginBottom: '12px',
+                  display: 'block',
+                  color: '#3D3D3D'
+                }}>
+                  📅 有效期 <span style={{ color: '#E74C3C' }}>*</span>
+                </label>
+                <input
+                  type="date"
+                  name="expiryDate"
+                  required
+                  defaultValue={new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                  style={{
+                    width: '100%',
+                    padding: '20px 24px',
+                    fontSize: '20px',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    outline: 'none',
+                    background: '#FAF7F2',
+                    fontFamily: 'inherit'
+                  }}
+                />
+              </div>
+
+              {/* 总数量 */}
+              <div style={{ marginBottom: '36px' }}>
+                <label style={{
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  marginBottom: '12px',
+                  display: 'block',
+                  color: '#3D3D3D'
+                }}>
+                  🔢 总数量 <span style={{ color: '#E74C3C' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  name="totalQuantity"
+                  defaultValue="30"
+                  min="1"
+                  step="0.1"
+                  style={{
+                    width: '100%',
+                    padding: '20px 24px',
+                    fontSize: '20px',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    outline: 'none',
+                    background: '#FAF7F2',
+                    fontFamily: 'inherit',
+                    // 完全隐藏并禁用数字输入框的滚动调整条
+                    MozAppearance: 'textfield',
+                    WebkitAppearance: 'none',
+                    appearance: 'none'
+                  }}
+                />
+              </div>
+
+              {/* 按钮组 */}
+              <div style={{
+                display: 'flex',
+                gap: '20px',
+                justifyContent: 'center'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBatchConfirmModal(false);
+                    setBatchConfirmedDrugs([]);
+                    setBatchDrugIndex(0);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '24px 40px',
+                    fontSize: '22px',
+                    fontWeight: '700',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    background: 'white',
+                    color: '#6B6B6B',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    flex: 1,
+                    padding: '24px 40px',
+                    fontSize: '22px',
+                    fontWeight: '700',
+                    border: 'none',
+                    borderRadius: '20px',
+                    background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
+                    color: 'white',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 8px 24px rgba(74, 144, 226, 0.3)'
+                  }}
+                >
+                  {(() => {
+                    // 计算当前药品在选中列表中的位置
+                    const selectedDrugIds = Array.from(batchSelectedForAdd);
+                    const currentIndexInSelected = selectedDrugIds.indexOf(recognizedDrugs[batchDrugIndex]?.id);
+                    const isLastDrug = currentIndexInSelected >= selectedDrugIds.length - 1;
+                    return isLastDrug ? '✅ 全部添加' : '✅ 下一步';
+                  })()}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* 冲突报告卡片弹窗 - 放在顶层确保居中显示 */}

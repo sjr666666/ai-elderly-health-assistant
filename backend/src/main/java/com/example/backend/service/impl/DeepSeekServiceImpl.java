@@ -167,7 +167,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             // 构建请求体
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
-            requestBody.put("temperature", 0.5);  // 提高温度让AI更愿意提供详细信息
+            requestBody.put("temperature", 0.2);  // 降低温度让AI回复更简洁
             requestBody.put("max_tokens", 1500);  // 增加token限制以容纳更详细的注意事项
 
             // 构建消息
