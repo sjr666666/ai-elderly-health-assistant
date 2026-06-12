@@ -67,6 +67,23 @@ function GuardianElderDetail({ guardianId, elderId, onBack }) {
     medication_missed: '漏服药物', other: '其他',
   }[type] || type);
 
+  const formatTime = (timeStr) => {
+    if (!timeStr) return '';
+    const date = new Date(timeStr);
+    if (isNaN(date.getTime())) return timeStr;
+    const now = new Date();
+    const diff = Math.floor((now - date) / 1000);
+    if (diff < 60) return '刚刚';
+    if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+    if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+    if (diff < 172800) return '昨天 ' + date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
+    const m = date.getMonth() + 1;
+    const d = date.getDate();
+    const h = date.getHours().toString().padStart(2, '0');
+    const min = date.getMinutes().toString().padStart(2, '0');
+    return m + '月' + d + '日 ' + h + ':' + min;
+  };
+
   if (isLoading) return <div className="g-loading"><div className="g-spinner"></div><p>加载中...</p></div>;
   if (error) return <div className="g-error"><p>{error}</p><button className="g-btn g-btn-primary" onClick={loadAllData}>重新加载</button></div>;
 
@@ -123,7 +140,7 @@ function GuardianElderDetail({ guardianId, elderId, onBack }) {
                 </div>
                 <div className="g-event-body">
                   <p>{event.description}</p>
-                  <p className="g-event-time">{event.createdAt}</p>
+                  <p className="g-event-time">{formatTime(event.createdAt)}</p>
                 </div>
                 {event.status !== 'resolved' && (
                   <button className="g-btn g-btn-sm g-btn-primary" onClick={() => handleResolveEvent(event.eventId)} style={{marginTop:8}}>
