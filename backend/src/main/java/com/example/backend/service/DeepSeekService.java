@@ -72,4 +72,15 @@ public interface DeepSeekService {
      * @return 药品搜索结果列表
      */
     List<DrugSearchResponse> searchMultipleDrugsWithAI(String keyword);
+
+    /**
+     * 使用DeepSeek AI生成每日慢病科普文章
+     * 基于用户慢性病史和基本信息，生成通俗易懂的健康科普内容
+     *
+     * @param diseaseName 慢病名称（如"高血压"）
+     * @param age 用户年龄（可选）
+     * @param gender 用户性别（可选）
+     * @return Map包含 "title" 和 "content" 两个key，生成失败返回null
+     */
+    java.util.Map<String, String> generateDiseaseScienceLesson(String diseaseName, Integer age, String gender);
 }

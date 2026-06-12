@@ -334,6 +334,26 @@ CALL add_fk_if_not_exists('emergency_contact', 'fk_contact_elder', 'FOREIGN KEY 
 CALL add_fk_if_not_exists('drug_conflict_rules', 'fk_conflict_drug_a', 'FOREIGN KEY (`drug_a_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE');
 CALL add_fk_if_not_exists('drug_conflict_rules', 'fk_conflict_drug_b', 'FOREIGN KEY (`drug_b_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE');
 
+-- ==================== 今日一课-慢病科普表 ====================
+CREATE TABLE IF NOT EXISTS `daily_lesson` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '自增主键ID',
+  `user_id` bigint NOT NULL COMMENT '用户ID（关联sys_user.id）',
+  `lesson_date` date NOT NULL COMMENT '推送日期',
+  `chronic_disease` varchar(100) NULL COMMENT '本次科普针对的慢病名称',
+  `title` varchar(200) NULL COMMENT '科普标题',
+  `content` text NULL COMMENT '科普正文（200-350字）',
+  `is_generated` tinyint NOT NULL DEFAULT 0 COMMENT '0-未生成或生成失败 1-已生成',
+  `error_msg` varchar(500) NULL COMMENT 'AI生成失败时的错误信息',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除标记',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_date` (`user_id`, `lesson_date`),
+  INDEX `idx_lesson_date` (`lesson_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='今日一课-慢病科普表';
+
+CALL add_fk_if_not_exists('daily_lesson', 'fk_daily_lesson_user', 'FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+
 DROP PROCEDURE IF EXISTS add_fk_if_not_exists;
 
 -- 重新启用外键检查
