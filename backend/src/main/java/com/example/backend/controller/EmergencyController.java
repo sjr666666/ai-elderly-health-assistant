@@ -148,7 +148,7 @@ public class EmergencyController {
         int notifyCount = 0;
         for (GuardianElderRelation relation : relations) {
             SysUser guardian = userMapper.selectById(relation.getGuardianId());
-            String phone = guardian != null ? guardian.getRealName() : "";
+            String phone = guardian != null ? guardian.getPhone() : "";
             try {
                 String message = String.format("【紧急求助】%s开启了紧急求助模式，请立即关注！", elderName);
                 smsNotificationService.sendNotification(

@@ -49,4 +49,7 @@ public class UserRegisterRequest {
     private Integer isSmoking;
 
     private Integer isDrinking;
+
+    @NotBlank(message = "角色不能为空")
+    private String role; // elder（老人）/ family（家属）
 }

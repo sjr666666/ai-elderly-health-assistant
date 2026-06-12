@@ -50,6 +50,12 @@ public class SysUser extends BaseEntity {
     private String realName;
 
     /**
+     * 手机号
+     */
+    @TableField("phone")
+    private String phone;
+
+    /**
      * 年龄
      * 用户年龄，可选字段
      */

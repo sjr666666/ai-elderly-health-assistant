@@ -2728,18 +2728,7 @@ function App() {
         if (r.planId) {
           saveLocalMedicationStatus(r.planId, 'taken');
         }
-        if (r.boxItemId && r.remainingQuantity !== undefined) {
-          const amount = parseDosageToNumber(r.dosage);
-          const newRemaining = Math.max(0, (r.remainingQuantity || 0) - amount);
-          return { ...r, taken: true, missed: false, remainingQuantity: newRemaining };
-        }
         return { ...r, taken: true, missed: false };
-      }
-      // 同一药品的其他时间段同步扣减库存
-      if (r.boxItemId && targetPlan && r.boxItemId === targetPlan.boxItemId) {
-        const amount = parseDosageToNumber(targetPlan.dosage);
-        const newRemaining = Math.max(0, (r.remainingQuantity || 0) - amount);
-        return { ...r, remainingQuantity: newRemaining };
       }
       return r;
     }));
@@ -2763,12 +2752,13 @@ function App() {
       saveLocalMedicationStatus(targetPlanId, null);
     }
 
-    // 不论成功失败都拉后端做最终校验：今日 + 一周都刷
+    // 不论成功失败都拉后端做最终校验：今日 + 一周 + 药箱都刷
     // 成功时：本地就是 taken、后端也是 completed，状态对齐
     // 失败时：后端仍是 pending，reload 后 UI 自动回退到"待吃"，消除本地和后端的不一致
     await Promise.all([
       loadCalendarPlans(),
-      typeof loadWeeklyMedication === 'function' ? loadWeeklyMedication() : Promise.resolve()
+      typeof loadWeeklyMedication === 'function' ? loadWeeklyMedication() : Promise.resolve(),
+      user?.userId ? loadMedicineBoxList(user.userId) : Promise.resolve()
     ]);
 
     // 服药后刷新缺药预警
@@ -2843,7 +2833,11 @@ function App() {
     // 乐观更新：confirm 之后一定是 taken
     patchWeeklyItemStatus(date, item.planId, 'taken');
     const result = await executeMedicationActionWithAPI(item.planId, user.userId, 'confirm');
-    if (!result.success) {
+    if (result.success) {
+      // 刷新药箱列表和缺药预警
+      loadMedicineBoxList(user.userId);
+      loadShortageWarnings(user.userId);
+    } else {
       // 回滚：重新拉一次
       loadWeeklyMedication();
     }
@@ -2864,6 +2858,9 @@ function App() {
     if (result.success) {
       // 重拉当周数据，让后端的真实状态覆盖本地
       loadWeeklyMedication();
+      // 刷新药箱列表和缺药预警
+      loadMedicineBoxList(user.userId);
+      loadShortageWarnings(user.userId);
       // 如果撤销的是今天那一格，顺便刷新今日视图数据
       const todayKey = toDateKey(new Date());
       if (date === todayKey) {
@@ -2922,18 +2919,7 @@ function App() {
     ));
     setCalendarPlans(calendarPlans.map(r => {
       if (r.id === id) {
-        if (r.boxItemId && r.remainingQuantity !== undefined) {
-          const amount = parseDosageToNumber(r.dosage);
-          const newRemaining = (r.remainingQuantity || 0) + amount;
-          updateMedicineBoxQuantity(r.boxItemId, r.remainingQuantity, r.dosage, true);
-          return { ...r, taken: false, remainingQuantity: newRemaining };
-        }
         return { ...r, taken: false };
-      }
-      if (r.boxItemId && targetPlan && r.boxItemId === targetPlan.boxItemId) {
-        const amount = parseDosageToNumber(targetPlan.dosage);
-        const newRemaining = (r.remainingQuantity || 0) + amount;
-        return { ...r, remainingQuantity: newRemaining };
       }
       return r;
     }));
@@ -2953,13 +2939,14 @@ function App() {
       }
     }
 
-    // 清掉 localStorage + reload 两个视图，让后端做最终校验
+    // 清掉 localStorage + reload 两个视图 + 药箱，让后端做最终校验
     if (targetPlanId) {
       saveLocalMedicationStatus(targetPlanId, null);
     }
     await Promise.all([
       loadCalendarPlans(),
-      typeof loadWeeklyMedication === 'function' ? loadWeeklyMedication() : Promise.resolve()
+      typeof loadWeeklyMedication === 'function' ? loadWeeklyMedication() : Promise.resolve(),
+      user?.userId ? loadMedicineBoxList(user.userId) : Promise.resolve()
     ]);
 
     // 撤销服药后刷新缺药预警

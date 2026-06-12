@@ -19,6 +19,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 监护人服务实现
@@ -60,18 +62,98 @@ public class GuardianServiceImpl implements GuardianService {
     public List<ElderSummaryDTO> getElderList(Long guardianId) {
         log.info("获取关联老人列表 - guardianId: {}", guardianId);
 
-        // 查询关联关系
+        // 1. 查询关联关系
         LambdaQueryWrapper<GuardianElderRelation> relationQuery = new LambdaQueryWrapper<>();
         relationQuery.eq(GuardianElderRelation::getGuardianId, guardianId)
                 .eq(GuardianElderRelation::getStatus, "active");
         List<GuardianElderRelation> relations = guardianElderRelationMapper.selectList(relationQuery);
 
+        if (relations.isEmpty()) {
+            log.info("未找到关联老人 - guardianId: {}", guardianId);
+            return new ArrayList<>();
+        }
+
+        List<Long> elderIds = relations.stream()
+                .map(GuardianElderRelation::getElderId)
+                .collect(Collectors.toList());
+
+        // 2. 批量查询老人基本信息
+        List<SysUser> elders = userMapper.selectBatchIds(elderIds);
+        Map<Long, SysUser> elderMap = elders.stream()
+                .collect(Collectors.toMap(SysUser::getId, u -> u));
+
+        // 3. 批量查询今日用药计划
+        LocalDate today = LocalDate.now();
+        LambdaQueryWrapper<MedicationPlan> planQuery = new LambdaQueryWrapper<>();
+        planQuery.in(MedicationPlan::getUserId, elderIds)
+                .eq(MedicationPlan::getPlanDate, today);
+        List<MedicationPlan> allPlans = medicationPlanMapper.selectList(planQuery);
+        Map<Long, List<MedicationPlan>> plansByElder = allPlans.stream()
+                .collect(Collectors.groupingBy(MedicationPlan::getUserId));
+
+        // 4. 批量查询活跃告警数
+        LambdaQueryWrapper<EmergencyEvent> eventQuery = new LambdaQueryWrapper<>();
+        eventQuery.in(EmergencyEvent::getElderId, elderIds)
+                .eq(EmergencyEvent::getIsResolved, 0);
+        List<EmergencyEvent> activeEvents = emergencyEventMapper.selectList(eventQuery);
+        Map<Long, Long> alertCountByElder = activeEvents.stream()
+                .collect(Collectors.groupingBy(EmergencyEvent::getElderId, Collectors.counting()));
+
+        // 5. 批量查询用药数量
+        LambdaQueryWrapper<UserMedicineBox> boxQuery = new LambdaQueryWrapper<>();
+        boxQuery.in(UserMedicineBox::getUserId, elderIds)
+                .eq(UserMedicineBox::getStatus, "active");
+        List<UserMedicineBox> allBoxes = userMedicineBoxMapper.selectList(boxQuery);
+        Map<Long, Long> medCountByElder = allBoxes.stream()
+                .collect(Collectors.groupingBy(UserMedicineBox::getUserId, Collectors.counting()));
+
+        // 6. 组装结果
         List<ElderSummaryDTO> elderList = new ArrayList<>();
-        for (GuardianElderRelation relation : relations) {
-            ElderSummaryDTO elderDTO = buildElderSummary(relation.getElderId());
-            if (elderDTO != null) {
-                elderList.add(elderDTO);
+        LocalDateTime now = LocalDateTime.now();
+
+        for (Long elderId : elderIds) {
+            SysUser elder = elderMap.get(elderId);
+            if (elder == null) {
+                log.warn("未找到老人 - elderId: {}", elderId);
+                continue;
             }
+
+            // 计算今日用药统计
+            List<MedicationPlan> plans = plansByElder.getOrDefault(elderId, new ArrayList<>());
+            int pendingCount = 0, takenCount = 0, missedCount = 0;
+            for (MedicationPlan plan : plans) {
+                switch (plan.getStatus()) {
+                    case "pending": pendingCount++; break;
+                    case "taken": takenCount++; break;
+                    case "missed": missedCount++; break;
+                }
+            }
+
+            // 计算最后活跃时间
+            String lastActiveTime = null;
+            if (elder.getUpdatedAt() != null) {
+                long minutes = java.time.Duration.between(elder.getUpdatedAt(), now).toMinutes();
+                if (minutes < 60) {
+                    lastActiveTime = minutes + "分钟前";
+                } else if (minutes < 1440) {
+                    lastActiveTime = (minutes / 60) + "小时前";
+                } else {
+                    lastActiveTime = (minutes / 1440) + "天前";
+                }
+            }
+
+            elderList.add(ElderSummaryDTO.builder()
+                    .elderId(elder.getId())
+                    .realName(elder.getRealName())
+                    .age(elder.getAge())
+                    .gender(elder.getGender())
+                    .medicationCount(medCountByElder.getOrDefault(elderId, 0L).intValue())
+                    .todayPendingCount(pendingCount)
+                    .todayTakenCount(takenCount)
+                    .todayMissedCount(missedCount)
+                    .activeAlertCount(alertCountByElder.getOrDefault(elderId, 0L).intValue())
+                    .lastActiveTime(lastActiveTime)
+                    .build());
         }
 
         log.info("找到 {} 个关联老人 - guardianId: {}", elderList.size(), guardianId);
@@ -183,15 +265,27 @@ public class GuardianServiceImpl implements GuardianService {
                 .le(UserMedicineBox::getExpiryDate, threshold)
                 .ge(UserMedicineBox::getExpiryDate, LocalDate.now());
         List<UserMedicineBox> boxes = userMedicineBoxMapper.selectList(query);
+        if (boxes.isEmpty()) {
+            log.info("未找到临期药品 - elderId: {}", elderId);
+            return new ArrayList<>();
+        }
+
+        // 批量查询药品名称
+        List<Long> drugIds = boxes.stream()
+                .map(UserMedicineBox::getDrugId)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, DrugBase> drugMap = drugIds.isEmpty() ? Map.of()
+                : drugBaseMapper.selectBatchIds(drugIds).stream()
+                        .collect(Collectors.toMap(DrugBase::getId, d -> d));
 
         List<ExpiringDrugDTO> result = new ArrayList<>();
         for (UserMedicineBox box : boxes) {
             String drugName = "未知药品";
-            if (box.getDrugId() != null) {
-                DrugBase drug = drugBaseMapper.selectById(box.getDrugId());
-                if (drug != null) {
-                    drugName = drug.getGenericName();
-                }
+            DrugBase drug = drugMap.get(box.getDrugId());
+            if (drug != null) {
+                drugName = drug.getGenericName();
             }
 
             int daysUntilExpiry = (int) java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), box.getExpiryDate());
