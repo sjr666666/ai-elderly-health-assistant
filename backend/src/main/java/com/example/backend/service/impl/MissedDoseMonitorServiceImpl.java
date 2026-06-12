@@ -114,7 +114,7 @@ public class MissedDoseMonitorServiceImpl implements MissedDoseMonitorService {
         for (GuardianElderRelation relation : relations) {
             // 查询监护人手机号
             SysUser guardian = userMapper.selectById(relation.getGuardianId());
-            String phone = guardian != null ? guardian.getRealName() : "";
+            String phone = guardian != null ? guardian.getPhone() : "";
 
             try {
                 smsNotificationService.sendNotification(

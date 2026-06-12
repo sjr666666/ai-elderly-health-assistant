@@ -83,6 +83,7 @@ CALL add_col_if_missing('sys_user', 'liver_function', "varchar(50) NULL COMMENT 
 CALL add_col_if_missing('sys_user', 'is_pregnant',    "tinyint NOT NULL DEFAULT 0 COMMENT '是否孕期' AFTER `liver_function`");
 CALL add_col_if_missing('sys_user', 'is_breastfeeding',"tinyint NOT NULL DEFAULT 0 COMMENT '是否哺乳期' AFTER `is_pregnant`");
 CALL add_col_if_missing('sys_user', 'is_smoking',     "tinyint NOT NULL DEFAULT 0 COMMENT '是否吸烟' AFTER `is_breastfeeding`");
+CALL add_col_if_missing('sys_user', 'phone',          "varchar(20) NULL COMMENT '手机号' AFTER `real_name`");
 CALL add_col_if_missing('sys_user', 'is_drinking',    "tinyint NOT NULL DEFAULT 0 COMMENT '是否饮酒' AFTER `is_smoking`");
 
 DROP PROCEDURE add_col_if_missing;

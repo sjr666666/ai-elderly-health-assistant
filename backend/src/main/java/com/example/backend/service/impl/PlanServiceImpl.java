@@ -149,6 +149,11 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         // updated_at由MyMetaObjectHandler自动填充
         updateById(plan);
 
+        // 扣减库存（如果有 boxItemId）
+        if (plan.getBoxItemId() != null) {
+            updateInventory(plan.getBoxItemId(), plan.getDosageAtTime(), false);
+        }
+
         markReminderAsRead(userId, planId);
 
         ConfirmMedicationResponseDTO response = new ConfirmMedicationResponseDTO();

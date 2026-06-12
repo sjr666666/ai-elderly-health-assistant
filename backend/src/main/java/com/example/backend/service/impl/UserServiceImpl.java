@@ -58,7 +58,13 @@ public class UserServiceImpl implements UserService {
         user.setIsBreastfeeding(request.getIsBreastfeeding());
         user.setIsSmoking(request.getIsSmoking());
         user.setIsDrinking(request.getIsDrinking());
-        user.setRole(SysUser.Role.ELDER.getCode());
+        // 根据请求设置角色，仅允许 elder 或 family
+        String role = request.getRole();
+        if (SysUser.Role.FAMILY.getCode().equals(role)) {
+            user.setRole(SysUser.Role.FAMILY.getCode());
+        } else {
+            user.setRole(SysUser.Role.ELDER.getCode());
+        }
 
         userMapper.insert(user);
 

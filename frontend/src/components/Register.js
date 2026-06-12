@@ -8,6 +8,7 @@ function Register({ onRegister }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [realName, setRealName] = useState('');
   const [age, setAge] = useState('');
+  const [role, setRole] = useState('elder');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -85,6 +86,7 @@ function Register({ onRegister }) {
           password: password,
           realName: realName.trim(),
           age: parseInt(age),
+          role: role,
         }),
       });
 
@@ -157,11 +159,69 @@ function Register({ onRegister }) {
       }}>
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <div style={{ fontSize: '80px', marginBottom: '20px', filter: 'drop-shadow(2px 4px 8px rgba(0,0,0,0.1))' }}>👴</div>
-          <h1 style={{ fontSize: '36px', fontWeight: '800', color: '#4A90E2', marginBottom: '8px' }}>创建老人档案</h1>
-          <p style={{ fontSize: '18px', color: '#6B6B6B', marginTop: '8px' }}>请填写基本信息完成注册</p>
+          <h1 style={{ fontSize: '36px', fontWeight: '800', color: '#4A90E2', marginBottom: '8px' }}>创建账号</h1>
+          <p style={{ fontSize: '18px', color: '#6B6B6B', marginTop: '8px' }}>请选择身份并填写基本信息</p>
         </div>
 
         <form onSubmit={handleSubmit}>
+          {/* 角色选择 */}
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{
+              fontSize: '20px',
+              fontWeight: '600',
+              marginBottom: '12px',
+              display: 'block',
+              color: '#3D3D3D'
+            }}>
+              <span style={{ color: '#E74C3C', marginRight: '4px' }}>*</span>
+              我是
+            </label>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <div
+                onClick={() => setRole('elder')}
+                style={{
+                  flex: 1,
+                  padding: '20px',
+                  borderRadius: '16px',
+                  border: role === 'elder' ? '3px solid #4A90E2' : '3px solid #F0EBE3',
+                  background: role === 'elder' ? '#EBF2FC' : '#FAF7F2',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={role === 'elder' ? '#4A90E2' : '#999'} strokeWidth="1.5" style={{ marginBottom: '8px' }}>
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                <div style={{ fontSize: '18px', fontWeight: '600', color: role === 'elder' ? '#4A90E2' : '#666' }}>老人</div>
+                <div style={{ fontSize: '13px', color: '#999', marginTop: '4px' }}>管理我的健康与用药</div>
+              </div>
+              <div
+                onClick={() => setRole('family')}
+                style={{
+                  flex: 1,
+                  padding: '20px',
+                  borderRadius: '16px',
+                  border: role === 'family' ? '3px solid #4A90E2' : '3px solid #F0EBE3',
+                  background: role === 'family' ? '#EBF2FC' : '#FAF7F2',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={role === 'family' ? '#4A90E2' : '#999'} strokeWidth="1.5" style={{ marginBottom: '8px' }}>
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                <div style={{ fontSize: '18px', fontWeight: '600', color: role === 'family' ? '#4A90E2' : '#666' }}>家属</div>
+                <div style={{ fontSize: '13px', color: '#999', marginTop: '4px' }}>关注老人健康状态</div>
+              </div>
+            </div>
+          </div>
+
           <div style={{ marginBottom: '24px' }}>
             <label style={{
               fontSize: '20px',
