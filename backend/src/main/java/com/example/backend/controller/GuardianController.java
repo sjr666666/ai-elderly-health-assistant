@@ -157,6 +157,20 @@ public class GuardianController {
         }
     }
 
+    @GetMapping("/elders/{elderId}/medication-plan")
+    public ResponseResult<ElderMedicationPlanDTO> getMedicationPlan(@RequestParam Long guardianId, @PathVariable Long elderId) {
+        log.info("获取老人今日用药计划 - guardianId: {}, elderId: {}", guardianId, elderId);
+        try {
+            if (!guardianService.hasPermission(guardianId, elderId)) {
+                return ResponseResult.fail("无权访问该老人数据");
+            }
+            return ResponseResult.success(guardianService.getMedicationPlan(elderId));
+        } catch (Exception e) {
+            log.error("获取用药计划失败 - guardianId: {}, elderId: {}", guardianId, elderId, e);
+            return ResponseResult.fail("获取用药计划失败：" + e.getMessage());
+        }
+    }
+
     @PostMapping("/test/trigger-missed-check")
     public ResponseResult<Void> triggerMissedCheck() {
         log.info("手动触发漏服检查");
