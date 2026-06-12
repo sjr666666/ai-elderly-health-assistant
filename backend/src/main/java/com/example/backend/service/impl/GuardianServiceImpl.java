@@ -2,6 +2,8 @@ package com.example.backend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.backend.mapper.*;
+import com.example.backend.model.dto.ElderMedicationPlanDTO;
+import com.example.backend.model.dto.ElderMedicationPlanItemDTO;
 import com.example.backend.model.dto.ElderSummaryDTO;
 import com.example.backend.model.dto.ExpiringDrugDTO;
 import com.example.backend.model.dto.GuardianDashboardDTO;
@@ -285,5 +287,87 @@ public class GuardianServiceImpl implements GuardianService {
                 .activeAlertCount(alertCount.intValue())
                 .lastActiveTime(lastActiveTime)
                 .build();
+    }
+
+    @Override
+    public ElderMedicationPlanDTO getMedicationPlan(Long elderId) {
+        log.info("获取老人今日用药计划 - elderId: {}", elderId);
+
+        SysUser elder = userMapper.selectById(elderId);
+        String elderName = elder != null ? elder.getRealName() : "未知";
+
+        LocalDate today = LocalDate.now();
+        List<MedicationPlan> plans = medicationPlanMapper.selectUserDailyPlans(elderId, today);
+
+        int takenCount = 0, pendingCount = 0, missedCount = 0, skippedCount = 0;
+        List<ElderMedicationPlanItemDTO> items = new ArrayList<>();
+
+        for (MedicationPlan plan : plans) {
+            String drugName = "未知药品";
+            String specification = "";
+            if (plan.getDrugId() != null) {
+                DrugBase drug = drugBaseMapper.selectById(plan.getDrugId());
+                if (drug != null) {
+                    drugName = drug.getGenericName();
+                    specification = drug.getSpecification();
+                }
+            }
+
+            switch (plan.getStatus()) {
+                case "taken": case "completed": takenCount++; break;
+                case "pending": pendingCount++; break;
+                case "missed": missedCount++; break;
+                case "skipped": skippedCount++; break;
+            }
+
+            items.add(ElderMedicationPlanItemDTO.builder()
+                    .planId(plan.getId())
+                    .drugId(plan.getDrugId())
+                    .drugName(drugName)
+                    .specification(specification)
+                    .dosageAtTime(plan.getDosageAtTime())
+                    .timeSlot(plan.getTimeSlot())
+                    .timeSlotLabel(getTimeSlotLabel(plan.getTimeSlot()))
+                    .status(plan.getStatus())
+                    .statusLabel(getStatusLabel(plan.getStatus()))
+                    .build());
+        }
+
+        int totalCount = plans.size();
+        int progressPercent = totalCount > 0 ? (takenCount + skippedCount) * 100 / totalCount : 0;
+
+        return ElderMedicationPlanDTO.builder()
+                .elderId(elderId)
+                .elderName(elderName)
+                .totalCount(totalCount)
+                .takenCount(takenCount)
+                .pendingCount(pendingCount)
+                .missedCount(missedCount)
+                .progressPercent(progressPercent)
+                .items(items)
+                .build();
+    }
+
+    private String getTimeSlotLabel(String timeSlot) {
+        switch (timeSlot) {
+            case "morning": return "早晨";
+            case "noon": return "中午";
+            case "afternoon": return "下午";
+            case "evening": return "傍晚";
+            case "before_bed": return "睡前";
+            case "night": return "夜间";
+            default: return timeSlot;
+        }
+    }
+
+    private String getStatusLabel(String status) {
+        switch (status) {
+            case "pending": return "待服用";
+            case "taken": return "已服用";
+            case "missed": return "已漏服";
+            case "skipped": return "已跳过";
+            case "completed": return "已完成";
+            default: return status;
+        }
     }
 }

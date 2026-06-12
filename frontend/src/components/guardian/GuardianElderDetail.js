@@ -5,6 +5,7 @@ function GuardianElderDetail({ guardianId, elderId, onBack }) {
   const [elder, setElder] = useState(null);
   const [events, setEvents] = useState([]);
   const [expiringDrugs, setExpiringDrugs] = useState([]);
+  const [medPlan, setMedPlan] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [showUnbindConfirm, setShowUnbindConfirm] = useState(false);
@@ -14,7 +15,7 @@ function GuardianElderDetail({ guardianId, elderId, onBack }) {
 
   const loadAllData = async () => {
     setIsLoading(true); setError('');
-    try { await Promise.all([loadElderDetail(), loadEvents(), loadExpiringDrugs()]); }
+    try { await Promise.all([loadElderDetail(), loadEvents(), loadExpiringDrugs(), loadMedPlan()]); }
     catch { setError('加载失败'); }
     finally { setIsLoading(false); }
   };
@@ -40,6 +41,14 @@ function GuardianElderDetail({ guardianId, elderId, onBack }) {
       const res = await fetch(`/api/v1/guardian/elders/${elderId}/expiring-drugs?guardianId=${guardianId}`);
       const data = await res.json();
       if (data.code === 200) setExpiringDrugs(data.data || []);
+    } catch {}
+  };
+
+  const loadMedPlan = async () => {
+    try {
+      const res = await fetch(`/api/v1/guardian/elders/${elderId}/medication-plan?guardianId=${guardianId}`);
+      const data = await res.json();
+      if (data.code === 200) setMedPlan(data.data);
     } catch {}
   };
 
@@ -84,6 +93,16 @@ function GuardianElderDetail({ guardianId, elderId, onBack }) {
     return m + '月' + d + '日 ' + h + ':' + min;
   };
 
+  const getStatusStyle = (status) => {
+    switch (status) {
+      case 'taken': case 'completed': return { bg: 'var(--success-light)', color: 'var(--success)', label: '已服用' };
+      case 'pending': return { bg: 'var(--primary-light)', color: 'var(--primary)', label: '待服用' };
+      case 'missed': return { bg: 'var(--danger-light)', color: 'var(--danger)', label: '已漏服' };
+      case 'skipped': return { bg: 'var(--warn-light)', color: 'var(--warn)', label: '已跳过' };
+      default: return { bg: '#f5f5f5', color: '#999', label: status };
+    }
+  };
+
   if (isLoading) return <div className="g-loading"><div className="g-spinner"></div><p>加载中...</p></div>;
   if (error) return <div className="g-error"><p>{error}</p><button className="g-btn g-btn-primary" onClick={loadAllData}>重新加载</button></div>;
 
@@ -123,6 +142,52 @@ function GuardianElderDetail({ guardianId, elderId, onBack }) {
           </div>
         </div>
       )}
+
+      {/* 今日用药计划 */}
+      <div className="g-section">
+        <h3 className="g-section-title">今日用药计划</h3>
+        {medPlan && medPlan.totalCount > 0 ? (
+          <div>
+            {/* 进度概览 */}
+            <div className="g-med-progress-card">
+              <div className="g-med-progress-bar-wrap">
+                <div className="g-med-progress-bar" style={{ width: medPlan.progressPercent + '%' }}></div>
+              </div>
+              <div className="g-med-progress-stats">
+                <span>已完成 <strong>{medPlan.takenCount}</strong>/{medPlan.totalCount}</span>
+                <span>{medPlan.progressPercent}%</span>
+              </div>
+              <div className="g-med-progress-detail">
+                {medPlan.takenCount > 0 && <span className="g-med-stat g-med-stat-ok">已服 {medPlan.takenCount}</span>}
+                {medPlan.pendingCount > 0 && <span className="g-med-stat g-med-stat-pending">待服 {medPlan.pendingCount}</span>}
+                {medPlan.missedCount > 0 && <span className="g-med-stat g-med-stat-miss">漏服 {medPlan.missedCount}</span>}
+              </div>
+            </div>
+            {/* 用药明细列表 */}
+            <div className="g-med-plan-list">
+              {medPlan.items.map((item) => {
+                const st = getStatusStyle(item.status);
+                return (
+                  <div key={item.planId} className="g-med-plan-item">
+                    <div className="g-med-plan-left">
+                      <span className="g-med-plan-slot">{item.timeSlotLabel}</span>
+                    </div>
+                    <div className="g-med-plan-center">
+                      <span className="g-med-plan-name">{item.drugName}</span>
+                      <span className="g-med-plan-spec">{item.specification} · {item.dosageAtTime}</span>
+                    </div>
+                    <span className="g-med-plan-status" style={{ background: st.bg, color: st.color }}>
+                      {st.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="g-empty-sm">今日暂无用药计划</div>
+        )}
+      </div>
 
       <div className="g-section">
         <h3 className="g-section-title">紧急事件</h3>

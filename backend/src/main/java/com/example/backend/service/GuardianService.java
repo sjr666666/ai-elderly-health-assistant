@@ -1,5 +1,6 @@
 package com.example.backend.service;
 
+import com.example.backend.model.dto.ElderMedicationPlanDTO;
 import com.example.backend.model.dto.ElderSummaryDTO;
 import com.example.backend.model.dto.ExpiringDrugDTO;
 import com.example.backend.model.dto.GuardianDashboardDTO;
@@ -70,4 +71,12 @@ public interface GuardianService {
      * @return 临期药品列表
      */
     List<ExpiringDrugDTO> getExpiringDrugs(Long elderId);
+
+    /**
+     * 获取老人今日用药计划详情
+     *
+     * @param elderId 老人ID
+     * @return 用药计划详情
+     */
+    ElderMedicationPlanDTO getMedicationPlan(Long elderId);
 }
