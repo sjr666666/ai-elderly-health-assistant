@@ -459,6 +459,197 @@ body {
   50% { box-shadow: 0 4px 30px rgba(238, 90, 36, 0.55); }
 }
 
+/* ============ 今日一课 ============ */
+.daily-lesson-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 20px 22px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.35);
+  color: white;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.daily-lesson-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 25px rgba(102, 126, 234, 0.45);
+}
+
+.daily-lesson-card.daily-lesson-loading {
+  background: linear-gradient(135deg, #a8b5e0 0%, #b8a0d0 100%);
+}
+
+.daily-lesson-card.daily-lesson-error {
+  background: linear-gradient(135deg, #f0a060 0%, #e08060 100%);
+}
+
+.daily-lesson-card.daily-lesson-prompt {
+  background: linear-gradient(135deg, #60b0a0 0%, #4090c0 100%);
+}
+
+.daily-lesson-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.daily-lesson-badge {
+  font-size: 15px;
+  font-weight: 600;
+  opacity: 0.9;
+  letter-spacing: 0.5px;
+}
+
+.daily-lesson-date {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.daily-lesson-body {
+  margin-bottom: 14px;
+}
+
+.daily-lesson-disease-tag {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 3px 12px;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.daily-lesson-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 8px 0 10px;
+  line-height: 1.4;
+}
+
+.daily-lesson-content p {
+  font-size: 15px;
+  line-height: 1.8;
+  margin: 6px 0;
+  opacity: 0.95;
+}
+
+.daily-lesson-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 12px;
+  font-size: 13px;
+}
+
+.daily-lesson-attribution {
+  opacity: 0.6;
+  font-size: 12px;
+}
+
+.daily-lesson-refresh-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+
+.daily-lesson-refresh-btn:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.daily-lesson-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 骨架屏加载 */
+.daily-lesson-skeleton {
+  margin: 14px 0;
+}
+
+.skeleton-line {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  height: 14px;
+  margin-bottom: 10px;
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-title {
+  width: 60%;
+  height: 20px;
+}
+
+.skeleton-text {
+  width: 90%;
+}
+
+.skeleton-text-short {
+  width: 50%;
+}
+
+.daily-lesson-loading-text {
+  opacity: 0.7;
+  font-size: 13px;
+}
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+/* 空状态 / 错误状态 */
+.daily-lesson-empty {
+  text-align: center;
+  padding: 20px 10px;
+}
+
+.daily-lesson-empty-icon {
+  font-size: 40px;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.daily-lesson-empty-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.daily-lesson-empty-desc {
+  font-size: 14px;
+  opacity: 0.85;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.daily-lesson-profile-btn,
+.daily-lesson-retry-btn {
+  background: rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: white;
+  padding: 10px 24px;
+  border-radius: 24px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.daily-lesson-profile-btn:hover,
+.daily-lesson-retry-btn:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.daily-lesson-retry-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ============ DASHBOARD ============ */
 .dashboard-grid {
   display: grid;

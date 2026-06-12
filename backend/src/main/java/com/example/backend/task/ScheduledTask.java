@@ -6,6 +6,7 @@ import com.example.backend.mapper.MedicationPlanMapper;
 import com.example.backend.mapper.UserMedicineBoxMapper;
 import com.example.backend.model.entity.MedicationPlan;
 import com.example.backend.model.entity.UserMedicineBox;
+import com.example.backend.service.DailyLessonService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,9 @@ public class ScheduledTask {
 
     @Autowired
     private MedicationPlanMapper medicationPlanMapper;
+
+    @Autowired
+    private DailyLessonService dailyLessonService;
 
     /**
      * 每天凌晨1点执行：自动将已过期的药品状态更新为stopped
@@ -223,6 +227,21 @@ public class ScheduledTask {
             
         } catch (Exception e) {
             logger.error("生成下一天用药计划定时任务执行失败", e);
+        }
+    }
+
+    /**
+     * 每天早晨6:00执行：为所有有慢病史的用户预生成今日科普
+     * 让用户在打开App时就能看到已生成的内容，无需等待AI响应
+     */
+    @Scheduled(cron = "0 0 6 * * ?")
+    public void generateDailyLessons() {
+        logger.info("=== 开始执行今日一课预生成定时任务 ===");
+        try {
+            dailyLessonService.generateDailyLessons();
+            logger.info("=== 今日一课预生成定时任务完成 ===");
+        } catch (Exception e) {
+            logger.error("今日一课预生成定时任务执行失败", e);
         }
     }
 }

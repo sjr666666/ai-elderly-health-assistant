@@ -15,6 +15,7 @@ import AddToPlanModal from './components/AddToPlanModal';
 import ConfirmDrugModal from './components/ConfirmDrugModal';
 import MedicationReminderModal from './components/MedicationReminderModal';
 import DrugListView from './components/DrugListView';
+import DailyLessonCard from './components/DailyLessonCard';
 import GuardianApp from './components/guardian/GuardianApp';
 import { useToast } from './components/Toast';
 
@@ -103,6 +104,10 @@ function App() {
   const conflictReportRef = useRef(null); // 冲突报告卡片引用（用于弹窗显示）
   const screenshotContainerRef = useRef(null); // 隐藏的截图容器引用
   const [showScreenshotContainer, setShowScreenshotContainer] = useState(false); // 控制隐藏截图容器显示
+
+  // 今日一课相关状态
+  const [dailyLesson, setDailyLesson] = useState(null);
+  const [dailyLessonLoading, setDailyLessonLoading] = useState(false);
 
   // 缺药预警相关状态
   const [shortageWarnings, setShortageWarnings] = useState([]); // 缺药预警列表
@@ -204,6 +209,42 @@ function App() {
       }
     } catch (err) {
       console.error('获取缺药预警异常:', err);
+    }
+  };
+
+  // 加载今日一课
+  const fetchDailyLesson = async (overrideUserId) => {
+    const userId = overrideUserId || user?.id;
+    if (!userId) return;
+    setDailyLessonLoading(true);
+    try {
+      const response = await fetch(`/api/v1/daily-lesson/today?userId=${userId}`);
+      const data = await response.json();
+      if (response.ok && data.code === 200) {
+        setDailyLesson(data.data);
+      } else {
+        console.error('获取今日一课失败:', data.message);
+      }
+    } catch (err) {
+      console.error('获取今日一课异常:', err);
+    } finally {
+      setDailyLessonLoading(false);
+    }
+  };
+
+  // 重新生成本日一课（换一篇）
+  const handleDailyLessonRefresh = async () => {
+    if (!user?.id) return;
+    try {
+      const response = await fetch(`/api/v1/daily-lesson/regenerate?userId=${user.id}`, { method: 'POST' });
+      const data = await response.json();
+      if (response.ok && data.code === 200) {
+        setDailyLesson(data.data);
+      } else {
+        console.error('重新生成今日一课失败:', data.message);
+      }
+    } catch (err) {
+      console.error('重新生成今日一课异常:', err);
     }
   };
 
@@ -587,26 +628,33 @@ function App() {
       loadEmergencyContacts(loginData.id);
     }
 
+    // 加载今日一课
+    if (loginData.role !== 'family' && loginData.id) {
+      fetchDailyLesson(loginData.id);
+    }
+
     if (loginData.needProfile) {
       setShowProfileModal(true);
     }
   };
 
   const handleProfileComplete = (profileData) => {
-    setUser(prev => ({
-      ...prev,
-      ...profileData
-    }));
+    setUser(prev => {
+      const updated = { ...prev, ...profileData };
+      localStorage.setItem('user', JSON.stringify(updated));
+      return updated;
+    });
     setShowProfileModal(false);
   };
 
   const handleProfileUpdate = (profileData) => {
-    setUser(prev => ({
-      ...prev,
-      ...profileData
-    }));
+    setUser(prev => {
+      const updated = { ...prev, ...profileData };
+      localStorage.setItem('user', JSON.stringify(updated));
+      return updated;
+    });
     setShowProfileEdit(false);
-    
+
     // 显示成功提示弹窗
     showToast('个人信息已更新！', 'success');
   };
@@ -1199,6 +1247,18 @@ function App() {
           setUser(userData);
           setIsLoggedIn(true);
 
+          // 从后端刷新用户档案，确保数据最新
+          fetch(`/api/v1/user/profile?userId=${userData.userId}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.code === 200 && data.data) {
+                const freshUser = { ...userData, ...data.data };
+                setUser(freshUser);
+                localStorage.setItem('user', JSON.stringify(freshUser));
+              }
+            })
+            .catch(err => console.error('刷新用户档案失败:', err));
+
           // 家属角色不需要加载老人端数据
           if (userData.role === 'family') {
             return;
@@ -1215,6 +1275,11 @@ function App() {
           setTimeout(() => {
             checkTodayExpiredMedicines(userData.userId);
           }, 500); // 延迟500ms执行，确保药箱列表已加载
+
+          // 加载今日一课
+          if (userData.id) {
+            fetchDailyLesson(userData.id);
+          }
         }
       } catch (e) {
         console.error('解析用户数据失败:', e);
@@ -3037,6 +3102,14 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* 今日一课 - 慢病科普卡片 */}
+      <DailyLessonCard
+        lesson={dailyLesson}
+        loading={dailyLessonLoading}
+        onRefresh={handleDailyLessonRefresh}
+        onGoProfile={() => setShowProfileEdit(true)}
+      />
 
       <div className="dashboard-grid">
         <div className="dashboard-card" onClick={() => setActiveTab('upload')}>

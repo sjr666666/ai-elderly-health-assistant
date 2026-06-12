@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS `sms_notification_log` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '自增主键ID',
   `guardian_id` bigint NOT NULL COMMENT '家属ID，关联sys_user表',
   `elder_id` bigint NOT NULL COMMENT '老人ID，关联sys_user表',
-  `phone` varchar(20) NOT NULL COMMENT '接收手机号',
+  `phone` varchar(20) NULL DEFAULT NULL COMMENT '接收手机号',
   `sms_type` varchar(50) NOT NULL COMMENT '短信类型，如missed_dose_alert/emergency_alert/expiring_drug_reminder',
   `content` text NOT NULL COMMENT '短信内容',
   `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT '发送状态：pending/sent/failed',

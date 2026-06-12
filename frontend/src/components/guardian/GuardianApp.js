@@ -33,12 +33,15 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
     }
   }, [propUser]);
 
-  // 登录后轮询未读数
+  // 登录后轮询未读数（3秒间隔，近实时更新）
   useEffect(() => {
     if (!user) return;
     fetchUnreadCount();
-    const timer = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(timer);
+    const timer = setInterval(fetchUnreadCount, 3000);
+    // 页面聚焦时立即刷新
+    const onFocus = () => fetchUnreadCount();
+    window.addEventListener('focus', onFocus);
+    return () => { clearInterval(timer); window.removeEventListener('focus', onFocus); };
   }, [user, fetchUnreadCount]);
 
   const handleLogin = (userData) => { setLocalUser(userData); };
@@ -68,7 +71,7 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
 
   // 通知页标记已读后的回调
   const handleNotificationsRead = () => {
-    setUnreadCount(0);
+    fetchUnreadCount();
   };
 
   if (!user) return <GuardianLogin onLogin={handleLogin} />;
