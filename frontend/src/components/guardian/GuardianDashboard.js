@@ -7,6 +7,7 @@ function GuardianDashboard({ guardianId, onViewElder }) {
   const [error, setError] = useState('');
   const [showBindForm, setShowBindForm] = useState(false);
   const [elderUsername, setElderUsername] = useState('');
+  const [relationType, setRelationType] = useState('');
   const [isBinding, setIsBinding] = useState(false);
   const [bindError, setBindError] = useState('');
 
@@ -25,15 +26,16 @@ function GuardianDashboard({ guardianId, onViewElder }) {
 
   const handleBind = async () => {
     if (!elderUsername.trim()) { setBindError('请输入老人用户名'); return; }
+    if (!relationType) { setBindError('请选择与老人的关系'); return; }
     setIsBinding(true); setBindError('');
     try {
       const res = await fetch('/api/v1/guardian/bind', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guardianId, elderUsername: elderUsername.trim() }),
+        body: JSON.stringify({ guardianId, elderUsername: elderUsername.trim(), relationType }),
       });
       const data = await res.json();
-      if (data.code === 200) { setElderUsername(''); setShowBindForm(false); loadDashboard(); }
+      if (data.code === 200) { setElderUsername(''); setRelationType(''); setShowBindForm(false); loadDashboard(); }
       else setBindError(data.message || '绑定失败');
     } catch { setBindError('网络连接失败'); }
     finally { setIsBinding(false); }
@@ -90,11 +92,26 @@ function GuardianDashboard({ guardianId, onViewElder }) {
           <div className="g-bind-input">
             <input type="text" value={elderUsername} onChange={(e) => setElderUsername(e.target.value)}
               placeholder="老人用户名" onKeyDown={(e) => e.key === 'Enter' && handleBind()} />
+          </div>
+          <div className="g-bind-input" style={{ marginTop: '8px' }}>
+            <select value={relationType} onChange={(e) => setRelationType(e.target.value)}
+              style={{ flex: 1, padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', color: relationType ? '#333' : '#999', background: 'white' }}>
+              <option value="">请选择与老人的关系</option>
+              <option value="儿子">儿子</option>
+              <option value="女儿">女儿</option>
+              <option value="配偶">配偶</option>
+              <option value="兄弟">兄弟</option>
+              <option value="姐妹">姐妹</option>
+              <option value="护工">护工</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
             <button className="g-btn g-btn-primary" onClick={handleBind} disabled={isBinding}>
               {isBinding ? '...' : '绑定'}
             </button>
+            <button className="g-btn g-btn-text" onClick={() => { setShowBindForm(false); setBindError(''); setRelationType(''); }}>取消</button>
           </div>
-          <button className="g-btn g-btn-text" onClick={() => { setShowBindForm(false); setBindError(''); }}>取消</button>
         </div>
       )}
 

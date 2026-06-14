@@ -74,6 +74,15 @@ public class EmergencyContactServiceImpl implements EmergencyContactService {
     public EmergencyContact saveContact(EmergencyContact contact) {
         logger.info("保存紧急联系人 - elderId: {}, name: {}", contact.getElderId(), contact.getName());
 
+        // 重复校验：同一老人下相同姓名+电话不能重复
+        LambdaQueryWrapper<EmergencyContact> check = new LambdaQueryWrapper<>();
+        check.eq(EmergencyContact::getElderId, contact.getElderId())
+                .eq(EmergencyContact::getName, contact.getName())
+                .eq(EmergencyContact::getPhone, contact.getPhone());
+        if (emergencyContactRepository.selectCount(check) > 0) {
+            throw new IllegalArgumentException("该联系人已存在");
+        }
+
         emergencyContactRepository.insert(contact);
 
         logger.info("紧急联系人保存成功 - id: {}", contact.getId());

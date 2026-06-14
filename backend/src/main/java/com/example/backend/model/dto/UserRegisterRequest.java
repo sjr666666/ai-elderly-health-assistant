@@ -52,4 +52,6 @@ public class UserRegisterRequest {
 
     @NotBlank(message = "角色不能为空")
     private String role; // elder（老人）/ family（家属）
+
+    private String phone; // 联系电话（家属必填）
 }

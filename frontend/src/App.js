@@ -17,6 +17,7 @@ import MedicationReminderModal from './components/MedicationReminderModal';
 import DrugListView from './components/DrugListView';
 import DailyLessonCard from './components/DailyLessonCard';
 import GuardianApp from './components/guardian/GuardianApp';
+import ElderNotificationPanel from './components/ElderNotificationPanel';
 import { useToast } from './components/Toast';
 
 function App() {
@@ -112,6 +113,11 @@ function App() {
   // 缺药预警相关状态
   const [shortageWarnings, setShortageWarnings] = useState([]); // 缺药预警列表
   const [showShortageDetail, setShowShortageDetail] = useState(false); // 缺药预警详情弹窗
+
+  // 老人端通知相关状态
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const wsRef = useRef(null); // WebSocket引用
 
   const expiringDrugsResult = useMemo(() => {
     const today = new Date();
@@ -1287,6 +1293,63 @@ function App() {
       }
     }
   }, []);
+
+  // WebSocket 连接管理 - 老人端实时通知
+  useEffect(() => {
+    if (!user || user.role === 'family' || !user.id) return;
+
+    const connectWebSocket = () => {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProtocol}//${window.location.hostname}:8080/ws/notifications?elderId=${user.id}`;
+      try {
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          console.log('WebSocket连接已建立 - elderId:', user.id);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'new_notification') {
+              // 收到新通知，更新未读数
+              setNotificationUnreadCount(prev => prev + 1);
+            }
+          } catch (e) {
+            // 忽略解析错误
+          }
+        };
+
+        ws.onclose = () => {
+          console.log('WebSocket连接已关闭');
+          wsRef.current = null;
+          // 5秒后重连
+          setTimeout(() => {
+            if (user && user.role !== 'family' && user.id) {
+              connectWebSocket();
+            }
+          }, 5000);
+        };
+
+        ws.onerror = (error) => {
+          console.warn('WebSocket连接错误');
+          ws.close();
+        };
+      } catch (e) {
+        console.warn('WebSocket连接失败，将使用轮询模式');
+      }
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [user?.id, user?.role]);
 
   // 全局阻止拖拽默认行为，防止文件被浏览器打开
   useEffect(() => {
@@ -3052,6 +3115,17 @@ function App() {
             <button className="logout-btn" onClick={handleLogout}>退出登录</button>
           </div>
         </div>
+        <button className="notification-bell-btn" onClick={() => setShowNotificationPanel(true)}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+          {notificationUnreadCount > 0 && (
+            <span className="notification-bell-badge">
+              {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
+            </span>
+          )}
+        </button>
       </div>
     </header>
   );
@@ -5042,6 +5116,17 @@ function App() {
           </div>
 
         </div>
+      )}
+
+      {/* 老人端通知面板 */}
+      {user?.role !== 'family' && user?.id && (
+        <ElderNotificationPanel
+          elderId={user.id}
+          isOpen={showNotificationPanel}
+          onClose={() => setShowNotificationPanel(false)}
+          onUnreadCountChange={setNotificationUnreadCount}
+          onContactAdded={() => loadEmergencyContacts(user.id)}
+        />
       )}
 
       {showProfileModal && (

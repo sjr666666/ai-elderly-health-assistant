@@ -1,8 +1,14 @@
 -- =====================================================
 -- 家属端相关表初始化脚本
 -- =====================================================
--- 包含: guardian_elder_relation / sms_notification_log / emergency_event
+-- 包含: guardian_elder_relation / sms_notification_log / emergency_event / elder_notification
 -- 说明: 必须在 init_database.sql 之后执行（依赖 sys_user 表）
+-- =====================================================
+-- 执行方式:
+--   MySQL 命令行: source /path/to/init_guardian_tables.sql
+--   Navicat:      打开脚本 → 运行（已自动处理 DELIMITER）
+--   DBeaver:      右键脚本 → Execute → 勾选 "Ignore DELIMITER"
+--   注意: 必须在 init_database.sql 和 init_drug_data.sql 之后执行
 -- =====================================================
 
 USE `elderly_medication`;
@@ -73,6 +79,26 @@ CREATE TABLE IF NOT EXISTS `emergency_event` (
   INDEX `idx_event_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='紧急事件表';
 
+-- ==================== 老人端通知表 ====================
+CREATE TABLE IF NOT EXISTS `elder_notification` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '自增主键ID',
+  `elder_id` bigint NOT NULL COMMENT '老人ID，关联sys_user表',
+  `notification_type` varchar(50) NOT NULL COMMENT '通知类型：bind_request/system/medication_reminder',
+  `title` varchar(200) NOT NULL COMMENT '通知标题',
+  `content` text NOT NULL COMMENT '通知内容',
+  `extra_data` json NULL COMMENT '附加数据（JSON格式，如绑定通知中的家属信息）',
+  `is_read` tinyint NOT NULL DEFAULT 0 COMMENT '是否已读：0-未读 1-已读',
+  `is_handled` tinyint NOT NULL DEFAULT 0 COMMENT '是否已处理：0-未处理 1-已处理',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除标记',
+  PRIMARY KEY (`id`),
+  INDEX `idx_notif_elder` (`elder_id`),
+  INDEX `idx_notif_read` (`is_read`),
+  INDEX `idx_notif_type` (`notification_type`),
+  INDEX `idx_notif_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='老人端通知表';
+
 -- =============== 添加外键约束 ===============
 -- 使用存储过程安全添加外键（避免重复执行报错）
 DROP PROCEDURE IF EXISTS add_fk_if_not_exists;
@@ -102,6 +128,7 @@ CALL add_fk_if_not_exists('guardian_elder_relation', 'fk_relation_elder', 'FOREI
 CALL add_fk_if_not_exists('sms_notification_log', 'fk_sms_guardian', 'FOREIGN KEY (`guardian_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
 CALL add_fk_if_not_exists('sms_notification_log', 'fk_sms_elder', 'FOREIGN KEY (`elder_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
 CALL add_fk_if_not_exists('emergency_event', 'fk_event_elder', 'FOREIGN KEY (`elder_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('elder_notification', 'fk_notif_elder', 'FOREIGN KEY (`elder_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
 
 DROP PROCEDURE IF EXISTS add_fk_if_not_exists;
 
