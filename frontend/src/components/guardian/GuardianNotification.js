@@ -1,18 +1,35 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from '../Toast';
 import './guardian.css';
 
 function GuardianNotification({ guardianId, onRead }) {
+  const { showToast } = useToast();
   const [notifications, setNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => { loadNotifications(); markAsRead(); }, [guardianId]);
+  useEffect(() => { loadNotifications(); }, [guardianId]);
 
   const markAsRead = async () => {
     try {
       await fetch(`/api/v1/guardian/notifications/read-all?guardianId=${guardianId}`, { method: 'PUT' });
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       if (onRead) onRead();
-    } catch {}
+      showToast('已全部标记为已读', 'success');
+    } catch { showToast('操作失败', 'error'); }
+  };
+
+  const clearRead = async () => {
+    try {
+      const res = await fetch(`/api/v1/guardian/notifications/read?guardianId=${guardianId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.code === 200) {
+        setNotifications(prev => prev.filter(n => !n.isRead));
+        showToast(data.message || '已清除', 'success');
+      } else {
+        showToast(data.message || '清除失败', 'error');
+      }
+    } catch { showToast('清除失败', 'error'); }
   };
 
   const loadNotifications = async () => {
@@ -75,7 +92,15 @@ function GuardianNotification({ guardianId, onRead }) {
     <div>
       <div className="g-notif-header">
         <h2>通知记录</h2>
-        <button className="g-btn g-btn-text" onClick={loadNotifications}>刷新</button>
+        <div className="g-notif-header-actions">
+          {notifications.some(n => !n.isRead) && (
+            <button className="g-btn g-btn-text" onClick={markAsRead}>全部已读</button>
+          )}
+          {notifications.some(n => n.isRead) && (
+            <button className="g-btn g-btn-text" onClick={clearRead}>清除已读</button>
+          )}
+          <button className="g-btn g-btn-text" onClick={loadNotifications}>刷新</button>
+        </div>
       </div>
 
       {notifications.length === 0 ? (

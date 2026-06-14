@@ -143,6 +143,13 @@ public class SysUser extends BaseEntity {
     private String role;
 
     /**
+     * 最后活跃时间
+     * 记录用户最后一次操作的时间，用于家属端展示"最近活跃"
+     */
+    @TableField("last_active_time")
+    private LocalDateTime lastActiveTime;
+
+    /**
      * 家属绑定的老人ID（自关联）
      * 用于建立家属与老人之间的关联关系
      */

@@ -1,12 +1,19 @@
 -- =====================================================
 -- 老年人用药管理系统 - 数据库初始化脚本
 -- =====================================================
--- 版本: 2.1
+-- 版本: 2.2
 -- 更新内容:
---   1. sys_user/drug_category_keywords/drug_aliases 改用 INSERT IGNORE
---      实现真正的脚本幂等（可重复执行不报错）
---   2. 保留原有的 add_col_if_missing 存储过程兼容老库
---   3. 其余业务表仍使用 DROP+CREATE，确保数据干净
+--   1. sys_user 建表语句补充 phone 字段（与 add_col_if_missing 保持一致）
+--   2. drug_category_keywords/drug_aliases 改用 CREATE TABLE IF NOT EXISTS
+--      配合 INSERT IGNORE 实现脚本幂等（可重复执行不报错）
+--   3. 保留原有的 add_col_if_missing 存储过程兼容老库
+--   4. 其余业务表仍使用 DROP+CREATE，确保数据干净
+-- =====================================================
+-- 执行方式:
+--   MySQL 命令行: source /path/to/init_database.sql
+--   Navicat:      打开脚本 → 运行（已自动处理 DELIMITER）
+--   DBeaver:      右键脚本 → Execute → 勾选 "Ignore DELIMITER"
+--   注意: 必须按顺序执行: 1.init_database.sql → 2.init_drug_data.sql → 3.init_guardian_tables.sql
 -- =====================================================
 
 -- 创建数据库（如果不存在）
@@ -29,6 +36,7 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
   `username` varchar(50) NOT NULL UNIQUE COMMENT '登录名',
   `password` varchar(255) NOT NULL COMMENT '加密密码',
   `real_name` varchar(50) NOT NULL COMMENT '真实姓名/称呼',
+  `phone` varchar(20) NULL COMMENT '手机号',
   `age` tinyint NULL COMMENT '年龄',
   `gender` varchar(10) NULL COMMENT '性别：male/female',
   `height` decimal(5,1) NULL COMMENT '身高（cm）',
@@ -42,6 +50,7 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
   `is_smoking` tinyint NOT NULL DEFAULT 0 COMMENT '是否吸烟：0否/1是',
   `is_drinking` tinyint NOT NULL DEFAULT 0 COMMENT '是否饮酒：0否/1是',
   `role` varchar(20) NOT NULL DEFAULT 'elder' COMMENT '角色：elder/family',
+  `last_active_time` datetime NULL COMMENT '最后活跃时间',
   `bind_elder_id` bigint NULL COMMENT '家属绑定的老人ID',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -85,6 +94,7 @@ CALL add_col_if_missing('sys_user', 'is_breastfeeding',"tinyint NOT NULL DEFAULT
 CALL add_col_if_missing('sys_user', 'is_smoking',     "tinyint NOT NULL DEFAULT 0 COMMENT '是否吸烟' AFTER `is_breastfeeding`");
 CALL add_col_if_missing('sys_user', 'phone',          "varchar(20) NULL COMMENT '手机号' AFTER `real_name`");
 CALL add_col_if_missing('sys_user', 'is_drinking',    "tinyint NOT NULL DEFAULT 0 COMMENT '是否饮酒' AFTER `is_smoking`");
+CALL add_col_if_missing('sys_user', 'last_active_time',"datetime NULL COMMENT '最后活跃时间' AFTER `role`");
 
 DROP PROCEDURE add_col_if_missing;
 
@@ -268,8 +278,7 @@ CREATE TABLE `drug_conflict_rules` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='药品冲突规则表';
 
 -- ==================== 药品类别关键词表 ====================
-DROP TABLE IF EXISTS `drug_category_keywords`;
-CREATE TABLE `drug_category_keywords` (
+CREATE TABLE IF NOT EXISTS `drug_category_keywords` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
   `category` varchar(100) NOT NULL COMMENT '药品类别',
   `keyword` varchar(100) NOT NULL COMMENT '搜索关键词',
@@ -283,8 +292,7 @@ CREATE TABLE `drug_category_keywords` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='药品类别关键词表';
 
 -- ==================== 药品别名映射表 ====================
-DROP TABLE IF EXISTS `drug_aliases`;
-CREATE TABLE `drug_aliases` (
+CREATE TABLE IF NOT EXISTS `drug_aliases` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
   `alias_name` varchar(200) NOT NULL COMMENT '药品别名',
   `generic_name` varchar(200) NOT NULL COMMENT '对应的通用名',
@@ -372,79 +380,16 @@ INSERT IGNORE INTO `sys_user` (`user_id`, `username`, `password`, `real_name`, `
 (10004, 'zhaosi', '$2a$10$VCrz02JzMVmFN2p56zcxR.gSlItx/Cn4kgx817j1q1UXrUJXDOHfu', '赵四', 42, 'male', 178.0, 80.0, NULL, NULL, 'normal', 'normal', 0, 0, 0, 0, 'family'),
 (10005, 'xiaomei', '$2a$10$VCrz02JzMVmFN2p56zcxR.gSlItx/Cn4kgx817j1q1UXrUJXDOHfu', '小美', 28, 'female', 165.0, 55.0, '磺胺过敏', NULL, 'normal', 'normal', 1, 0, 0, 0, 'family');
 
--- ---------------- 药品基础数据（完整版84种） ----------------
--- 注意：实际生产中应通过 init_drug_data.sql 导入完整药品数据
--- 此处仅保留少量代表性药品作为基础数据
-INSERT IGNORE INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `common_name`, `specification`, `manufacturer`, `category`, `description`) VALUES
-('国药准字Z44021856', '感冒灵颗粒', '999感冒灵', '三九感冒灵', '10g*9袋', '华润三九医药股份有限公司', '感冒药', '成分：三叉苦、金盏银盘、野菊花、岗梅、咖啡因、对乙酰氨基酚、马来酸氯苯那敏、薄荷油。适应症：解热镇痛。用于感冒引起的头痛、发热、鼻塞、流涕、咽痛。用法用量：开水冲服，一次1袋，一日3次。'),
-('国药准字H10910052', '硝苯地平缓释片', '伲福达', '硝苯地平', '20mg*30片', '青岛黄海制药有限责任公司', '降压药', '成分：硝苯地平。适应症：用于治疗高血压、心绞痛。用法用量：口服，一次1片，一日2次。'),
-('国药准字H11021309', '阿司匹林肠溶片', '拜阿司匹灵', '阿司匹林', '100mg*30片', '拜耳医药保健有限公司', '心脑血管药', '成分：阿司匹林。适应症：用于抑制血小板聚集，预防心肌梗死、脑梗死。用法用量：口服，一次1片，一日1次。'),
-('国药准字H44021524', '阿莫西林胶囊', '阿莫仙', '阿莫西林', '0.5g*24粒', '珠海联邦制药股份有限公司', '消炎药', '成分：阿莫西林。适应症：用于敏感菌所致的呼吸道、泌尿生殖道感染。用法用量：口服，一次0.5g，每6-8小时1次。'),
-('国药准字Z44023485', '板蓝根颗粒', '白云山', '板蓝根', '10g*20袋', '广州白云山和记黄埔中药有限公司', '清热解毒药', '成分：板蓝根。适应症：清热解毒，凉血，利咽。用法用量：口服，一次5-10g，一日3-4次。'),
-('国药准字H10970418', '氯雷他定片', '开瑞坦', '氯雷他定', '10mg*6片', '上海先灵葆雅制药有限公司', '抗过敏药', '成分：氯雷他定。适应症：用于缓解过敏性鼻炎症状。用法用量：口服，一次1片，一日1次。'),
-('国药准字Z11020377', '藿香正气水', '同仁堂', '藿香正气', '10ml*10支', '北京同仁堂科技发展股份有限公司制药厂', '胃药', '成分：苍术、陈皮、厚朴、白芷、茯苓、大腹皮、生半夏、甘草浸膏、广藿香油、紫苏叶油。适应症：解表化湿，理气和中。用法用量：口服，一次5-10ml，一日2次。'),
-('国药准字H11021600', '葡萄糖酸钙片', '双鹤', '钙片', '0.5g*100片', '北京双鹤药业股份有限公司', '维生素矿物质', '成分：葡萄糖酸钙。适应症：用于预防和治疗钙缺乏症。用法用量：口服，成人一次1-4片，一日3次。'),
-('国药准字H19991323', '布洛芬缓释胶囊', '芬必得', '芬必得', '300mg*20粒', '中美天津史克制药有限公司', '感冒药', '成分：布洛芬。适应症：用于缓解轻至中度疼痛如头痛、关节痛、偏头痛、牙痛、肌肉痛、神经痛、痛经。也用于普通感冒或流行性感冒引起的发热。用法用量：口服，成人一次1粒，一日2次。'),
-('国药准字H10910058', '奥美拉唑肠溶胶囊', '洛赛克', '奥美拉唑', '20mg*14粒', '阿斯利康制药有限公司', '胃药', '成分：奥美拉唑。适应症：用于胃溃疡、十二指肠溃疡、应激性溃疡、反流性食管炎和卓-艾综合征。用法用量：口服，一次1粒，一日1-2次。'),
-('国药准字H10950010', '苯磺酸氨氯地平片', '络活喜', '氨氯地平', '5mg*7片', '辉瑞制药有限公司', '降压药', '成分：苯磺酸氨氯地平。适应症：用于高血压的治疗，以及冠心病心绞痛的治疗。用法用量：口服，初始剂量为5mg，一日1次。'),
-('国药准字H10910085', '盐酸二甲双胍肠溶片', '格华止', '二甲双胍', '500mg*48片', '中美上海施贵宝制药有限公司', '降糖药', '成分：盐酸二甲双胍。适应症：用于单纯饮食控制不满意的2型糖尿病患者。用法用量：口服，成人一次500mg，一日2-3次。'),
-('国药准字Z53020609', '云南白药气雾剂', '云南白药', '白药气雾剂', '60g+60g', '云南白药集团股份有限公司', '跌打损伤药', '成分：三七等中药提取物。适应症：活血散瘀，消肿止痛。用于跌打损伤，瘀血肿痛，肌肉酸痛及风湿疼痛。用法用量：外用，喷于伤患处，一日3-5次。'),
-('国药准字H20093817', '盐酸氨溴索口服溶液', '沐舒坦', '氨溴索', '100ml:0.6g', '勃林格殷格翰制药有限公司', '止咳化痰药', '成分：盐酸氨溴索。适应症：用于急、慢性支气管炎引起的痰液粘稠、咳痰困难。用法用量：口服，成人一次10ml，一日3次。');
-
--- ---------------- 家庭药箱测试数据 ----------------
-INSERT INTO `user_medicine_box` (`user_id`, `drug_id`, `dosage`, `frequency`, `start_date`, `expiry_date`, `total_quantity`, `remaining_quantity`, `note`, `status`) VALUES
-(1, 2, '1片', '每日2次', '2024-01-01', '2025-06-30', 60, 45, '血压控制', 'active'),
-(1, 3, '1片', '每日1次', '2024-01-01', '2025-12-31', 30, 20, '预防心梗', 'active'),
-(1, 1, '1袋', '发热时服用', '2024-02-01', '2025-02-01', 9, 6, '感冒灵备用', 'active'),
-(3, 2, '1片', '每日2次', '2023-06-01', '2025-06-01', 60, 15, '冠心病用药', 'active');
-
--- ---------------- OCR识别记录测试数据 ----------------
-INSERT INTO `ocr_record` (`user_id`, `image_url`, `raw_text`, `matched_drug_id`, `match_score`, `status`, `created_at`) VALUES
-(1, '/uploads/ocr/20240101_abc123.jpg', '阿司匹林肠溶片 拜耳医药 100mg', 3, 0.9523, 'matched', '2024-01-15 10:30:00'),
-(1, '/uploads/ocr/20240102_def456.jpg', '硝苯地平缓释片', 2, 0.8856, 'matched', '2024-01-16 14:20:00'),
-(3, '/uploads/ocr/20240103_ghi789.jpg', '未知药片 XYZ药厂', NULL, 0.1234, 'unmatched', '2024-01-17 09:15:00');
-
--- ---------------- 药品识别日志测试数据 ----------------
-INSERT INTO `drug_recognition_log` (`ocr_record_id`, `user_id`, `raw_text`, `normalized_name`, `matched_drug_id`, `matched_drug_name`, `match_score`, `matched`, `status`) VALUES
-(1, 1, '阿司匹林肠溶片 拜耳医药 100mg', '阿司匹林肠溶片', 3, '阿司匹林肠溶片', 0.9523, 1, '识别成功'),
-(2, 1, '硝苯地平缓释片', '硝苯地平缓释片', 2, '硝苯地平缓释片', 0.8856, 1, '识别成功');
-
--- ---------------- AI对话记录测试数据 ----------------
-INSERT INTO `ai_conversation_log` (`user_id`, `query_type`, `user_input`, `ai_output`, `safety_check_passed`) VALUES
-(1, 'drug_search', '感冒了吃什么药好', '根据您的症状描述，建议您可以使用以下药品：\n1. 感冒灵颗粒 - 用于感冒引起的头痛、发热、鼻塞等症状\n2. 布洛芬缓释胶囊 - 用于缓解发热和疼痛\n\n注意事项：\n- 如果症状持续或加重，请及时就医\n- 服用药物时请仔细阅读说明书', 1),
-(1, 'drug_search', '阿司匹林的副作用', '阿司匹林可能的副作用包括：\n1. 胃肠道不适：如恶心、呕吐、腹痛\n2. 出血风险：可能增加出血倾向\n3. 过敏反应：少数人可能出现皮疹、哮喘\n\n如果出现严重不适，请立即停药并就医。', 1);
-
--- ---------------- 用药计划测试数据 ----------------
-INSERT INTO `medication_plan` (`user_id`, `drug_id`, `plan_date`, `time_slot`, `dosage_at_time`, `status`, `remind_before`) VALUES
-(1, 2, CURDATE(), 'morning', '1片', 'pending', 15),
-(1, 2, CURDATE(), 'afternoon', '1片', 'pending', 15),
-(1, 2, CURDATE(), 'evening', '1片', 'pending', 15),
-(1, 3, CURDATE(), 'morning', '1片', 'pending', 15),
-(3, 2, CURDATE(), 'morning', '1片', 'pending', 20),
-(3, 2, CURDATE(), 'evening', '1片', 'pending', 20);
-
--- ---------------- 服药确认记录测试数据 ----------------
-INSERT INTO `medication_log` (`plan_id`, `user_id`, `status`, `confirmed_at`, `note`) VALUES
-(1, 1, 'taken', DATE_SUB(NOW(), INTERVAL 4 HOUR), '早餐后服用'),
-(4, 1, 'taken', DATE_SUB(NOW(), INTERVAL 8 HOUR), '早餐后服用');
-
--- ---------------- 提醒通知记录测试数据 ----------------
-INSERT INTO `reminder_log` (`user_id`, `plan_id`, `remind_type`, `content`, `channel`, `status`) VALUES
-(1, 1, 'medication_reminder', '王阿姨您好，您有一个服药提醒：硝苯地平缓释片 1片', 'app', 'sent'),
-(1, 4, 'medication_reminder', '王阿姨您好，您有一个服药提醒：阿司匹林肠溶片 1片', 'app', 'sent'),
-(3, 5, 'medication_reminder', '李大爷您好，您有一个服药提醒：硝苯地平缓释片 1片', 'app', 'sent');
+-- ---------------- 药品基础数据 ----------------
+-- 注意：完整药品数据通过 init_drug_data.sql 导入（必须在此脚本之后执行）
+-- 此处不再插入药品数据，避免与 init_drug_data.sql 产生重复记录
+-- 依赖 drug_id 的测试数据（药箱/OCR/识别日志/用药计划/冲突规则）也移至 init_drug_data.sql
 
 -- ---------------- 紧急联系人测试数据 ----------------
 INSERT INTO `emergency_contact` (`elder_id`, `name`, `phone`, `relationship`, `is_primary`) VALUES
 (1, '张三', '13800138001', '儿子', 1),
 (1, '王小红', '13800138002', '女儿', 0),
 (3, '赵六', '13900139001', '儿子', 1);
-
--- ---------------- 药品冲突规则测试数据 ----------------
-INSERT INTO `drug_conflict_rules` (`drug_a_id`, `drug_b_id`, `conflict_level`, `conflict_reason`, `conflict_reason_plain`, `source`) VALUES
-(3, 11, 'high', '阿司匹林与布洛芬合用可能增加胃肠道出血风险', '阿司匹林和布洛芬都是非甾体抗炎药，一起吃可能会让胃不舒服，严重的话可能会胃出血', '临床用药指南'),
-(4, 9, 'medium', '阿莫西林与布洛芬合用可能增加肾毒性风险', '阿莫西林和布洛芬一起用可能会对肾脏造成负担', '药物相互作用数据库'),
-(10, 12, 'low', '奥美拉唑可能影响二甲双胍的吸收', '胃药可能会影响糖尿病药物的效果，必要时请错开服用时间', '临床经验');
 
 -- ---------------- 药品类别关键词数据 ----------------
 -- 使用 INSERT IGNORE：drug_category_keywords 在该脚本中用 CREATE TABLE IF NOT EXISTS 创建，

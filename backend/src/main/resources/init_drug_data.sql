@@ -1,11 +1,18 @@
 -- =====================================================
 -- 老年人用药管理系统 - 完整药品测试数据初始化脚本
 -- =====================================================
--- 版本: 3.0
+-- 版本: 3.1
 -- 更新内容:
 --   1. 改用 INSERT IGNORE 替代 REPLACE INTO，避免 AUTO_INCREMENT ID 漂移
 --   2. 保持与 init_database.sql 的兼容性（已存在的不重复插入）
 --   3. 修复脚本可重复执行不报错
+--   4. init_database.sql 不再插入药品数据，统一由此脚本导入
+-- =====================================================
+-- 执行方式:
+--   MySQL 命令行: source /path/to/init_drug_data.sql
+--   Navicat:      打开脚本 → 运行
+--   DBeaver:      右键脚本 → Execute
+--   注意: 必须在 init_database.sql 之后执行
 -- =====================================================
 
 USE elderly_medication;
@@ -173,6 +180,62 @@ INSERT IGNORE INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`,
 ('国药准字H10910035', '盐酸地芬尼多片', '眩晕停', '地芬尼多', '25mg*30片', '浙江医药股份有限公司新昌制药厂', '晕车药', '成分：盐酸地芬尼多。适应症：用于防治多种原因或疾病引起的眩晕、恶心、呕吐。用法用量：口服，成人一次1-2片，一日3次。'),
 ('国药准字Z10944081', '板蓝根颗粒', '白云山', '板蓝根', '10g*20袋', '广州白云山和记黄埔中药有限公司', '清热解毒药', '成分：板蓝根。适应症：清热解毒，凉血，利咽。用于肺胃热盛所致的咽喉肿痛、口咽干燥。用法用量：口服，一次5-10g，一日3-4次。'),
 ('国药准字Z10970025', '清开灵颗粒', '清开灵', '清开灵', '5g*6袋', '哈尔滨一洲制药有限公司', '清热解毒药', '成分：胆酸、珍珠母、猪去氧胆酸、栀子、水牛角、板蓝根、黄芩苷、金银花。适应症：清热解毒，镇静安神。用于外感风热所致发热、烦躁不安。用法用量：口服，一次3-6g，一日2-3次。');
+
+-- 先插入测试数据，再启用外键检查
+-- 注意：测试数据中的子查询依赖 drug_base 表已有数据
+
+-- ==================== 依赖 drug_id 的测试数据 ====================
+-- 使用子查询通过 approval_number 查找 drug_id，避免硬编码 AUTO_INCREMENT 值
+-- 这样无论药品插入顺序如何，测试数据都能正确关联
+
+-- ---------------- 家庭药箱测试数据 ----------------
+INSERT INTO `user_medicine_box` (`user_id`, `drug_id`, `dosage`, `frequency`, `start_date`, `expiry_date`, `total_quantity`, `remaining_quantity`, `note`, `status`) VALUES
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), '1片', '每日2次', '2024-01-01', '2025-06-30', 60, 45, '血压控制', 'active'),
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字H11021309'), '1片', '每日1次', '2024-01-01', '2025-12-31', 30, 20, '预防心梗', 'active'),
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字Z44021856'), '1袋', '发热时服用', '2024-02-01', '2025-02-01', 9, 6, '感冒灵备用', 'active'),
+(3, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), '1片', '每日2次', '2023-06-01', '2025-06-01', 60, 15, '冠心病用药', 'active');
+
+-- ---------------- OCR识别记录测试数据 ----------------
+INSERT INTO `ocr_record` (`user_id`, `image_url`, `raw_text`, `matched_drug_id`, `match_score`, `status`, `created_at`) VALUES
+(1, '/uploads/ocr/20240101_abc123.jpg', '阿司匹林肠溶片 拜耳医药 100mg', (SELECT id FROM drug_base WHERE approval_number='国药准字H11021309'), 0.9523, 'matched', '2024-01-15 10:30:00'),
+(1, '/uploads/ocr/20240102_def456.jpg', '硝苯地平缓释片', (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), 0.8856, 'matched', '2024-01-16 14:20:00'),
+(3, '/uploads/ocr/20240103_ghi789.jpg', '未知药片 XYZ药厂', NULL, 0.1234, 'unmatched', '2024-01-17 09:15:00');
+
+-- ---------------- 药品识别日志测试数据 ----------------
+INSERT INTO `drug_recognition_log` (`ocr_record_id`, `user_id`, `raw_text`, `normalized_name`, `matched_drug_id`, `matched_drug_name`, `match_score`, `matched`, `status`) VALUES
+(1, 1, '阿司匹林肠溶片 拜耳医药 100mg', '阿司匹林肠溶片', (SELECT id FROM drug_base WHERE approval_number='国药准字H11021309'), '阿司匹林肠溶片', 0.9523, 1, '识别成功'),
+(2, 1, '硝苯地平缓释片', '硝苯地平缓释片', (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), '硝苯地平缓释片', 0.8856, 1, '识别成功');
+
+-- ---------------- AI对话记录测试数据 ----------------
+INSERT INTO `ai_conversation_log` (`user_id`, `query_type`, `user_input`, `ai_output`, `safety_check_passed`) VALUES
+(1, 'drug_search', '感冒了吃什么药好', '根据您的症状描述，建议您可以使用以下药品：\n1. 感冒灵颗粒 - 用于感冒引起的头痛、发热、鼻塞等症状\n2. 布洛芬缓释胶囊 - 用于缓解发热和疼痛\n\n注意事项：\n- 如果症状持续或加重，请及时就医\n- 服用药物时请仔细阅读说明书', 1),
+(1, 'drug_search', '阿司匹林的副作用', '阿司匹林可能的副作用包括：\n1. 胃肠道不适：如恶心、呕吐、腹痛\n2. 出血风险：可能增加出血倾向\n3. 过敏反应：少数人可能出现皮疹、哮喘\n\n如果出现严重不适，请立即停药并就医。', 1);
+
+-- ---------------- 用药计划测试数据 ----------------
+INSERT INTO `medication_plan` (`user_id`, `drug_id`, `plan_date`, `time_slot`, `dosage_at_time`, `status`, `remind_before`) VALUES
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), CURDATE(), 'morning', '1片', 'pending', 15),
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), CURDATE(), 'afternoon', '1片', 'pending', 15),
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), CURDATE(), 'evening', '1片', 'pending', 15),
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字H11021309'), CURDATE(), 'morning', '1片', 'pending', 15),
+(3, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), CURDATE(), 'morning', '1片', 'pending', 20),
+(3, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), CURDATE(), 'evening', '1片', 'pending', 20);
+
+-- ---------------- 服药确认记录测试数据 ----------------
+INSERT INTO `medication_log` (`plan_id`, `user_id`, `status`, `confirmed_at`, `note`) VALUES
+(1, 1, 'taken', DATE_SUB(NOW(), INTERVAL 4 HOUR), '早餐后服用'),
+(4, 1, 'taken', DATE_SUB(NOW(), INTERVAL 8 HOUR), '早餐后服用');
+
+-- ---------------- 提醒通知记录测试数据 ----------------
+INSERT INTO `reminder_log` (`user_id`, `plan_id`, `remind_type`, `content`, `channel`, `status`) VALUES
+(1, 1, 'medication_reminder', '王阿姨您好，您有一个服药提醒：硝苯地平缓释片 1片', 'app', 'sent'),
+(1, 4, 'medication_reminder', '王阿姨您好，您有一个服药提醒：阿司匹林肠溶片 1片', 'app', 'sent'),
+(3, 5, 'medication_reminder', '李大爷您好，您有一个服药提醒：硝苯地平缓释片 1片', 'app', 'sent');
+
+-- ---------------- 药品冲突规则测试数据 ----------------
+INSERT INTO `drug_conflict_rules` (`drug_a_id`, `drug_b_id`, `conflict_level`, `conflict_reason`, `conflict_reason_plain`, `source`) VALUES
+((SELECT id FROM drug_base WHERE approval_number='国药准字H11021309'), (SELECT id FROM drug_base WHERE approval_number='国药准字H19991323'), 'high', '阿司匹林与布洛芬合用可能增加胃肠道出血风险', '阿司匹林和布洛芬都是非甾体抗炎药，一起吃可能会让胃不舒服，严重的话可能会胃出血', '临床用药指南'),
+((SELECT id FROM drug_base WHERE approval_number='国药准字H19993038'), (SELECT id FROM drug_base WHERE approval_number='国药准字H19991323'), 'medium', '阿莫西林与布洛芬合用可能增加肾毒性风险', '阿莫西林和布洛芬一起用可能会对肾脏造成负担', '药物相互作用数据库'),
+((SELECT id FROM drug_base WHERE approval_number='国药准字H10910058'), (SELECT id FROM drug_base WHERE approval_number='国药准字H10910085'), 'low', '奥美拉唑可能影响二甲双胍的吸收', '胃药可能会影响糖尿病药物的效果，必要时请错开服用时间', '临床经验');
 
 -- 重新启用外键检查
 SET FOREIGN_KEY_CHECKS = 1;

@@ -120,7 +120,7 @@ function ProfileEdit({ user, onSave, onClose }) {
         height: parseNum(height),
         weight: parseNum(weight),
         allergyHistory: allergyHistory.trim() || null,
-        chronicDiseases: chronicDiseases.length > 0 ? chronicDiseases.join('、') : null,
+        chronicDiseases: chronicDiseases.length > 0 ? chronicDiseases.join('、') : '',
         kidneyFunction: user?.kidneyFunction || null,
         liverFunction: user?.liverFunction || null,
         isPregnant: isPregnant ? 1 : 0,
