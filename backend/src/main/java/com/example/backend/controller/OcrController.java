@@ -1,18 +1,23 @@
 package com.example.backend.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.example.backend.common.ResponseResult;
 import com.example.backend.mapper.UserMapper;
+import com.example.backend.model.entity.DrugRecognitionLog;
 import com.example.backend.model.entity.SysUser;
 import com.example.backend.model.dto.BatchRecognizeResponse;
 import com.example.backend.model.dto.OcrResultResponse;
 import com.example.backend.model.dto.OcrUploadResponse;
+import com.example.backend.mapper.DrugRecognitionLogMapper;
 import com.example.backend.service.OcrService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/drug/recognize")
@@ -22,11 +27,13 @@ public class OcrController {
 
     private final OcrService ocrService;
     private final UserMapper userMapper;
+    private final DrugRecognitionLogMapper recognitionLogMapper;
 
     @Autowired
-    public OcrController(OcrService ocrService, UserMapper userMapper) {
+    public OcrController(OcrService ocrService, UserMapper userMapper, DrugRecognitionLogMapper recognitionLogMapper) {
         this.ocrService = ocrService;
         this.userMapper = userMapper;
+        this.recognitionLogMapper = recognitionLogMapper;
     }
 
     @PostMapping("/upload")
@@ -161,6 +168,34 @@ public class OcrController {
         } catch (Exception e) {
             logger.error("查询批量 OCR 结果失败", e);
             return ResponseResult.fail("查询失败: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/history")
+    public ResponseResult<List<DrugRecognitionLog>> getRecognitionHistory(
+            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestParam(value = "limit", defaultValue = "20") Integer limit) {
+        try {
+            if (userId == null) {
+                return ResponseResult.fail("用户ID不能为空");
+            }
+
+            Long dbUserId = convertToDbUserId(userId);
+            if (dbUserId == null) {
+                return ResponseResult.fail("用户不存在");
+            }
+
+            QueryWrapper<DrugRecognitionLog> queryWrapper = new QueryWrapper<>();
+            queryWrapper.eq("user_id", dbUserId)
+                    .orderByDesc("created_at")
+                    .last("LIMIT " + Math.min(limit, 50));
+
+            List<DrugRecognitionLog> logs = recognitionLogMapper.selectList(queryWrapper);
+            return ResponseResult.success(logs);
+
+        } catch (Exception e) {
+            logger.error("查询识别历史失败", e);
+            return ResponseResult.fail("查询识别历史失败: " + e.getMessage());
         }
     }
 }

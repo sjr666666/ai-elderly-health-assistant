@@ -81,6 +81,18 @@ function App() {
   const [isCheckingConflicts, setIsCheckingConflicts] = useState(false); // 是否正在检测冲突
   const [conflictError, setConflictError] = useState(null); // 冲突检测错误
   const [showConflictReport, setShowConflictReport] = useState(false); // 是否显示冲突报告卡片
+
+  // 综合冲突场景化选项状态
+  const [selectedScenarios, setSelectedScenarios] = useState([]); // 已选场景标签
+  const [customFoodInput, setCustomFoodInput] = useState(''); // 自定义食物输入
+  const [scenarioConflictReport, setScenarioConflictReport] = useState(null); // 综合冲突报告
+  const [isCheckingScenario, setIsCheckingScenario] = useState(false); // 综合冲突检测中
+  const [showScenarioPanel, setShowScenarioPanel] = useState(false); // 综合冲突面板折叠状态
+  const [showOriginalText, setShowOriginalText] = useState(false); // 医学原文折叠状态
+  const [showRecognitionHistory, setShowRecognitionHistory] = useState(false); // 识药历史弹窗
+  const [recognitionHistory, setRecognitionHistory] = useState([]); // 识药历史列表
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false); // 加载历史中
+  const [historyDetailLog, setHistoryDetailLog] = useState(null); // 历史详情查看的记录
   
   // 新药入箱冲突检测弹窗相关状态
   const [showConflictAlert, setShowConflictAlert] = useState(false); // 新药入箱冲突检测结果弹窗
@@ -3283,10 +3295,204 @@ function App() {
 
   const renderUploadTab = () => (
     <div className="card">
-      <h2 className="card-title">
-        <span className="card-title-icon">📷</span>
-        上传药品照片
-      </h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 className="card-title">
+          <span className="card-title-icon">📷</span>
+          上传药品照片
+        </h2>
+        <button
+          onClick={async () => {
+            setShowRecognitionHistory(true);
+            setIsLoadingHistory(true);
+            try {
+              const response = await fetch('/api/v1/drug/recognize/history?limit=20', {
+                headers: { 'X-User-Id': String(user?.userId || '1') }
+              });
+              const data = await response.json();
+              if (data.code === 200 && data.data) {
+                setRecognitionHistory(data.data);
+              }
+            } catch (e) {
+              console.error('获取识药历史失败', e);
+            } finally {
+              setIsLoadingHistory(false);
+            }
+          }}
+          style={{
+            padding: '6px 14px', borderRadius: '8px', border: '1.5px solid #6366f1',
+            background: '#eef2ff', color: '#4f46e5', fontSize: '13px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: '4px'
+          }}
+        >
+          📋 识药历史
+        </button>
+      </div>
+
+      {/* 识药历史弹窗 */}
+      {showRecognitionHistory && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}
+          onClick={() => setShowRecognitionHistory(false)}
+        >
+          <div style={{
+            background: 'white', borderRadius: '16px', padding: '24px',
+            width: '90%', maxWidth: '500px', maxHeight: '80vh',
+            overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+          }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>📋 识药历史记录</h3>
+              <button onClick={() => setShowRecognitionHistory(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#9ca3af' }}>✕</button>
+            </div>
+
+            {isLoadingHistory ? (
+              <div style={{ textAlign: 'center', padding: '32px', color: '#9ca3af' }}>
+                <div className="loading-spinner" style={{ margin: '0 auto 12px' }}></div>
+                <p>加载中...</p>
+              </div>
+            ) : historyDetailLog ? (
+              /* 历史记录详情视图 */
+              <div>
+                <button onClick={() => setHistoryDetailLog(null)} style={{ background: 'none', border: 'none', fontSize: '14px', color: '#6366f1', cursor: 'pointer', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  ← 返回列表
+                </button>
+                <div style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px', background: '#fafafa' }}>
+                  {/* 药品图片 */}
+                  {historyDetailLog._imageUrl && (
+                    <div style={{ marginBottom: '12px', textAlign: 'center' }}>
+                      <img src={historyDetailLog._imageUrl} alt="识别图片" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', objectFit: 'contain' }} />
+                    </div>
+                  )}
+                  {/* 药品名称和状态 */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '17px', fontWeight: 'bold', color: '#1f2937' }}>
+                      {historyDetailLog.matchedDrugName || historyDetailLog.normalizedName || '未知药品'}
+                    </span>
+                    {(() => {
+                      const statusMap = {
+                        matched: { label: '✅ 已匹配', color: '#16a34a', bg: '#f0fdf4' },
+                        unmatched: { label: '❌ 未匹配', color: '#dc2626', bg: '#fef2f2' },
+                        imported: { label: '📥 已入库', color: '#2563eb', bg: '#eff6ff' },
+                        pending: { label: '⏳ 处理中', color: '#d97706', bg: '#fffbeb' }
+                      };
+                      const st = statusMap[historyDetailLog.status] || statusMap.pending;
+                      return <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '8px', background: st.bg, color: st.color }}>{st.label}</span>;
+                    })()}
+                  </div>
+                  {/* OCR原文 */}
+                  {historyDetailLog.rawText && (
+                    <div style={{ marginBottom: '10px' }}>
+                      <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#6b7280', marginBottom: '4px' }}>OCR识别原文：</p>
+                      <p style={{ fontSize: '13px', color: '#374151', background: '#f3f4f6', padding: '10px', borderRadius: '8px', whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0 }}>
+                        {historyDetailLog.rawText}
+                      </p>
+                    </div>
+                  )}
+                  {/* 匹配信息 */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#9ca3af', marginBottom: '12px' }}>
+                    <span>{historyDetailLog.createdAt ? new Date(historyDetailLog.createdAt).toLocaleString('zh-CN') : ''}</span>
+                    {historyDetailLog.matchScore && <span>匹配度: {(historyDetailLog.matchScore * 100).toFixed(0)}%</span>}
+                  </div>
+                  {/* 操作按钮 */}
+                  {(historyDetailLog.status === 'matched' || historyDetailLog.status === 'imported') && historyDetailLog.matchedDrugName && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const r = await fetch(`/api/v1/drug/detail?drugName=${encodeURIComponent(historyDetailLog.matchedDrugName)}`);
+                          const data = await r.json();
+                          if (data.code === 200 && data.data) {
+                            setRecognizedDrugs([data.data]);
+                            setBatchSelectedForAdd(new Set([data.data.id]));
+                            setActiveTab('recognition');
+                            setShowRecognitionHistory(false);
+                            setHistoryDetailLog(null);
+                          }
+                        } catch (e) {
+                          console.error('跳转识别结果失败', e);
+                        }
+                      }}
+                      style={{
+                        width: '100%', padding: '12px', borderRadius: '10px', border: 'none',
+                        background: '#4f46e5', color: 'white', fontSize: '15px', fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🔍 查看识别结果
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : recognitionHistory.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px', color: '#9ca3af' }}>
+                <span style={{ fontSize: '40px' }}>📭</span>
+                <p style={{ marginTop: '8px' }}>暂无识药历史记录</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {recognitionHistory.map(log => {
+                  const statusMap = {
+                    matched: { label: '✅ 已匹配', color: '#16a34a', bg: '#f0fdf4' },
+                    unmatched: { label: '❌ 未匹配', color: '#dc2626', bg: '#fef2f2' },
+                    imported: { label: '📥 已入库', color: '#2563eb', bg: '#eff6ff' },
+                    pending: { label: '⏳ 处理中', color: '#d97706', bg: '#fffbeb' }
+                  };
+                  const st = statusMap[log.status] || statusMap.pending;
+                  return (
+                    <div key={log.id} style={{
+                      border: '1px solid #e5e7eb', borderRadius: '12px', padding: '14px',
+                      background: '#fafafa', cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                      onClick={async () => {
+                        // 尝试获取关联的OcrRecord图片
+                        let imageUrl = null;
+                        if (log.ocrRecordId) {
+                          try {
+                            const r = await fetch(`/api/v1/drug/recognize/result/${log.ocrRecordId}`);
+                            const d = await r.json();
+                            if (d.code === 200 && d.data && d.data.imageUrl) {
+                              imageUrl = d.data.imageUrl;
+                            }
+                          } catch (e) { /* ignore */ }
+                        }
+                        setHistoryDetailLog({ ...log, _imageUrl: imageUrl });
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#1f2937' }}>
+                          {log.matchedDrugName || log.normalizedName || '未知药品'}
+                        </span>
+                        <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '8px', background: st.bg, color: st.color }}>
+                          {st.label}
+                        </span>
+                      </div>
+                      {log.rawText && (
+                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          OCR: {log.rawText.substring(0, 60)}{log.rawText.length > 60 ? '...' : ''}
+                        </p>
+                      )}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '11px', color: '#d1d5db' }}>
+                          {log.createdAt ? new Date(log.createdAt).toLocaleString('zh-CN') : ''}
+                        </span>
+                        {log.matchScore && (
+                          <span style={{ fontSize: '11px', color: '#6b7280' }}>
+                            匹配度: {(log.matchScore * 100).toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 批量识别区域 */}
       {batchRecognizeItems.length > 0 ? (
@@ -3965,6 +4171,80 @@ function App() {
         </div>
 
         <div className="explanation-layout">
+          {/* 医学原文折叠对照 */}
+          <div style={{
+            borderRadius: '12px',
+            marginBottom: '16px',
+            border: '1px solid #e2e8f0',
+            overflow: 'hidden'
+          }}>
+            <div
+              onClick={() => setShowOriginalText(!showOriginalText)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 16px',
+                background: 'linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)',
+                cursor: 'pointer', userSelect: 'none'
+              }}
+            >
+              <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#7c3aed', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                📄 医学原文
+                <span style={{ fontSize: '11px', fontWeight: 'normal', color: '#a78bfa' }}>对照查看</span>
+              </span>
+              <span style={{ fontSize: '13px', color: '#7c3aed', transition: 'transform 0.2s', transform: showOriginalText ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                ▼
+              </span>
+            </div>
+            {showOriginalText && (
+              <div style={{ padding: '14px 16px', background: '#fafafa' }}>
+                {/* 左右对照布局 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', height: '400px' }}>
+                  {/* 左侧：老年友好版摘要 */}
+                  <div style={{ background: '#f0fdf4', borderRadius: '10px', padding: '12px', border: '1px solid #bbf7d0', overflowY: 'auto' }}>
+                    <h4 style={{ fontSize: '16px', fontWeight: 'bold', color: '#16a34a', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      👴 老年友好版
+                    </h4>
+                    {elderlyGuide ? (
+                      <div style={{ fontSize: '16px', lineHeight: '2', color: '#374151', whiteSpace: 'pre-wrap' }}
+                        dangerouslySetInnerHTML={{ __html: displayGuideHtml }}
+                      />
+                    ) : (
+                      <p style={{ fontSize: '16px', color: '#999' }}>加载中...</p>
+                    )}
+                  </div>
+                  {/* 右侧：医学原文 */}
+                  <div style={{ background: '#fffbeb', borderRadius: '10px', padding: '12px', border: '1px solid #fde68a', overflowY: 'auto' }}>
+                    <h4 style={{ fontSize: '16px', fontWeight: 'bold', color: '#b45309', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      📋 医学原文
+                    </h4>
+                    <div style={{ fontSize: '16px', lineHeight: '2', color: '#374151' }}>
+                      <div style={{ marginBottom: '10px' }}>
+                        <span style={{ fontWeight: 'bold', color: '#92400e', fontSize: '17px' }}>【成分】</span>
+                        <p style={{ margin: '2px 0' }}>{drugDetails.ingredient}</p>
+                      </div>
+                      <div style={{ marginBottom: '10px' }}>
+                        <span style={{ fontWeight: 'bold', color: '#92400e', fontSize: '17px' }}>【适应症】</span>
+                        <p style={{ margin: '2px 0' }}>{drugDetails.indications}</p>
+                      </div>
+                      <div style={{ marginBottom: '10px' }}>
+                        <span style={{ fontWeight: 'bold', color: '#92400e', fontSize: '17px' }}>【用法用量】</span>
+                        <p style={{ margin: '2px 0' }}>{drugDetails.usage}</p>
+                      </div>
+                      <div style={{ marginBottom: '10px' }}>
+                        <span style={{ fontWeight: 'bold', color: '#92400e', fontSize: '17px' }}>【注意事项】</span>
+                        <p style={{ margin: '2px 0' }}>{drugDetails.precautions}</p>
+                      </div>
+                      <div>
+                        <span style={{ fontWeight: 'bold', color: '#92400e', fontSize: '17px' }}>【不良反应】</span>
+                        <p style={{ margin: '2px 0' }}>{drugDetails.adverseReactions}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* 上方区域：虚拟药剂师 */}
           <div className="pharmacist-section">
             <div className="chat-section">
@@ -4285,12 +4565,361 @@ function App() {
       }
     };
 
+    // 场景化选项配置（精简预设，鼓励用户自定义）
+    const scenarioOptions = [
+      { id: 'grapefruit', label: '🍊 西柚汁', type: 'beverage', value: '西柚汁' },
+      { id: 'alcohol', label: '🍺 酒', type: 'beverage', value: '酒精' },
+      { id: 'coffee', label: '☕ 咖啡', type: 'beverage', value: '咖啡' },
+      { id: 'tea', label: '🍵 浓茶', type: 'beverage', value: '浓茶' },
+      { id: 'vitamin_c', label: '💊 维C', type: 'supplement', value: '维生素C' },
+      { id: 'calcium', label: '💊 钙片', type: 'supplement', value: '钙片' },
+      { id: 'ginseng', label: '🌿 人参', type: 'supplement', value: '人参' },
+      { id: 'seafood', label: '🦐 海鲜', type: 'food', value: '海鲜' },
+    ];
+
+    // 切换场景标签选中状态
+    const toggleScenario = (scenario) => {
+      setSelectedScenarios(prev => {
+        const exists = prev.find(s => s.id === scenario.id);
+        if (exists) return prev.filter(s => s.id !== scenario.id);
+        return [...prev, scenario];
+      });
+      setScenarioConflictReport(null);
+    };
+
+    // 添加自定义食物
+    const addCustomFood = () => {
+      const trimmed = customFoodInput.trim();
+      if (!trimmed) return;
+      const customId = 'custom_' + Date.now();
+      setSelectedScenarios(prev => [...prev, { id: customId, label: trimmed, type: 'food', value: trimmed }]);
+      setCustomFoodInput('');
+      setScenarioConflictReport(null);
+    };
+
+    // 调用 /analyze 端点进行综合冲突检测
+    const handleAnalyzeConflicts = async () => {
+      if (drugList.length === 0) {
+        showToast('请先添加药品到药箱', 'warning');
+        return;
+      }
+      if (selectedScenarios.length === 0) {
+        showToast('请至少选择一个场景选项', 'warning');
+        return;
+      }
+
+      setIsCheckingScenario(true);
+      setScenarioConflictReport(null);
+
+      try {
+        const drugNames = drugList.map(d => d.name);
+        const supplements = selectedScenarios.filter(s => s.type === 'supplement').map(s => s.value);
+        const beverages = selectedScenarios.filter(s => s.type === 'beverage').map(s => s.value);
+        const foods = selectedScenarios.filter(s => s.type === 'food').map(s => s.value);
+
+        const requestBody = {
+          drugNames,
+          supplements: supplements.length > 0 ? supplements : undefined,
+          beverages: beverages.length > 0 ? beverages : undefined,
+          foods: foods.length > 0 ? foods : undefined,
+          detailed: true,
+          includeAlternatives: true
+        };
+
+        console.log('=== 综合冲突检测 ===', requestBody);
+
+        const response = await fetch('/api/conflict/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+
+        const data = await response.json();
+        console.log('综合冲突检测响应:', data);
+
+        if (data.code === 200 && data.data) {
+          setScenarioConflictReport(data.data);
+        } else {
+          showToast(data.message || '综合冲突检测失败', 'error');
+        }
+      } catch (error) {
+        console.error('综合冲突检测异常:', error);
+        showToast('网络错误，请稍后重试', 'error');
+      } finally {
+        setIsCheckingScenario(false);
+      }
+    };
+
     return (
       <div className="card">
         <h2 className="card-title">
           <span className="card-title-icon">⚠️</span>
           用药安全检查
         </h2>
+
+        {/* 药品/食物/保健品综合冲突 - 折叠面板 */}
+        <div style={{
+          borderRadius: '12px',
+          marginBottom: '20px',
+          border: '1px solid #bae6fd',
+          overflow: 'hidden'
+        }}>
+          {/* 折叠标题栏 */}
+          <div
+            onClick={() => setShowScenarioPanel(!showScenarioPanel)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+              cursor: 'pointer',
+              userSelect: 'none'
+            }}
+          >
+            <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              🍽️ 药品/食物/保健品综合冲突
+              {selectedScenarios.length > 0 && (
+                <span style={{
+                  fontSize: '11px', padding: '2px 8px', borderRadius: '10px',
+                  background: '#0284c7', color: 'white'
+                }}>
+                  {selectedScenarios.length}项
+                </span>
+              )}
+            </span>
+            <span style={{ fontSize: '14px', color: '#0369a1', transition: 'transform 0.2s', transform: showScenarioPanel ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+              ▼
+            </span>
+          </div>
+
+          {/* 折叠内容 */}
+          {showScenarioPanel && (
+            <div style={{ padding: '14px 16px', background: '#f8fafc' }}>
+              <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '10px' }}>
+                选择今天的饮食/保健品，AI分析与您药品是否冲突
+              </p>
+
+              {/* 场景标签选择 */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                {scenarioOptions.map(scenario => {
+                  const isSelected = selectedScenarios.some(s => s.id === scenario.id);
+                  return (
+                    <button
+                      key={scenario.id}
+                      onClick={() => toggleScenario(scenario)}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: '16px',
+                        fontSize: '13px',
+                        border: isSelected ? '2px solid #0284c7' : '1.5px solid #cbd5e1',
+                        background: isSelected ? '#0284c7' : '#ffffff',
+                        color: isSelected ? '#ffffff' : '#475569',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {scenario.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 自定义输入 */}
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                <input
+                  type="text"
+                  value={customFoodInput}
+                  onChange={(e) => setCustomFoodInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addCustomFood()}
+                  placeholder="输入其他食物/饮品，回车添加"
+                  style={{
+                    flex: 1, padding: '7px 12px', borderRadius: '8px',
+                    border: '1.5px solid #cbd5e1', fontSize: '13px', outline: 'none'
+                  }}
+                />
+                <button
+                  onClick={addCustomFood}
+                  style={{
+                    padding: '7px 14px', borderRadius: '8px', border: 'none',
+                    background: '#0284c7', color: 'white', fontSize: '13px', cursor: 'pointer'
+                  }}
+                >
+                  添加
+                </button>
+              </div>
+
+              {/* 已选标签 */}
+              {selectedScenarios.length > 0 && (
+                <div style={{ marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                    {selectedScenarios.map(s => (
+                      <span key={s.id} style={{
+                        padding: '3px 10px', borderRadius: '10px', fontSize: '11px',
+                        background: s.type === 'beverage' ? '#dbeafe' : s.type === 'supplement' ? '#fce7f3' : '#dcfce7',
+                        color: s.type === 'beverage' ? '#1d4ed8' : s.type === 'supplement' ? '#be185d' : '#15803d',
+                        display: 'flex', alignItems: 'center', gap: '3px'
+                      }}>
+                        {s.value}
+                        <span onClick={() => toggleScenario(s)} style={{ cursor: 'pointer', fontWeight: 'bold' }}>×</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 检测按钮 */}
+              <button
+                className="btn btn-primary"
+                onClick={handleAnalyzeConflicts}
+                disabled={isCheckingScenario || drugList.length === 0 || selectedScenarios.length === 0}
+                style={{
+                  width: '100%', minHeight: '40px', fontSize: '14px',
+                  opacity: (isCheckingScenario || drugList.length === 0 || selectedScenarios.length === 0) ? 0.6 : 1
+                }}
+              >
+                {isCheckingScenario ? '🔍 AI分析中...' : '🔬 综合冲突检测'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 综合冲突检测结果 */}
+        {isCheckingScenario && (
+          <div style={{ textAlign: 'center', padding: '20px' }}>
+            <div className="loading-spinner-container" style={{ margin: '0 auto 12px' }}>
+              <div className="loading-spinner"></div>
+            </div>
+            <p style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+              🔍 AI分析中：{drugList.map(d => d.name).join('、')} × {selectedScenarios.map(s => s.value).join('、')}
+            </p>
+          </div>
+        )}
+
+        {scenarioConflictReport && !isCheckingScenario && (
+          <div style={{
+            borderRadius: '12px',
+            padding: '14px',
+            marginBottom: '16px',
+            border: scenarioConflictReport.hasSevereConflict ? '1px solid #fca5a5' : '1px solid #86efac',
+            background: scenarioConflictReport.hasSevereConflict ? '#fef2f2' : '#f0fdf4'
+          }}>
+            <h4 style={{
+              fontSize: '15px', fontWeight: 'bold', marginBottom: '10px',
+              color: scenarioConflictReport.hasSevereConflict ? '#dc2626' : '#16a34a',
+              display: 'flex', alignItems: 'center', gap: '6px'
+            }}>
+              {scenarioConflictReport.hasSevereConflict ? '🔴 发现严重冲突' : '🟢 未发现严重冲突'}
+            </h4>
+
+            {/* 检测范围 */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+              {scenarioConflictReport.drugsChecked?.length > 0 && (
+                <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '11px', background: '#dbeafe', color: '#1d4ed8' }}>
+                  💊{scenarioConflictReport.drugsChecked.join('、')}
+                </span>
+              )}
+              {scenarioConflictReport.beveragesChecked?.length > 0 && (
+                <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '11px', background: '#fef3c7', color: '#92400e' }}>
+                  🥤{scenarioConflictReport.beveragesChecked.join('、')}
+                </span>
+              )}
+              {scenarioConflictReport.supplementsChecked?.length > 0 && (
+                <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '11px', background: '#fce7f3', color: '#9d174d' }}>
+                  💊{scenarioConflictReport.supplementsChecked.join('、')}
+                </span>
+              )}
+              {scenarioConflictReport.foodsChecked?.length > 0 && (
+                <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '11px', background: '#dcfce7', color: '#15803d' }}>
+                  🍽️{scenarioConflictReport.foodsChecked.join('、')}
+                </span>
+              )}
+            </div>
+
+            {/* 统计 */}
+            {scenarioConflictReport.conflicts?.length > 0 && (
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                {scenarioConflictReport.statistics?.severeCount > 0 && (
+                  <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#dc2626', color: 'white', fontSize: '12px' }}>
+                    严重×{scenarioConflictReport.statistics.severeCount}
+                  </span>
+                )}
+                {scenarioConflictReport.statistics?.moderateCount > 0 && (
+                  <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#ea580c', color: 'white', fontSize: '12px' }}>
+                    中度×{scenarioConflictReport.statistics.moderateCount}
+                  </span>
+                )}
+                {scenarioConflictReport.statistics?.mildCount > 0 && (
+                  <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#ca8a04', color: 'white', fontSize: '12px' }}>
+                    轻微×{scenarioConflictReport.statistics.mildCount}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* 冲突详情 */}
+            {scenarioConflictReport.conflicts?.map((conflict, index) => (
+              <div
+                key={index}
+                className={`conflict-item conflict-level-${conflict.severity?.toLowerCase() || 'mild'}`}
+                style={{ marginBottom: '8px', padding: '8px 10px' }}
+              >
+                <span className={`conflict-badge ${conflict.severity?.toLowerCase() || 'mild'}`}>
+                  {conflict.severity === 'SEVERE' && '🔴 严重'}
+                  {conflict.severity === 'MODERATE' && '🟡 中度'}
+                  {conflict.severity === 'MILD' && '🔵 轻微'}
+                  {(!conflict.severity || conflict.severity === 'NONE') && '🟢 安全'}
+                </span>
+                <div className="drug-connection">
+                  <div className="drug-node">{conflict.drugA}</div>
+                  <span className="drug-connector">⚡</span>
+                  <div className="drug-node">{conflict.drugB}</div>
+                </div>
+                {conflict.conflictExplanation && (
+                  <p className="conflict-explanation-text">{conflict.conflictExplanation}</p>
+                )}
+                {conflict.riskWarning && (
+                  <p className="conflict-explanation-text" style={{
+                    color: conflict.severity === 'SEVERE' ? '#dc2626' : conflict.severity === 'MODERATE' ? '#ea580c' : '#856404',
+                    fontWeight: 'bold', marginTop: '4px', fontSize: '12px'
+                  }}>
+                    ⚠️ {conflict.riskWarning}
+                  </p>
+                )}
+                {conflict.alternatives?.length > 0 && (
+                  <div style={{ marginTop: '4px' }}>
+                    {conflict.alternatives.map((alt, i) => (
+                      <p key={i} style={{ fontSize: '11px', color: '#666', marginLeft: '8px' }}>💡 {alt}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* 无冲突 */}
+            {scenarioConflictReport.conflicts?.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '10px' }}>
+                <span style={{ fontSize: '32px' }}>🛡️</span>
+                <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#16a34a' }}>未发现冲突</p>
+              </div>
+            )}
+
+            {/* 总体建议 */}
+            {scenarioConflictReport.generalAdvice && (
+              <div className="warning-box" style={{ marginTop: '10px', background: '#e0f2fe', padding: '8px 10px' }}>
+                <p style={{ fontSize: '12px', color: '#075985' }}>💊 {scenarioConflictReport.generalAdvice}</p>
+              </div>
+            )}
+
+            <button
+              className="btn btn-secondary"
+              style={{ width: '100%', marginTop: '10px', fontSize: '13px', minHeight: '36px' }}
+              onClick={() => { setScenarioConflictReport(null); }}
+            >
+              🔄 重新检测
+            </button>
+          </div>
+        )}
 
         {drugList.length === 0 ? (
           <div className="safe-display">
