@@ -43,4 +43,12 @@ public interface SmsNotificationService {
      * @param guardianId 监护人ID
      */
     void markAllAsRead(Long guardianId);
+
+    /**
+     * 删除已读通知
+     *
+     * @param guardianId 监护人ID
+     * @return 删除数量
+     */
+    int deleteReadNotifications(Long guardianId);
 }

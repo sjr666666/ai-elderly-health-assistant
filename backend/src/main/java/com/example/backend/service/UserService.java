@@ -26,4 +26,12 @@ public interface UserService {
      * @param request 更新请求
      */
     void updateUserProfile(Long userId, UserProfileUpdateRequest request);
+
+    /**
+     * 修改密码
+     * @param userId 用户ID
+     * @param oldPassword 旧密码
+     * @param newPassword 新密码
+     */
+    void changePassword(Long userId, String oldPassword, String newPassword);
 }

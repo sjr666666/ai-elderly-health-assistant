@@ -9,6 +9,7 @@ function Register({ onRegister }) {
   const [realName, setRealName] = useState('');
   const [age, setAge] = useState('');
   const [role, setRole] = useState('elder');
+  const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -87,6 +88,7 @@ function Register({ onRegister }) {
           realName: realName.trim(),
           age: parseInt(age),
           role: role,
+          phone: role === 'family' ? phone.trim() : undefined,
         }),
       });
 
@@ -532,6 +534,50 @@ function Register({ onRegister }) {
               }}
             />
           </div>
+
+          {/* 家属角色时显示联系电话 */}
+          {role === 'family' && (
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{
+                fontSize: '20px',
+                fontWeight: '600',
+                marginBottom: '12px',
+                display: 'block',
+                color: '#3D3D3D'
+              }}>
+                <span style={{ color: '#E74C3C', marginRight: '4px' }}>*</span>
+                联系电话
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="请输入联系电话"
+                required
+                style={{
+                  width: '100%',
+                  padding: '18px 24px',
+                  fontSize: '20px',
+                  border: '3px solid #F0EBE3',
+                  borderRadius: '16px',
+                  outline: 'none',
+                  transition: 'all 0.3s ease',
+                  background: '#FAF7F2',
+                  fontFamily: 'inherit'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#4A90E2';
+                  e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
+                  e.target.style.background = 'white';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#F0EBE3';
+                  e.target.style.boxShadow = 'none';
+                  e.target.style.background = '#FAF7F2';
+                }}
+              />
+            </div>
+          )}
 
           <button
             type="submit"

@@ -52,7 +52,7 @@ function ProfileModal({ onComplete, onClose, userId }) {
 
     setIsSubmitting(true);
     try {
-      const diseasesStr = chronicDiseases.length > 0 ? chronicDiseases.join('、') : null;
+      const diseasesStr = chronicDiseases.length > 0 ? chronicDiseases.join('、') : '';
       const response = await fetch(`/api/v1/user/profile?userId=${userId}`, {
         method: 'PUT',
         headers: {

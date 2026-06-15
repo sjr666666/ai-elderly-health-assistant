@@ -9,6 +9,7 @@ import com.example.backend.model.dto.ExpiringDrugDTO;
 import com.example.backend.model.dto.GuardianDashboardDTO;
 import com.example.backend.model.dto.GuardianRelationRequest;
 import com.example.backend.model.entity.*;
+import com.example.backend.service.ElderNotificationService;
 import com.example.backend.service.GuardianService;
 import com.example.backend.service.SmsNotificationService;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -37,6 +39,7 @@ public class GuardianServiceImpl implements GuardianService {
     private final UserMedicineBoxMapper userMedicineBoxMapper;
     private final DrugBaseMapper drugBaseMapper;
     private final SmsNotificationService smsNotificationService;
+    private final ElderNotificationService elderNotificationService;
 
     @Override
     public GuardianDashboardDTO getDashboard(Long guardianId) {
@@ -129,18 +132,8 @@ public class GuardianServiceImpl implements GuardianService {
                 }
             }
 
-            // 计算最后活跃时间
-            String lastActiveTime = null;
-            if (elder.getUpdatedAt() != null) {
-                long minutes = java.time.Duration.between(elder.getUpdatedAt(), now).toMinutes();
-                if (minutes < 60) {
-                    lastActiveTime = minutes + "分钟前";
-                } else if (minutes < 1440) {
-                    lastActiveTime = (minutes / 60) + "小时前";
-                } else {
-                    lastActiveTime = (minutes / 1440) + "天前";
-                }
-            }
+            // 计算最后活跃时间（优先使用 lastActiveTime，兜底使用 updatedAt）
+            String lastActiveTime = formatLastActiveTime(elder.getLastActiveTime(), elder.getUpdatedAt(), now);
 
             elderList.add(ElderSummaryDTO.builder()
                     .elderId(elder.getId())
@@ -218,6 +211,8 @@ public class GuardianServiceImpl implements GuardianService {
             inactiveRelation.setRelationType(request.getRelationType());
             guardianElderRelationMapper.updateById(inactiveRelation);
             log.info("监护关系恢复成功 - id: {}", inactiveRelation.getId());
+            // 通知老人
+            sendBindNotification(request.getGuardianId(), elderId, request.getRelationType());
             return inactiveRelation;
         }
 
@@ -230,6 +225,8 @@ public class GuardianServiceImpl implements GuardianService {
         guardianElderRelationMapper.insert(relation);
 
         log.info("监护关系绑定成功 - id: {}", relation.getId());
+        // 通知老人
+        sendBindNotification(request.getGuardianId(), elderId, request.getRelationType());
         return relation;
     }
 
@@ -354,20 +351,8 @@ public class GuardianServiceImpl implements GuardianService {
                 .eq(UserMedicineBox::getStatus, "active");
         Long medicationCount = userMedicineBoxMapper.selectCount(boxQuery);
 
-        // 最后活跃时间：使用用户最后更新时间
-        String lastActiveTime = null;
-        if (elder.getUpdatedAt() != null) {
-            LocalDateTime updated = elder.getUpdatedAt();
-            LocalDateTime now = LocalDateTime.now();
-            long minutes = java.time.Duration.between(updated, now).toMinutes();
-            if (minutes < 60) {
-                lastActiveTime = minutes + "分钟前";
-            } else if (minutes < 1440) {
-                lastActiveTime = (minutes / 60) + "小时前";
-            } else {
-                lastActiveTime = (minutes / 1440) + "天前";
-            }
-        }
+        // 最后活跃时间（优先使用 lastActiveTime，兜底使用 updatedAt）
+        String lastActiveTime = formatLastActiveTime(elder.getLastActiveTime(), elder.getUpdatedAt(), LocalDateTime.now());
 
         return ElderSummaryDTO.builder()
                 .elderId(elder.getId())
@@ -462,6 +447,56 @@ public class GuardianServiceImpl implements GuardianService {
             case "skipped": return "已跳过";
             case "completed": return "已完成";
             default: return status;
+        }
+    }
+
+    /**
+     * 格式化最后活跃时间
+     * 优先使用 lastActiveTime，兜底使用 updatedAt
+     */
+    private String formatLastActiveTime(LocalDateTime lastActiveTime, LocalDateTime updatedAt, LocalDateTime now) {
+        LocalDateTime activeTime = lastActiveTime != null ? lastActiveTime : updatedAt;
+        if (activeTime == null) {
+            return null;
+        }
+        long minutes = java.time.Duration.between(activeTime, now).toMinutes();
+        if (minutes < 0) {
+            minutes = 0;
+        }
+        if (minutes < 60) {
+            return minutes + "分钟前";
+        } else if (minutes < 1440) {
+            return (minutes / 60) + "小时前";
+        } else {
+            return (minutes / 1440) + "天前";
+        }
+    }
+
+    /**
+     * 绑定成功后通知老人
+     */
+    private void sendBindNotification(Long guardianId, Long elderId, String relationType) {
+        try {
+            SysUser guardian = userMapper.selectById(guardianId);
+            String guardianName = guardian != null ? guardian.getRealName() : "家属";
+            String guardianPhone = guardian != null && guardian.getPhone() != null ? guardian.getPhone() : "";
+            String relationship = relationType != null ? relationType : "家属";
+
+            String title = "家属绑定通知";
+            String content = guardianName + "（" + relationship + "）已绑定您，您可以选择将其添加为紧急联系人";
+
+            // 构建extraData JSON
+            Map<String, Object> extraData = new HashMap<>();
+            extraData.put("guardianId", guardianId);
+            extraData.put("guardianName", guardianName);
+            extraData.put("guardianPhone", guardianPhone);
+            extraData.put("relationship", relationship);
+
+            String extraJson = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(extraData);
+            elderNotificationService.createNotification(elderId, "bind_request", title, content, extraJson);
+            log.info("绑定通知已发送 - elderId: {}, guardianId: {}", elderId, guardianId);
+        } catch (Exception e) {
+            log.error("发送绑定通知失败 - elderId: {}, guardianId: {}", elderId, guardianId, e);
         }
     }
 }

@@ -143,6 +143,18 @@ public class GuardianController {
         }
     }
 
+    @DeleteMapping("/notifications/read")
+    public ResponseResult<String> deleteReadNotifications(@RequestParam Long guardianId) {
+        log.info("清除已读通知 - guardianId: {}", guardianId);
+        try {
+            int count = smsNotificationService.deleteReadNotifications(guardianId);
+            return ResponseResult.success("已清除" + count + "条已读通知");
+        } catch (Exception e) {
+            log.error("清除已读通知失败 - guardianId: {}", guardianId, e);
+            return ResponseResult.fail("清除失败：" + e.getMessage());
+        }
+    }
+
     @GetMapping("/elders/{elderId}/expiring-drugs")
     public ResponseResult<List<ExpiringDrugDTO>> getExpiringDrugs(@RequestParam Long guardianId, @PathVariable Long elderId) {
         log.info("获取老人临期药品 - guardianId: {}, elderId: {}", guardianId, elderId);

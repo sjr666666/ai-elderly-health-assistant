@@ -10,12 +10,17 @@ import com.example.backend.model.dto.UserRegisterRequest;
 import com.example.backend.model.dto.UserRegisterResponse;
 import com.example.backend.model.entity.SysUser;
 import com.example.backend.service.UserService;
+import com.example.backend.service.ElderNotificationService;
+import com.example.backend.mapper.GuardianElderRelationMapper;
+import com.example.backend.model.entity.GuardianElderRelation;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class UserServiceImpl implements UserService {
@@ -24,11 +29,16 @@ public class UserServiceImpl implements UserService {
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final ElderNotificationService elderNotificationService;
+    private final GuardianElderRelationMapper guardianElderRelationMapper;
 
     @Autowired
-    public UserServiceImpl(UserMapper userMapper, PasswordEncoder passwordEncoder) {
+    public UserServiceImpl(UserMapper userMapper, PasswordEncoder passwordEncoder,
+                           ElderNotificationService elderNotificationService, GuardianElderRelationMapper guardianElderRelationMapper) {
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
+        this.elderNotificationService = elderNotificationService;
+        this.guardianElderRelationMapper = guardianElderRelationMapper;
     }
 
     @Override
@@ -58,6 +68,7 @@ public class UserServiceImpl implements UserService {
         user.setIsBreastfeeding(request.getIsBreastfeeding());
         user.setIsSmoking(request.getIsSmoking());
         user.setIsDrinking(request.getIsDrinking());
+        user.setPhone(request.getPhone());
         // 根据请求设置角色，仅允许 elder 或 family
         String role = request.getRole();
         if (SysUser.Role.FAMILY.getCode().equals(role)) {
@@ -135,6 +146,7 @@ public class UserServiceImpl implements UserService {
                 .isSmoking(user.getIsSmoking())
                 .isDrinking(user.getIsDrinking())
                 .role(user.getRole())
+                .phone(user.getPhone())
                 .build();
     }
 
@@ -182,9 +194,9 @@ public class UserServiceImpl implements UserService {
         if (request.getAllergyHistory() != null) {
             user.setAllergyHistory(request.getAllergyHistory());
         }
-        // 更新慢性病史
+        // 更新慢性病史（允许空字符串清空）
         if (request.getChronicDiseases() != null) {
-            user.setChronicDiseases(request.getChronicDiseases());
+            user.setChronicDiseases(request.getChronicDiseases().trim().isEmpty() ? null : request.getChronicDiseases());
         }
         // 更新肾功能状态
         if (request.getKidneyFunction() != null && !request.getKidneyFunction().trim().isEmpty()) {
@@ -210,8 +222,65 @@ public class UserServiceImpl implements UserService {
         if (request.getIsDrinking() != null) {
             user.setIsDrinking(request.getIsDrinking());
         }
+        // 更新联系电话
+        if (request.getPhone() != null && !request.getPhone().trim().isEmpty()) {
+            String oldPhone = user.getPhone();
+            user.setPhone(request.getPhone().trim());
+            // 家属修改电话时，通知绑定的老人
+            if ("family".equals(user.getRole()) && !request.getPhone().trim().equals(oldPhone)) {
+                notifyEldersPhoneChanged(user, oldPhone, request.getPhone().trim());
+            }
+        }
 
         int result = userMapper.updateById(user);
         logger.info("用户档案更新结果 - userId: {}, 影响行数: {}", userId, result);
+    }
+
+    @Override
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(SysUser::getUserId, userId);
+        SysUser user = userMapper.selectOne(queryWrapper);
+        if (user == null) {
+            throw new RuntimeException("用户不存在");
+        }
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+            throw new RuntimeException("旧密码错误");
+        }
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new RuntimeException("新密码长度不能少于6位");
+        }
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userMapper.updateById(user);
+        logger.info("用户密码修改成功 - userId: {}", userId);
+    }
+
+    /**
+     * 家属电话变更时通知绑定的老人
+     */
+    private void notifyEldersPhoneChanged(SysUser guardian, String oldPhone, String newPhone) {
+        try {
+            LambdaQueryWrapper<GuardianElderRelation> query = new LambdaQueryWrapper<>();
+            query.eq(GuardianElderRelation::getGuardianId, guardian.getId())
+                    .eq(GuardianElderRelation::getStatus, "active");
+            List<GuardianElderRelation> bindings = guardianElderRelationMapper.selectList(query);
+            for (GuardianElderRelation binding : bindings) {
+                String extraData = String.format(
+                        "{\"guardianId\":%d,\"guardianName\":\"%s\",\"oldPhone\":\"%s\",\"newPhone\":\"%s\",\"relationship\":\"%s\"}",
+                        guardian.getId(), guardian.getRealName(),
+                        oldPhone != null ? oldPhone : "",
+                        newPhone,
+                        binding.getRelationType() != null ? binding.getRelationType() : "");
+                elderNotificationService.createNotification(
+                        binding.getElderId(),
+                        "phone_update",
+                        "联系电话变更",
+                        guardian.getRealName() + "的联系电话已变更为" + newPhone + "，是否更新紧急联系人电话？",
+                        extraData
+                );
+            }
+        } catch (Exception e) {
+            logger.warn("通知老人电话变更失败 - guardianId: {}, error: {}", guardian.getUserId(), e.getMessage());
+        }
     }
 }
