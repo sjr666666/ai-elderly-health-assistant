@@ -97,4 +97,14 @@ public class SmsNotificationServiceImpl implements SmsNotificationService {
                 .set(SmsNotificationLog::getIsRead, 1);
         smsNotificationLogMapper.update(null, updateWrapper);
     }
+
+    @Override
+    public int deleteReadNotifications(Long guardianId) {
+        LambdaQueryWrapper<SmsNotificationLog> query = new LambdaQueryWrapper<>();
+        query.eq(SmsNotificationLog::getGuardianId, guardianId)
+                .eq(SmsNotificationLog::getIsRead, 1);
+        int count = smsNotificationLogMapper.delete(query);
+        log.info("删除已读通知 - guardianId: {}, count: {}", guardianId, count);
+        return count;
+    }
 }

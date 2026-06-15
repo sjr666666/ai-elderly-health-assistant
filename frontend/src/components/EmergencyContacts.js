@@ -100,7 +100,7 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
         closeContactForm();
         showToast('添加成功', 'success');
       } else {
-        showToast(result.message || '添加失败', 'error');
+        showToast(result.message || '添加失败', result.message && result.message.includes('重复') ? 'warning' : 'error');
       }
     } catch (error) {
       console.error('保存联系人失败:', error);
@@ -115,34 +115,12 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
     setShowConfirmDialog(true);
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     setIsClosingDialog(true);
-    
-    try {
-      const response = await fetch(`/api/emergency/v1/contacts/${deleteId}`, {
-        method: 'DELETE',
-      });
-      
-      const result = await response.json();
-      
-      if (result.code === 200) {
-        onDelete(deleteId);
-        showToast('删除成功', 'success');
-      } else {
-        console.error('删除联系人失败，响应码:', result.code, '消息:', result.message);
-        showToast(result.message || '删除失败', 'error');
-      }
-      
-      setShowConfirmDialog(false);
-      setIsClosingDialog(false);
-      setDeleteId(null);
-    } catch (error) {
-      console.error('删除联系人失败:', error);
-      showToast('删除失败，请检查网络连接', 'error');
-      setShowConfirmDialog(false);
-      setIsClosingDialog(false);
-      setDeleteId(null);
-    }
+    onDelete(deleteId);
+    setShowConfirmDialog(false);
+    setIsClosingDialog(false);
+    setDeleteId(null);
   };
 
   // 进入编辑模式
