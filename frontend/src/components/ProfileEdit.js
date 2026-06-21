@@ -148,6 +148,7 @@ function ProfileEdit({ user, onSave, onClose }) {
           showToast(data.message || '更新失败，请重试', 'error');
         }
     } catch (err) {
+      console.error('更新个人信息失败:', err);
       showToast('网络连接失败，请稍后重试', 'error');
     } finally {
       setIsSubmitting(false);

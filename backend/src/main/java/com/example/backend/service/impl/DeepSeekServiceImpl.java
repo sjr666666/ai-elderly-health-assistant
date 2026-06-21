@@ -208,14 +208,8 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             String authHeader = "Bearer " + cleanKey;
-            logger.info("API Key 前10个字符: {}", cleanKey.substring(0, Math.min(10, cleanKey.length())));
-            logger.info("Authorization Header: {}", authHeader);
             headers.set("Authorization", authHeader);
             
-            // 添加拦截器打印实际发送的header
-            logger.info("准备发送请求到: {}", DEEPSEEK_API_URL);
-            logger.info("请求头内容: {}", headers);
-
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
 
             // 发送请求

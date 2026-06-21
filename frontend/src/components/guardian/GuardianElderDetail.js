@@ -65,7 +65,7 @@ function GuardianElderDetail({ guardianId, elderId, onBack }) {
     try {
       const res = await fetch(`/api/v1/guardian/unbind?guardianId=${guardianId}&elderId=${elderId}`, { method: 'DELETE' });
       const data = await res.json();
-      if (data.code === 200) onBack();
+      if (data.code === 200) onBack(true);
       else alert(data.message || '解绑失败');
     } catch { alert('网络连接失败'); }
     finally { setIsUnbinding(false); setShowUnbindConfirm(false); }

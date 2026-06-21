@@ -36,7 +36,7 @@ const ElderNotificationPanel = ({ elderId, isOpen, onClose, onUnreadCountChange,
         if (onUnreadCountChange) onUnreadCountChange(data.data || 0);
       }
     } catch (e) {
-      // 静默失败
+      console.error('获取未读通知数失败:', e);
     }
   }, [elderId, onUnreadCountChange]);
 
@@ -50,7 +50,7 @@ const ElderNotificationPanel = ({ elderId, isOpen, onClose, onUnreadCountChange,
           await fetch(`/api/v1/elder/notifications/read-all?elderId=${elderId}`, { method: 'PUT' });
           fetchUnreadCount();
         } catch (e) {
-          // 静默失败
+          console.error('标记已读失败:', e);
         }
       }, 1500);
       return () => clearTimeout(timer);
@@ -96,7 +96,7 @@ const ElderNotificationPanel = ({ elderId, isOpen, onClose, onUnreadCountChange,
         prev.map(n => n.id === notificationId ? { ...n, isHandled: 1, isRead: 1 } : n)
       );
     } catch (e) {
-      // 静默失败
+      console.error('忽略通知失败:', e);
     }
   };
 

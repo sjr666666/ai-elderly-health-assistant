@@ -225,6 +225,7 @@ function AddDrugModal({ onClose, onAdd, userId }) {
       }
 
     } catch (err) {
+      console.error('添加药品失败:', err);
       showToast('添加失败，请稍后重试', 'error');
       setIsSubmitting(false);
     }
