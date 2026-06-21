@@ -79,6 +79,23 @@ public class AiController {
     }
 
     /**
+     * 测试药品分类（处方药/非处方药）
+     */
+    @GetMapping("/classify-drug")
+    public ResponseResult<String> classifyDrug(@RequestParam String drugName) {
+        try {
+            String category = deepSeekService.classifyDrugCategory(drugName);
+            if (category != null) {
+                return ResponseResult.success(category);
+            } else {
+                return ResponseResult.fail("AI分类失败，返回null");
+            }
+        } catch (Exception e) {
+            return ResponseResult.fail("药品分类失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 测试百度TTS配置
      */
     @GetMapping("/tts/test")

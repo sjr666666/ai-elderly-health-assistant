@@ -41,11 +41,17 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
     private final ObjectMapper objectMapper;
     private final AiConversationLogService conversationLogService;
 
-    // 紧急关键词列表
+    // 紧急关键词列表（排除泛化词如"快""马上"，避免日常用语误判）
     private static final Set<String> EMERGENCY_KEYWORDS = Set.of(
             "紧急", "救命", "晕倒", "昏迷", "心跳", "呼吸", "出血", "车祸", "摔倒", "骨折",
             "中风", "心梗", "胸痛", "窒息", "中毒", "溺水", "触电", "烧伤", "烫伤", "休克",
-            "抽搐", "发作", "危险", "快", "马上", "立刻", "急救"
+            "抽搐", "发作", "危险", "立刻", "急救"
+    );
+
+    // 否定场景关键词（出现这些词时，即使包含紧急关键词也不判定为紧急）
+    private static final Set<String> NEGATIVE_KEYWORDS = Set.of(
+            "不急", "没事", "不要紧", "没关系", "不用担心", "不严重", "不紧急",
+            "不是紧急", "不是急", "虚惊", "误报", "已经好了", "已经没事"
     );
 
     // 问题分类标签
@@ -299,6 +305,15 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
         }
 
         String lowerQuestion = question.toLowerCase();
+
+        // 先检查否定场景，如果包含否定关键词则不判定为紧急
+        for (String negKeyword : NEGATIVE_KEYWORDS) {
+            if (lowerQuestion.contains(negKeyword)) {
+                return false;
+            }
+        }
+
+        // 再检查紧急关键词
         for (String keyword : EMERGENCY_KEYWORDS) {
             if (lowerQuestion.contains(keyword)) {
                 return true;

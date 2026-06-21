@@ -353,7 +353,9 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
         newDrug.setTradeName(normalizedName); // 初始时商品名和通用名相同
         newDrug.setCommonName(normalizedName); // 初始时俗名也相同
         newDrug.setSpecification(specification);
-        newDrug.setCategory("非处方药"); // 默认分类
+        // 使用AI判断处方药/非处方药分类，AI失败时回退为"非处方药"
+        String category = deepSeekService.classifyDrugCategory(normalizedName);
+        newDrug.setCategory(category != null ? category : "非处方药");
         newDrug.setCreatedAt(LocalDateTime.now());
 
         // 保存到数据库

@@ -74,6 +74,14 @@ public interface DeepSeekService {
     List<DrugSearchResponse> searchMultipleDrugsWithAI(String keyword);
 
     /**
+     * 使用DeepSeek AI判断药品是处方药还是非处方药
+     *
+     * @param drugName 药品名称
+     * @return "处方药" 或 "非处方药"，判断失败返回null
+     */
+    String classifyDrugCategory(String drugName);
+
+    /**
      * 使用DeepSeek AI生成每日慢病科普文章
      * 基于用户慢性病史和基本信息，生成通俗易懂的健康科普内容
      *

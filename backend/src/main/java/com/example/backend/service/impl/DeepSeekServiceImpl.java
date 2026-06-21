@@ -2628,6 +2628,79 @@ public class DeepSeekServiceImpl implements DeepSeekService {
     }
 
     @Override
+    public String classifyDrugCategory(String drugName) {
+        if (drugName == null || drugName.trim().isEmpty()) {
+            logger.warn("药品名称为空，无法判断处方药/非处方药分类");
+            return null;
+        }
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            logger.warn("DeepSeek API Key未配置，无法判断药品分类");
+            return null;
+        }
+
+        try {
+            logger.info("调用DeepSeek AI判断药品分类 - 药品: {}", drugName);
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("temperature", 0.1);
+            requestBody.put("max_tokens", 10);
+
+            String systemPrompt = "你是一个专业的药品分类助手。根据药品名称判断该药品是处方药还是非处方药。" +
+                    "只需回复\"处方药\"或\"非处方药\"，不要回复任何其他内容。";
+
+            String userPrompt = "请判断以下药品是处方药还是非处方药：\n\n" + drugName;
+
+            Map<String, String> systemMessage = new HashMap<>();
+            systemMessage.put("role", "system");
+            systemMessage.put("content", systemPrompt);
+
+            Map<String, String> userMessage = new HashMap<>();
+            userMessage.put("role", "user");
+            userMessage.put("content", userPrompt);
+
+            requestBody.put("messages", new Object[]{systemMessage, userMessage});
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Authorization", "Bearer " + apiKey);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+
+            ResponseEntity<String> response = restTemplate.postForEntity(DEEPSEEK_API_URL, request, String.class);
+
+            if (response.getStatusCode() == HttpStatus.OK) {
+                String result = parseResponse(response.getBody());
+                if (result != null) {
+                    result = result.trim();
+                    if ("处方药".equals(result) || "非处方药".equals(result)) {
+                        logger.info("AI判断药品分类成功 - 药品: {}, 分类: {}", drugName, result);
+                        return result;
+                    }
+                    // 先检查"非处方药"（更具体的关键词，包含"处方药"子串，需优先判断）
+                    if (result.contains("非处方药") || result.contains("OTC")) {
+                        logger.info("AI判断药品分类成功（提取） - 药品: {}, 分类: 非处方药", drugName);
+                        return "非处方药";
+                    }
+                    if (result.contains("处方药")) {
+                        logger.info("AI判断药品分类成功（提取） - 药品: {}, 分类: 处方药", drugName);
+                        return "处方药";
+                    }
+                }
+                logger.warn("AI返回的药品分类无法识别 - 药品: {}, 原始回复: {}", drugName, result);
+                return null;
+            } else {
+                logger.error("DeepSeek API请求失败 - 状态码: {}", response.getStatusCode());
+                return null;
+            }
+        } catch (Exception e) {
+            logger.error("调用DeepSeek AI判断药品分类失败 - 药品: {}, 错误: {}", drugName, e.getMessage(), e);
+            return null;
+        }
+    }
+
+    @Override
     public java.util.Map<String, String> generateDiseaseScienceLesson(String diseaseName, Integer age, String gender) {
         if (diseaseName == null || diseaseName.trim().isEmpty()) {
             logger.warn("慢病名称为空，无法生成每日科普");
