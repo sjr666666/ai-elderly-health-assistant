@@ -731,7 +731,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
     }
 
     /**
-     * 更新库存（幂等）
+     * 更新库存（原子操作）
      * @param boxItemId 药箱条目ID
      * @param dosage 用量
      * @param isRestore true=恢复（增加），false=扣减（减少）
@@ -741,22 +741,20 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             return;
         }
 
-        UserMedicineBox boxItem = userMedicineBoxMapper.selectById(boxItemId);
-        if (boxItem == null) {
-            logger.warn("药箱条目不存在，无法更新库存 - boxItemId: {}", boxItemId);
+        int amount = parseDosageToNumber(dosage);
+        int rows;
+        if (isRestore) {
+            rows = userMedicineBoxMapper.restoreInventory(boxItemId, amount);
+        } else {
+            rows = userMedicineBoxMapper.deductInventory(boxItemId, amount);
+        }
+
+        if (rows == 0) {
+            logger.warn("库存更新失败（记录不存在或remaining_quantity为NULL） - boxItemId: {}", boxItemId);
             return;
         }
 
-        int amount = parseDosageToNumber(dosage);
-        int currentRemaining = boxItem.getRemainingQuantity() != null ? boxItem.getRemainingQuantity() : 0;
-        int newRemaining = isRestore
-                ? currentRemaining + amount
-                : Math.max(0, currentRemaining - amount);
-
-        boxItem.setRemainingQuantity(newRemaining);
-        userMedicineBoxMapper.updateById(boxItem);
-
-        logger.info("库存更新成功 - boxItemId: {}, {}, amount: {}, 剩余: {}",
-                boxItemId, isRestore ? "恢复" : "扣减", amount, newRemaining);
+        logger.info("库存更新成功 - boxItemId: {}, {}, amount: {}",
+                boxItemId, isRestore ? "恢复" : "扣减", amount);
     }
 }
