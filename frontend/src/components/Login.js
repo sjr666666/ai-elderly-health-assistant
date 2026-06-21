@@ -56,6 +56,7 @@ function Login({ onLogin, onShowRegister }) {
         setError(data.message || '用户名或密码错误');
       }
     } catch (err) {
+      console.error('登录请求失败:', err);
       setError('网络连接失败，请稍后重试');
     } finally {
       setIsLoading(false);

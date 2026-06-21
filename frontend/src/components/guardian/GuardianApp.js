@@ -10,6 +10,7 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
   const [localUser, setLocalUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedElderId, setSelectedElderId] = useState(null);
+  const [dashboardKey, setDashboardKey] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
 
   const user = propUser || localUser;
@@ -19,7 +20,7 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
     fetch(`/api/v1/guardian/notifications/unread-count?guardianId=${user.id}`)
       .then(res => res.json())
       .then(data => { if (data.code === 200) setUnreadCount(data.data); })
-      .catch(() => {});
+      .catch(e => console.error('获取未读通知数失败:', e));
   }, [user]);
 
   useEffect(() => {
@@ -29,7 +30,7 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
         try {
           const userData = JSON.parse(savedUser);
           if (userData.role === 'family') setLocalUser(userData);
-        } catch (e) { localStorage.removeItem('guardianUser'); }
+        } catch (e) { console.error('解析家属用户数据失败:', e); localStorage.removeItem('guardianUser'); }
       }
     }
   }, [propUser]);
@@ -61,9 +62,10 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
     setActiveTab('elderDetail');
   };
 
-  const handleBackToDashboard = () => {
+  const handleBackToDashboard = (needRefresh) => {
     setSelectedElderId(null);
     setActiveTab('dashboard');
+    if (needRefresh) setDashboardKey(k => k + 1);
   };
 
   const handleTabNotification = () => {
@@ -80,7 +82,7 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <GuardianDashboard guardianId={user.id} onViewElder={handleViewElder} />;
+        return <GuardianDashboard key={dashboardKey} guardianId={user.id} onViewElder={handleViewElder} />;
       case 'elderDetail':
         return <GuardianElderDetail guardianId={user.id} elderId={selectedElderId} onBack={handleBackToDashboard} />;
       case 'notification':
@@ -88,7 +90,7 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
       case 'profile':
         return <GuardianProfile user={user} onLogout={handleLogout} />;
       default:
-        return <GuardianDashboard guardianId={user.id} onViewElder={handleViewElder} />;
+        return <GuardianDashboard key={dashboardKey} guardianId={user.id} onViewElder={handleViewElder} />;
     }
   };
 

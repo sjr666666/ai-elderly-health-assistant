@@ -127,6 +127,7 @@ function Register({ onRegister }) {
         setError(data.message || '注册失败，请重试');
       }
     } catch (err) {
+      console.error('注册请求失败:', err);
       setError('网络连接失败，请稍后重试');
     } finally {
       setIsLoading(false);

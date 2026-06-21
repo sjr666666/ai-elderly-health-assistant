@@ -54,10 +54,9 @@ function GuardianProfile({ user, onLogout }) {
       } else {
         showToast(data.message || '修改失败', 'error');
       }
-    } catch {
+    } catch (e) {
+      console.error('修改电话号码失败:', e);
       showToast('网络错误', 'error');
-    } finally {
-      setPhoneSaving(false);
     }
   };
 
@@ -90,7 +89,8 @@ function GuardianProfile({ user, onLogout }) {
       } else {
         showToast(data.message || '修改失败', 'error');
       }
-    } catch {
+    } catch (e) {
+      console.error('修改密码失败:', e);
       showToast('网络错误', 'error');
     } finally {
       setPwdSaving(false);
