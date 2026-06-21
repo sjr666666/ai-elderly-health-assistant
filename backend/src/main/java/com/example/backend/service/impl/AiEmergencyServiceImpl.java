@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -33,9 +34,6 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
 
     @Value("${deepseek.model:deepseek-chat}")
     private String model;
-
-    @Value("${deepseek.timeout:30000}")
-    private int timeout;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -105,7 +103,7 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
         OFFLINE_RESPONSES.put("救命", "请立即拨打120！同时保持患者呼吸道通畅，尽量提供急救帮助。");
     }
 
-    public AiEmergencyServiceImpl(RestTemplate restTemplate, ObjectMapper objectMapper,
+    public AiEmergencyServiceImpl(@Qualifier("aiRestTemplate") RestTemplate restTemplate, ObjectMapper objectMapper,
                                   AiConversationLogService conversationLogService) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;

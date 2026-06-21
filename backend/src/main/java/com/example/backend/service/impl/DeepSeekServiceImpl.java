@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -42,7 +43,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    public DeepSeekServiceImpl(RestTemplate restTemplate, ObjectMapper objectMapper) {
+    public DeepSeekServiceImpl(@Qualifier("aiRestTemplate") RestTemplate restTemplate, ObjectMapper objectMapper) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
     }
