@@ -1490,7 +1490,9 @@ function App() {
   const audioRef = useRef(null);
 
   const speak = async (text, rate = speechRate) => {
-    if (!text || text.trim() === '') {
+    // 剥离HTML标签，避免TTS朗读标签内容
+    const cleanText = (text || '').replace(/<[^>]*>/g, '');
+    if (!cleanText || cleanText.trim() === '') {
       console.log('没有可播放的内容');
       return;
     }
@@ -1504,7 +1506,7 @@ function App() {
 
       // 将前端语速(0.6-1)映射到百度TTS语速(3-5)
       const baiduRate = rate === 0.6 ? 3 : 5;
-      const response = await fetch(`/api/ai/tts?text=${encodeURIComponent(text)}&speechRate=${baiduRate}`);
+      const response = await fetch(`/api/ai/tts?text=${encodeURIComponent(cleanText)}&speechRate=${baiduRate}`);
 
       if (response.ok) {
         const result = await response.json();
@@ -1525,11 +1527,11 @@ function App() {
 
       // 如果百度TTS失败，使用浏览器原生语音（备用方案）
       console.warn('百度TTS不可用，使用浏览器原生语音');
-      speakWithBrowser(text, rate);
+      speakWithBrowser(cleanText, rate);
 
     } catch (error) {
       console.error('百度TTS调用失败，使用备用方案:', error);
-      speakWithBrowser(text, rate);
+      speakWithBrowser(cleanText, rate);
     }
   };
 
