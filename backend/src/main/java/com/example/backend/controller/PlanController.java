@@ -7,6 +7,7 @@ import com.example.backend.model.dto.ReminderResponseDTO;
 import com.example.backend.model.dto.AddToPlanRequest;
 import com.example.backend.model.dto.MedicationActionRequest;
 import com.example.backend.service.PlanService;
+import com.example.backend.service.ProgressiveReminderService;
 import com.example.backend.common.ResponseResult;
 import com.example.backend.task.ScheduledTask;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class PlanController {
 
     private final PlanService planService;
     private final ScheduledTask scheduledTask;
+    private final ProgressiveReminderService progressiveReminderService;
 
     // 原有接口保留不变
 
@@ -112,5 +114,14 @@ public class PlanController {
     public ResponseResult<Void> testGenerateNextDayPlan() {
         scheduledTask.generateNextDayMedicationPlan();
         return ResponseResult.success("已手动触发生成下一天用药计划", null);
+    }
+
+    /**
+     * 7.11 手动触发渐进式提醒扫描（仅用于测试）
+     */
+    @PostMapping("/test/progressive-reminder")
+    public ResponseResult<Void> testProgressiveReminder() {
+        progressiveReminderService.processProgressiveReminders();
+        return ResponseResult.success("已手动触发渐进式提醒扫描", null);
     }
 }

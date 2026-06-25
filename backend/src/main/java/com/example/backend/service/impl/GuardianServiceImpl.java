@@ -8,6 +8,7 @@ import com.example.backend.model.dto.ElderSummaryDTO;
 import com.example.backend.model.dto.ExpiringDrugDTO;
 import com.example.backend.model.dto.GuardianDashboardDTO;
 import com.example.backend.model.dto.GuardianRelationRequest;
+import com.example.backend.model.dto.GuardianSummaryDTO;
 import com.example.backend.model.entity.*;
 import com.example.backend.service.ElderNotificationService;
 import com.example.backend.service.GuardianService;
@@ -151,6 +152,58 @@ public class GuardianServiceImpl implements GuardianService {
 
         log.info("找到 {} 个关联老人 - guardianId: {}", elderList.size(), guardianId);
         return elderList;
+    }
+
+    @Override
+    public List<GuardianSummaryDTO> getGuardianList(Long elderId) {
+        log.info("老人查询已绑定家属列表 - elderId: {}", elderId);
+
+        // 1. 查询所有 active 状态的家属绑定关系
+        LambdaQueryWrapper<GuardianElderRelation> relationQuery = new LambdaQueryWrapper<>();
+        relationQuery.eq(GuardianElderRelation::getElderId, elderId)
+                .eq(GuardianElderRelation::getStatus, "active");
+        List<GuardianElderRelation> relations = guardianElderRelationMapper.selectList(relationQuery);
+
+        if (relations.isEmpty()) {
+            log.info("老人未绑定任何家属 - elderId: {}", elderId);
+            return new ArrayList<>();
+        }
+
+        List<Long> guardianIds = relations.stream()
+                .map(GuardianElderRelation::getGuardianId)
+                .collect(Collectors.toList());
+
+        // 2. 批量查询家属用户信息
+        List<SysUser> guardians = userMapper.selectBatchIds(guardianIds);
+        Map<Long, SysUser> guardianMap = guardians.stream()
+                .collect(Collectors.toMap(SysUser::getId, u -> u));
+
+        // 3. 组装结果
+        List<GuardianSummaryDTO> guardianList = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+
+        for (GuardianElderRelation relation : relations) {
+            SysUser guardian = guardianMap.get(relation.getGuardianId());
+            if (guardian == null) {
+                log.warn("未找到家属 - guardianId: {}", relation.getGuardianId());
+                continue;
+            }
+
+            String lastActiveTime = formatLastActiveTime(guardian.getLastActiveTime(), guardian.getUpdatedAt(), now);
+
+            guardianList.add(GuardianSummaryDTO.builder()
+                    .guardianId(guardian.getId())
+                    .realName(guardian.getRealName())
+                    .phone(guardian.getPhone())
+                    .age(guardian.getAge())
+                    .gender(guardian.getGender())
+                    .relationType(relation.getRelationType())
+                    .lastActiveTime(lastActiveTime)
+                    .build());
+        }
+
+        log.info("找到 {} 个绑定家属 - elderId: {}", guardianList.size(), elderId);
+        return guardianList;
     }
 
     @Override

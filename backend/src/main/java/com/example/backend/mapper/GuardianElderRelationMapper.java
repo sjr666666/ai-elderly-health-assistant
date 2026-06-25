@@ -20,4 +20,12 @@ public interface GuardianElderRelationMapper extends BaseMapper<GuardianElderRel
      * @return 关联关系列表
      */
     List<GuardianElderRelation> findByGuardianId(@Param("guardianId") Long guardianId);
+
+    /**
+     * 根据老人ID查询关联关系（用于老人端查询自己的家属列表）
+     *
+     * @param elderId 老人ID
+     * @return 关联关系列表
+     */
+    List<GuardianElderRelation> findByElderId(@Param("elderId") Long elderId);
 }

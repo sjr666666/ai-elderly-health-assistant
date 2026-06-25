@@ -14,6 +14,12 @@ public class TodayPlanItemDTO {
     private Integer remindBefore;
 
     /**
+     * 提醒阶段
+     * none/pre_remind/due_now/overdue/notify_family
+     */
+    private String reminderStage;
+
+    /**
      * 药箱条目ID（用于更新剩余数量）
      */
     private Long boxItemId;

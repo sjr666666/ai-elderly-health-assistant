@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 /**
  * 今日一课卡片组件
@@ -12,9 +12,64 @@ import React, { useState } from 'react';
  */
 function DailyLessonCard({ lesson, loading, onRefresh, onGoProfile }) {
   const [refreshing, setRefreshing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const contentRef = useRef(null);
+
+  // 检测内容是否超出3行
+  useEffect(() => {
+    if (contentRef.current) {
+      const el = contentRef.current;
+      // 折叠状态下比较 scrollHeight 和 clientHeight
+      setOverflowing(el.scrollHeight > el.clientHeight + 2);
+    }
+  }, [lesson?.content]);
+
+  // 组件卸载时停止播报
+  useEffect(() => {
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  // 切换展开/收起
+  const toggleExpand = () => setExpanded(prev => !prev);
+
+  // 语音播报
+  const toggleSpeech = useCallback(() => {
+    if (!('speechSynthesis' in window)) return;
+    const synth = window.speechSynthesis;
+
+    if (speaking) {
+      synth.cancel();
+      setSpeaking(false);
+      return;
+    }
+
+    // 拼接标题和内容
+    const text = [lesson.title, lesson.content].filter(Boolean).join('。');
+    if (!text) return;
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'zh-CN';
+    utterance.rate = 0.9;
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    synth.speak(utterance);
+    setSpeaking(true);
+  }, [speaking, lesson?.title, lesson?.content]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    setExpanded(false);
+    // 换一篇时停止播报
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSpeaking(false);
     try {
       await onRefresh();
     } finally {
@@ -112,22 +167,39 @@ function DailyLessonCard({ lesson, loading, onRefresh, onGoProfile }) {
             </span>
           )}
           <h3 className="daily-lesson-title">{lesson.title}</h3>
-          <div className="daily-lesson-content">
+          <div
+            className={`daily-lesson-content ${expanded ? 'daily-lesson-content--expanded' : 'daily-lesson-content--collapsed'}`}
+            ref={contentRef}
+          >
             {lesson.content && lesson.content.split('\n').map((line, i) => (
               <p key={i}>{line}</p>
             ))}
           </div>
+          {overflowing && (
+            <button className="daily-lesson-expand-btn" onClick={toggleExpand}>
+              {expanded ? '收起' : '展开全文'}
+            </button>
+          )}
         </div>
         <div className="daily-lesson-footer">
           <span className="daily-lesson-attribution">由 DeepSeek AI 生成</span>
-          <button
-            className="daily-lesson-refresh-btn"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            title="换一篇"
-          >
-            {refreshing ? '⏳' : '🔄'} 换一篇
-          </button>
+          <div className="daily-lesson-footer-actions">
+            <button
+              className={`daily-lesson-speak-btn ${speaking ? 'daily-lesson-speak-btn--active' : ''}`}
+              onClick={toggleSpeech}
+              title={speaking ? '停止播报' : '语音播报'}
+            >
+              {speaking ? '🔊 暂停' : '🔊 播报'}
+            </button>
+            <button
+              className="daily-lesson-refresh-btn"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              title="换一篇"
+            >
+              {refreshing ? '⏳' : '🔄'} 换一篇
+            </button>
+          </div>
         </div>
       </div>
     );

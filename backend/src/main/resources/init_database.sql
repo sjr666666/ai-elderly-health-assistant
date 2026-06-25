@@ -203,6 +203,7 @@ CREATE TABLE `medication_plan` (
   `dosage_at_time` varchar(50) NOT NULL COMMENT '该时段用量',
   `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT '状态',
   `remind_before` int NULL DEFAULT 15 COMMENT '提前提醒分钟数',
+  `reminder_stage` varchar(20) NOT NULL DEFAULT 'none' COMMENT '提醒阶段: none/pre_remind/due_now/overdue/notify_family',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除标记',

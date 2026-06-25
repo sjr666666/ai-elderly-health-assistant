@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import ContactModal from './ContactModal';
+import ConfirmDialog from './ConfirmDialog';
 
 const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
   const [messages, setMessages] = useState([]);
@@ -9,19 +10,54 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
   const [emergencyMode, setEmergencyMode] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [activeCategory, setActiveCategory] = useState(null);
+  const [randomPresets, setRandomPresets] = useState([]);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   
   const messagesEndRef = useRef(null);
 
   // 紧急情况分类标签
   const categories = [
-    { id: 'heart', name: '心脏问题', icon: '❤️', keywords: ['心脏病', '胸闷', '心悸', '心跳', '胸痛'] },
-    { id: 'stroke', name: '中风', icon: '🧠', keywords: ['中风', '偏瘫', '言语不清', '肢体麻木'] },
-    { id: 'breathing', name: '呼吸困难', icon: '🫁', keywords: ['呼吸困难', '窒息', '气喘', '咳嗽'] },
-    { id: 'accident', name: '意外伤害', icon: '🦴', keywords: ['摔倒', '骨折', '出血', '外伤'] },
-    { id: 'poison', name: '中毒', icon: '☠️', keywords: ['中毒', '误食', '药物过量'] },
-    { id: 'fire', name: '火灾', icon: '🔥', keywords: ['火灾', '着火', '浓烟'] },
-    { id: 'medical', name: '急救常识', icon: '🏥', keywords: ['急救', '止血', '包扎', 'CPR'] },
-    { id: 'other', name: '其他紧急情况', icon: '⚠️', keywords: ['紧急', '帮助', '求救'] },
+    { id: 'heart', name: '心脏问题', icon: '❤️', keywords: ['心脏病', '胸闷', '心悸', '心跳', '胸痛'], presets: [
+      '我感到胸闷心悸，心脏不舒服', '有人突然胸痛出冷汗', '心跳突然加快或变慢',
+      '有心脏病史的人突然不舒服', '胸口压榨性疼痛怎么办', '心跳不规律忽快忽慢',
+      '运动后心脏难受喘不上气', '夜间突然憋醒心慌', '左肩背疼痛怀疑心脏问题',
+    ]},
+    { id: 'stroke', name: '中风', icon: '🧠', keywords: ['中风', '偏瘫', '言语不清', '肢体麻木'], presets: [
+      '有人说话突然含糊不清', '有人半边身体麻木无力', '有人嘴角歪斜、视力模糊',
+      '老人突然头晕站不稳', '有人突然拿不住东西掉落', '一只眼睛突然看不清',
+      '有人突然剧烈头痛呕吐', '面部不对称一侧下垂', '抬胳膊时一侧无力下垂',
+    ]},
+    { id: 'breathing', name: '呼吸困难', icon: '🫁', keywords: ['呼吸困难', '窒息', '气喘', '咳嗽'], presets: [
+      '有人喘不上气、呼吸困难', '有人被异物卡住喉咙', '有人哮喘发作',
+      '吃饭时突然说不出话脸发紫', '小孩吃果冻卡住气管', '有人过敏喉咙肿胀呼吸困难',
+      '老人躺下就喘不上气', '有人剧烈咳嗽停不下来', '高原反应呼吸困难怎么办',
+    ]},
+    { id: 'accident', name: '意外伤害', icon: '🦴', keywords: ['摔倒', '骨折', '出血', '外伤'], presets: [
+      '有人摔倒起不来了', '有人大量出血止不住', '有人疑似骨折',
+      '老人洗澡时滑倒受伤', '手指被门夹了肿痛', '头撞破了在流血',
+      '扭伤脚踝肿起来了', '被开水烫伤了怎么办', '从楼梯上摔下来受伤',
+    ]},
+    { id: 'poison', name: '中毒', icon: '☠️', keywords: ['中毒', '误食', '药物过量'], presets: [
+      '有人误食了有毒物质', '有人药物服用过量', '有人食物中毒呕吐腹泻',
+      '小孩误喝了洗洁精', '吃了野生蘑菇后不舒服', '有人吸入有害气体头晕',
+      '农药沾到皮肤上了怎么办', '喝了变质的牛奶肚子疼', '有人一氧化碳中毒',
+    ]},
+    { id: 'fire', name: '火灾', icon: '🔥', keywords: ['火灾', '着火', '浓烟'], presets: [
+      '家里着火了怎么逃生', '楼道里有浓烟怎么办', '衣服着火了怎么处理',
+      '厨房油锅起火了', '电器着火了能用水浇吗', '被困在房间里外面有火',
+      '高层建筑着火怎么逃生', '睡觉时被烟呛醒了', '邻居家着火烟飘进来了',
+    ]},
+    { id: 'medical', name: '急救常识', icon: '🏥', keywords: ['急救', '止血', '包扎', 'CPR'], presets: [
+      '如何正确进行心肺复苏CPR', '伤口出血怎么止血包扎', '有人晕倒了怎么处理',
+      '被狗咬了需要打疫苗吗', '异物扎进身体里怎么处理', '如何使用AED除颤仪',
+      '有人抽搐发作怎么急救', '被蜜蜂蛰了怎么处理', '鼻出血怎么正确止血',
+    ]},
+    { id: 'other', name: '其他紧急情况', icon: '⚠️', keywords: ['紧急', '帮助', '求救'], presets: [
+      '遇到了紧急情况需要帮助', '有人突然晕倒不省人事', '需要紧急求助但不知怎么办',
+      '地震了怎么保护自己', '洪水来了怎么转移', '台风天气被困在外面',
+      '有人落水了怎么施救', '触电了怎么安全断电救人', '被困在电梯里怎么办',
+    ]},
   ];
 
   // 离线模式下的基础应答
@@ -105,8 +141,12 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
 
   // 切换紧急模式
   const handleEmergencyModeChange = async (checked) => {
-    setEmergencyMode(checked);
-    if (checked && elderId) {
+    if (!checked) {
+      setShowCloseConfirm(true);
+      return;
+    }
+    setEmergencyMode(true);
+    if (elderId) {
       try {
         await fetch('/api/emergency/trigger', {
           method: 'POST',
@@ -128,7 +168,7 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
     setIsLoading(true);
     
     const category = getCategoryByQuestion(question);
-    const isEmergency = isEmergencyQuestion(question) || emergencyMode;
+    const isEmergency = emergencyMode;
     
     // 添加用户消息
     const userMessage = {
@@ -233,9 +273,22 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
     }
   };
 
-  // 处理分类标签点击
+  // 处理分类标签点击 - 展开/收起预设问题列表（随机选取3个）
   const handleCategoryClick = (category) => {
-    setInputValue(prev => prev + `【${category.name}】`);
+    if (activeCategory === category.id) {
+      setActiveCategory(null);
+      setRandomPresets([]);
+    } else {
+      const shuffled = [...category.presets].sort(() => Math.random() - 0.5);
+      setRandomPresets(shuffled.slice(0, 3));
+      setActiveCategory(category.id);
+    }
+  };
+
+  // 选择预设问题 - 填入输入框
+  const handlePresetClick = (preset) => {
+    setInputValue(preset);
+    setActiveCategory(null);
   };
 
   // 清空对话
@@ -244,12 +297,24 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
     setError('');
   };
 
-  // 处理一键呼叫家人 - 展示联系人选择面板
+  // 处理一键呼叫家人 - 优先直接拨打主要联系人
   const handleCallFamily = () => {
     if (!emergencyContacts || emergencyContacts.length === 0) {
       setError('请先添加紧急联系人');
       return;
     }
+    // 如果只有一个联系人，直接拨打
+    if (emergencyContacts.length === 1) {
+      window.location.href = `tel:${emergencyContacts[0].phone}`;
+      return;
+    }
+    // 如果有主要联系人，直接拨打
+    const primary = emergencyContacts.find(c => c.isPrimary === 1);
+    if (primary) {
+      window.location.href = `tel:${primary.phone}`;
+      return;
+    }
+    // 多个联系人且无主要联系人，展示选择面板
     setShowContactModal(true);
   };
 
@@ -366,7 +431,7 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
               letterSpacing: '0.5px'
             }}>紧急模式（救命用）</div>
             <div style={{
-              fontSize: '12px',
+              fontSize: '14px',
               color: '#E57373',
               marginTop: '2px'
             }}>开启后优先处理紧急求助</div>
@@ -423,12 +488,9 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
         <div className="category-title">快速选择紧急情况：</div>
         <div className="category-tags" style={{
           display: 'flex',
-          overflowX: 'auto',
+          flexWrap: 'wrap',
           gap: '8px',
           padding: '8px 0',
-          WebkitOverflowScrolling: 'touch',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none'
         }}>
           {categories.map((category) => (
             <button
@@ -436,16 +498,16 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
               className="category-tag"
               onClick={() => handleCategoryClick(category)}
               style={{
-                flexShrink: 0,
                 padding: '8px 12px',
                 borderRadius: '16px',
-                border: '1px solid #e0e0e0',
-                background: 'white',
+                border: activeCategory === category.id ? '1px solid #E53935' : '1px solid #e0e0e0',
+                background: activeCategory === category.id ? '#FFF5F5' : 'white',
+                color: activeCategory === category.id ? '#C62828' : '#333',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px',
-                fontSize: '13px',
+                fontSize: '14px',
                 transition: 'all 0.2s ease'
               }}
             >
@@ -454,6 +516,43 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
             </button>
           ))}
         </div>
+        {/* 预设问题列表 */}
+        {activeCategory && (
+            <div style={{
+              marginTop: '8px',
+              padding: '12px',
+              background: '#FAFAFA',
+              borderRadius: '12px',
+              border: '1px solid #EEEEEE',
+            }}>
+              <div style={{ fontSize: '14px', color: '#999', marginBottom: '8px' }}>选择一个常见问题，或自行修改后发送：</div>
+              {randomPresets.map((preset, index) => (
+                <button
+                  key={index}
+                  onClick={() => handlePresetClick(preset)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '10px 12px',
+                    marginBottom: index < randomPresets.length - 1 ? '6px' : '0',
+                    borderRadius: '8px',
+                    border: '1px solid #E0E0E0',
+                    background: 'white',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    lineHeight: '1.5',
+                    color: '#333',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => { e.target.style.background = '#FFF5F5'; e.target.style.borderColor = '#FFCDD2'; }}
+                  onMouseLeave={e => { e.target.style.background = 'white'; e.target.style.borderColor = '#E0E0E0'; }}
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+        )}
       </div>
 
       {/* 消息展示区域 */}
@@ -547,6 +646,17 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
         isOpen={showContactModal}
         onClose={() => setShowContactModal(false)}
         contacts={emergencyContacts}
+      />
+
+      {/* 关闭紧急模式确认弹窗 */}
+      <ConfirmDialog
+        isOpen={showCloseConfirm}
+        title="关闭紧急模式"
+        message="确定要关闭紧急模式吗？关闭后，您的求助将不再被优先处理。"
+        confirmText="确定关闭"
+        cancelText="再想想"
+        onConfirm={() => { setEmergencyMode(false); setShowCloseConfirm(false); }}
+        onCancel={() => setShowCloseConfirm(false)}
       />
     </div>
   );

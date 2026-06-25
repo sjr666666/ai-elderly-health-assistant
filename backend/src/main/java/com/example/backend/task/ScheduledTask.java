@@ -7,6 +7,7 @@ import com.example.backend.mapper.UserMedicineBoxMapper;
 import com.example.backend.model.entity.MedicationPlan;
 import com.example.backend.model.entity.UserMedicineBox;
 import com.example.backend.service.DailyLessonService;
+import com.example.backend.service.ProgressiveReminderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +38,9 @@ public class ScheduledTask {
 
     @Autowired
     private DailyLessonService dailyLessonService;
+
+    @Autowired
+    private ProgressiveReminderService progressiveReminderService;
 
     /**
      * 每天凌晨1点执行：自动将已过期的药品状态更新为stopped
@@ -242,6 +246,19 @@ public class ScheduledTask {
             logger.info("=== 今日一课预生成定时任务完成 ===");
         } catch (Exception e) {
             logger.error("今日一课预生成定时任务执行失败", e);
+        }
+    }
+
+    /**
+     * 每分钟执行：渐进式提醒扫描
+     * 阶段推进：none → pre_remind(提前15min) → due_now(到时) → overdue(超时) → notify_family(超时10min通知家属)
+     */
+    @Scheduled(cron = "0 * * * * ?")
+    public void progressiveReminderCheck() {
+        try {
+            progressiveReminderService.processProgressiveReminders();
+        } catch (Exception e) {
+            logger.error("渐进式提醒定时任务执行失败", e);
         }
     }
 }
