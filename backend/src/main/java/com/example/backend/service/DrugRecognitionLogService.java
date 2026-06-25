@@ -27,10 +27,11 @@ public interface DrugRecognitionLogService {
     /**
      * 更新日志记录（自动入库成功）
      *
-     * @param logId        日志ID
+     * @param logId          日志ID
      * @param importedDrugId 新入库的药品ID
+     * @param importedDrugName 新入库的药品名称
      */
-    void updateImported(Long logId, Long importedDrugId);
+    void updateImported(Long logId, Long importedDrugId, String importedDrugName);
 
     /**
      * 更新日志记录（未匹配）

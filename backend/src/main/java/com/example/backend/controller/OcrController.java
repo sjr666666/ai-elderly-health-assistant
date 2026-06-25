@@ -1,11 +1,9 @@
 package com.example.backend.controller;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.example.backend.common.ResponseResult;
 import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.entity.DrugRecognitionLog;
-import com.example.backend.model.entity.SysUser;
 import com.example.backend.model.dto.BatchRecognizeResponse;
 import com.example.backend.model.dto.OcrResultResponse;
 import com.example.backend.model.dto.OcrUploadResponse;
@@ -62,12 +60,7 @@ public class OcrController {
                 userId = 1L;
             }
 
-            Long dbUserId = convertToDbUserId(userId);
-            if (dbUserId == null) {
-                dbUserId = 1L;
-            }
-
-            OcrUploadResponse response = ocrService.uploadAndRecognize(file, dbUserId);
+            OcrUploadResponse response = ocrService.uploadAndRecognize(file, userId);
 
             return ResponseResult.success("图片已上传，识别中", response);
 
@@ -106,12 +99,7 @@ public class OcrController {
                 userId = 1L;
             }
 
-            Long dbUserId = convertToDbUserId(userId);
-            if (dbUserId == null) {
-                dbUserId = 1L;
-            }
-
-            BatchRecognizeResponse response = ocrService.batchUploadAndRecognize(files, dbUserId);
+            BatchRecognizeResponse response = ocrService.batchUploadAndRecognize(files, userId);
 
             return ResponseResult.success("批量图片已上传，识别中", response);
 
@@ -119,20 +107,6 @@ public class OcrController {
             logger.error("批量图片上传失败", e);
             return ResponseResult.fail("批量图片上传失败: " + e.getMessage());
         }
-    }
-
-    private Long convertToDbUserId(Long snowflakeUserId) {
-        try {
-            LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
-            queryWrapper.eq(SysUser::getUserId, snowflakeUserId);
-            SysUser user = userMapper.selectOne(queryWrapper);
-            if (user != null) {
-                return user.getId();
-            }
-        } catch (Exception e) {
-            logger.error("转换用户ID失败", e);
-        }
-        return null;
     }
 
     @GetMapping("/result/{taskId}")
@@ -180,13 +154,8 @@ public class OcrController {
                 return ResponseResult.fail("用户ID不能为空");
             }
 
-            Long dbUserId = convertToDbUserId(userId);
-            if (dbUserId == null) {
-                return ResponseResult.fail("用户不存在");
-            }
-
             QueryWrapper<DrugRecognitionLog> queryWrapper = new QueryWrapper<>();
-            queryWrapper.eq("user_id", dbUserId)
+            queryWrapper.eq("user_id", userId)
                     .orderByDesc("created_at")
                     .last("LIMIT " + Math.min(limit, 50));
 

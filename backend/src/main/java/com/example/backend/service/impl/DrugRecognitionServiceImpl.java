@@ -169,7 +169,7 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                     // 自动入库成功
                     if (logId != null) {
                         try {
-                            logService.updateImported(logId, newDrug.getId());
+                            logService.updateImported(logId, newDrug.getId(), newDrug.getGenericName());
                         } catch (Exception logEx) {
                             logger.warn("更新入库日志失败 - error: {}", logEx.getMessage());
                         }

@@ -44,14 +44,18 @@ public class DrugRecognitionLogServiceImpl implements DrugRecognitionLogService 
     }
 
     @Override
-    public void updateImported(Long logId, Long importedDrugId) {
+    public void updateImported(Long logId, Long importedDrugId, String importedDrugName) {
         DrugRecognitionLog log = logMapper.selectById(logId);
         if (log != null) {
             log.setAutoImported(true);
             log.setImportedDrugId(importedDrugId);
+            log.setMatchedDrugId(importedDrugId);
+            log.setMatchedDrugName(importedDrugName);
+            log.setMatched(true);
+            log.setMatchScore(new java.math.BigDecimal("1.0"));
             log.setStatus(DrugRecognitionLog.Status.IMPORTED.getCode());
             logMapper.updateById(log);
-            logger.info("更新药品识别日志为已入库 - logId: {}, importedDrugId: {}", logId, importedDrugId);
+            logger.info("更新药品识别日志为已入库 - logId: {}, importedDrugId: {}, drugName: {}", logId, importedDrugId, importedDrugName);
         }
     }
 

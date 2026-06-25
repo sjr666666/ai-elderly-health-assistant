@@ -460,6 +460,86 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         }
     }
 
+    @Override
+    public String answerFollowUpQuestion(DrugDetailResponse drugDetail, String question, List<Map<String, String>> conversationHistory) {
+        if (drugDetail == null || question == null || question.trim().isEmpty()) {
+            return null;
+        }
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            logger.warn("DeepSeek API Key未配置，无法回答追问");
+            return null;
+        }
+
+        try {
+            logger.info("开始调用DeepSeek AI回答追问 - 药品: {}, 问题: {}", drugDetail.getGenericName(), question);
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("temperature", 0.6);
+            requestBody.put("max_tokens", 500);
+
+            // 系统提示：设定AI角色为面向老年人的药剂师
+            String systemPrompt = "你是一位慈祥的药剂师，正在为老年人解答用药疑问。\n\n" +
+                    "当前药品信息：\n" +
+                    "药品名称：" + (drugDetail.getGenericName() != null ? drugDetail.getGenericName() : "未知") + "\n" +
+                    "规格：" + (drugDetail.getSpecification() != null ? drugDetail.getSpecification() : "未知") + "\n" +
+                    "用法用量：" + (drugDetail.getUsage() != null ? drugDetail.getUsage() : "未知") + "\n" +
+                    "注意事项：" + (drugDetail.getPrecautions() != null ? drugDetail.getPrecautions() : "未知") + "\n" +
+                    "不良反应：" + (drugDetail.getAdverseReactions() != null ? drugDetail.getAdverseReactions() : "未知") + "\n\n" +
+                    "回答要求：\n" +
+                    "1. 语言通俗易懂，避免专业术语，像和家里长辈说话一样\n" +
+                    "2. 语气温暖亲切，使用\"您\"\n" +
+                    "3. 回答要简洁，控制在200字以内\n" +
+                    "4. 如果问题与药品无关，礼貌提醒用户专注于用药问题\n" +
+                    "5. 涉及用药调整的建议，提醒用户咨询医生";
+
+            List<Map<String, String>> messages = new ArrayList<>();
+            Map<String, String> systemMessage = new HashMap<>();
+            systemMessage.put("role", "system");
+            systemMessage.put("content", systemPrompt);
+            messages.add(systemMessage);
+
+            // 添加历史对话上下文（最多保留最近6轮）
+            if (conversationHistory != null) {
+                int startIndex = Math.max(0, conversationHistory.size() - 12);
+                for (int i = startIndex; i < conversationHistory.size(); i++) {
+                    messages.add(conversationHistory.get(i));
+                }
+            }
+
+            // 添加当前问题
+            Map<String, String> userMessage = new HashMap<>();
+            userMessage.put("role", "user");
+            userMessage.put("content", question);
+            messages.add(userMessage);
+
+            requestBody.put("messages", messages.toArray());
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Authorization", "Bearer " + apiKey);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+
+            ResponseEntity<String> response = restTemplate.postForEntity(DEEPSEEK_API_URL, request, String.class);
+
+            if (response.getStatusCode() == HttpStatus.OK) {
+                String answer = parseResponse(response.getBody());
+                if (answer != null && !answer.isEmpty()) {
+                    logger.info("DeepSeek AI回答追问成功");
+                    return answer.trim();
+                }
+            } else {
+                logger.error("DeepSeek API请求失败 - 状态码: {}", response.getStatusCode());
+            }
+            return null;
+        } catch (Exception e) {
+            logger.error("调用DeepSeek AI回答追问失败 - 错误: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
     /**
      * 本地生成老年友好用药指导（当AI不可用时使用）
      * 使用规则化的方式生成简单易懂的指导文本，控制在80-150字

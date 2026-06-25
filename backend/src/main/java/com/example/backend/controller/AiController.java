@@ -3,12 +3,16 @@ package com.example.backend.controller;
 import com.example.backend.common.ResponseResult;
 import com.example.backend.config.BaiduTtsConfig;
 import com.example.backend.model.dto.DrugDetailResponse;
+import com.example.backend.model.dto.FollowUpQuestionRequest;
 import com.example.backend.service.BaiduTtsService;
 import com.example.backend.service.DeepSeekService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/ai")
@@ -39,6 +43,35 @@ public class AiController {
             return ResponseResult.success(guide);
         } catch (Exception e) {
             return ResponseResult.fail("生成用药指导失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 药品追问接口
+     * 用户在查看用药说明后，可以对当前药品进行追问
+     *
+     * @param request 包含药品信息、用户问题和对话历史
+     * @return AI回答
+     */
+    @PostMapping("/follow-up-question")
+    public ResponseResult<String> followUpQuestion(@RequestBody FollowUpQuestionRequest request) {
+        try {
+            if (request.getQuestion() == null || request.getQuestion().trim().isEmpty()) {
+                return ResponseResult.fail("问题不能为空");
+            }
+            String answer = deepSeekService.answerFollowUpQuestion(
+                    request.getDrugDetail(),
+                    request.getQuestion(),
+                    request.getConversationHistory()
+            );
+            if (answer != null) {
+                return ResponseResult.success(answer);
+            } else {
+                return ResponseResult.fail("AI服务暂时不可用，请稍后再试");
+            }
+        } catch (Exception e) {
+            logger.error("药品追问失败: ", e);
+            return ResponseResult.fail("回答失败: " + e.getMessage());
         }
     }
 
