@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import html2canvas from 'html2canvas';
+import DOMPurify from 'dompurify';
 import './App.css';
 import Login from './components/Login';
 import Register from './components/Register';
@@ -19,6 +20,7 @@ import DrugListView from './components/DrugListView';
 import DailyLessonCard from './components/DailyLessonCard';
 import GuardianApp from './components/guardian/GuardianApp';
 import ElderNotificationPanel from './components/ElderNotificationPanel';
+import WeeklyReport from './components/WeeklyReport';
 import { useToast } from './components/Toast';
 
 function App() {
@@ -47,6 +49,7 @@ function App() {
   const [calendarViewMode, setCalendarViewMode] = useState('today'); // 用药日历视图模式：today/week
   const [weeklyMedicationData, setWeeklyMedicationData] = useState(null); // 一周用药数据
   const [selectedWeekDay, setSelectedWeekDay] = useState(null); // 周视图中就地展开的某天（YYYY-MM-DD）
+  const [showWeeklyReport, setShowWeeklyReport] = useState(false); // AI周报显示状态
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false); // 添加到用药日历弹窗
   const [selectedDrugForPlan, setSelectedDrugForPlan] = useState(null); // 选中的要添加到计划的药品
   const [showCelebration, setShowCelebration] = useState(false);
@@ -4381,7 +4384,7 @@ function App() {
                     </h4>
                     {elderlyGuide ? (
                       <div style={{ fontSize: '16px', lineHeight: '2', color: '#374151', whiteSpace: 'pre-wrap' }}
-                        dangerouslySetInnerHTML={{ __html: displayGuideHtml }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(displayGuideHtml) }}
                       />
                     ) : (
                       <p style={{ fontSize: '16px', color: '#999' }}>加载中...</p>
@@ -4451,7 +4454,7 @@ function App() {
                         lineHeight: '2',
                         fontSize: '16px'
                       }}
-                      dangerouslySetInnerHTML={{ __html: displayGuideHtml }}
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(displayGuideHtml) }}
                     />
                   ) : (
                     <p className="chat-bubble-text" style={{ color: '#999' }}>
@@ -5416,7 +5419,7 @@ function App() {
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2 className="card-title" style={{ marginBottom: 0 }}>
-          <span className="card-title-icon">📅</span>
+          <span className="card-title-icon"></span>
           {calendarViewMode === 'today' ? '今日用药时间轴' : '一周用药记录'}
         </h2>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -5433,8 +5436,30 @@ function App() {
             }}
             title="手动触发用药提醒（调试用）"
           >
-            🔔 测试提醒
+             测试提醒
           </button>
+          {/* AI周报显示/隐藏按钮 - 仅在周视图显示 */}
+          {calendarViewMode === 'week' && (
+            <button
+              className="btn"
+              onClick={() => {
+                setShowWeeklyReport(!showWeeklyReport);
+                if (selectedWeekDay) setSelectedWeekDay(null); // 打开AI周报时关闭日详情
+              }}
+              style={{ 
+                minHeight: '40px', 
+                fontSize: '16px',
+                background: showWeeklyReport ? '#e91e63' : '#ff5722',
+                color: 'white',
+                border: 'none',
+                fontWeight: 'bold',
+                boxShadow: '0 4px 12px rgba(233, 30, 99, 0.3)',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              {showWeeklyReport ? '📊 隐藏AI周报' : '📊 显示AI周报'}
+            </button>
+          )}
           <button
             className={`btn ${calendarViewMode === 'today' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => handleCalendarViewChange('today')}
@@ -5451,6 +5476,100 @@ function App() {
       </div>
 
       {calendarViewMode === 'today' ? renderTodayCalendar() : renderWeekCalendar()}
+
+      {/* AI周报摘要 - 仅在周视图显示 */}
+      {calendarViewMode === 'week' && showWeeklyReport && (
+        <div style={{ marginTop: '32px', borderTop: '2px solid #e8f4fd', paddingTop: '24px' }}>
+          <WeeklyReport userId={user?.userId} compact />
+          {/* 截图按钮 - 参考冲突检测模块 */}
+          <div style={{ 
+            display: 'flex', 
+            gap: '16px', 
+            marginTop: '20px'
+          }}>
+            <button
+              className="btn btn-primary"
+              onClick={async () => {
+                // 找到WeeklyReport组件的reportRef并截图
+                const reportContent = document.querySelector('.weekly-report-content');
+                if (!reportContent) return;
+                
+                try {
+                  showToast('正在生成截图...', 'info');
+                  const canvas = await html2canvas(reportContent, {
+                    backgroundColor: '#ffffff',
+                    scale: 2,
+                    useCORS: true,
+                    logging: false
+                  });
+                  
+                  const link = document.createElement('a');
+                  const dateStr = new Date().toLocaleDateString('zh-CN').replace(/\//g, '-');
+                  link.download = `用药周报_${dateStr}.png`;
+                  link.href = canvas.toDataURL('image/png');
+                  link.click();
+                  showToast('截图已保存！', 'success');
+                } catch (error) {
+                  console.error('截图失败:', error);
+                  showToast('截图失败，请稍后重试', 'error');
+                }
+              }}
+              style={{
+                flex: 1,
+                background: '#2196F3',
+                color: 'white',
+                border: 'none',
+                padding: '16px 32px',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                boxShadow: '0 6px 16px rgba(33, 150, 243, 0.4)',
+                transition: 'all 0.3s ease',
+                minHeight: '52px'
+              }}
+            >
+               📷 截图报告
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={async () => {
+                // 获取AI总结文本并复制
+                try {
+                  const response = await fetch(`/api/weekly-report/latest?userId=${user?.userId}`);
+                  const data = await response.json();
+                  
+                  if (data.code === 200 && data.data?.fullReportText) {
+                    await navigator.clipboard.writeText(data.data.fullReportText);
+                    showToast('报告已复制到剪贴板！', 'success');
+                  } else {
+                    showToast('复制失败', 'error');
+                  }
+                } catch (error) {
+                  console.error('复制失败:', error);
+                  showToast('复制失败，请稍后重试', 'error');
+                }
+              }}
+              style={{
+                flex: 1,
+                background: '#FF9800',
+                color: 'white',
+                border: 'none',
+                padding: '16px 32px',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                boxShadow: '0 6px 16px rgba(255, 152, 0, 0.4)',
+                transition: 'all 0.3s ease',
+                minHeight: '52px'
+              }}
+            >
+               📋 复制文本
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -5677,7 +5796,10 @@ function App() {
                   phase === 'future' ? 'is-future' : '',
                   total === 0 ? 'is-empty' : ''
                 ].filter(Boolean).join(' ')}
-                onClick={() => handleWeekDayToggle(day.date)}
+                onClick={() => {
+                  handleWeekDayToggle(day.date);
+                  if (showWeeklyReport) setShowWeeklyReport(false); // 打开日详情时关闭AI周报
+                }}
               >
                 <div className="week-day-cell__weekday">周{weekday}</div>
                 <div className="week-day-cell__num">{dayNum}</div>
