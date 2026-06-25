@@ -4,11 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.backend.common.util.SnowflakeIdGenerator;
 import com.example.backend.mapper.DrugBaseMapper;
 import com.example.backend.mapper.OcrRecordMapper;
+import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.dto.BatchRecognizeResponse;
 import com.example.backend.model.dto.OcrResultResponse;
 import com.example.backend.model.dto.OcrUploadResponse;
 import com.example.backend.model.entity.DrugBase;
 import com.example.backend.model.entity.OcrRecord;
+import com.example.backend.model.entity.SysUser;
 import com.example.backend.service.DrugRecognitionService;
 import com.example.backend.service.OcrAsyncService;
 import com.example.backend.service.OcrService;
@@ -43,6 +45,7 @@ public class OcrServiceImpl implements OcrService {
 
     private final OcrRecordMapper ocrRecordMapper;
     private final DrugBaseMapper drugBaseMapper;
+    private final UserMapper userMapper;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final OcrAsyncService ocrAsyncService;
     private final DrugRecognitionService drugRecognitionService;
@@ -128,10 +131,12 @@ public class OcrServiceImpl implements OcrService {
     public OcrServiceImpl(
             OcrRecordMapper ocrRecordMapper,
             DrugBaseMapper drugBaseMapper,
+            UserMapper userMapper,
             OcrAsyncService ocrAsyncService,
             DrugRecognitionService drugRecognitionService) {
         this.ocrRecordMapper = ocrRecordMapper;
         this.drugBaseMapper = drugBaseMapper;
+        this.userMapper = userMapper;
         this.snowflakeIdGenerator = new SnowflakeIdGenerator(1, 1);
         this.ocrAsyncService = ocrAsyncService;
         this.drugRecognitionService = drugRecognitionService;
@@ -144,13 +149,26 @@ public class OcrServiceImpl implements OcrService {
             validateImageFile(file);
 
             String fileId = String.valueOf(snowflakeIdGenerator.nextId());
-            logger.info("开始处理OCR识别任务 - fileId: {}, userId: {}, fileName: {}",
+            logger.info("开始处理OCR识别任务 - fileId: {}, userId (雪花算法ID): {}, fileName: {}",
                     fileId, userId, file.getOriginalFilename());
+
+            // 根据雪花算法 user_id 查询实际的自增主键 id
+            LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
+            queryWrapper.eq(SysUser::getUserId, userId);
+            SysUser user = userMapper.selectOne(queryWrapper);
+
+            if (user == null) {
+                logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
+                throw new RuntimeException("用户不存在");
+            }
+
+            Long actualUserId = user.getId();
+            logger.info("用户ID转换成功 - 雪花算法ID: {}, 自增主键ID: {}", userId, actualUserId);
 
             String imageUrl = saveFileLocally(file, fileId);
 
             OcrRecord ocrRecord = new OcrRecord();
-            ocrRecord.setUserId(userId);
+            ocrRecord.setUserId(actualUserId);  // 使用自增主键ID
             ocrRecord.setImageUrl(imageUrl);
             ocrRecord.setStatus(OcrRecord.Status.PENDING.getCode());
             ocrRecordMapper.insert(ocrRecord);
@@ -250,8 +268,21 @@ public class OcrServiceImpl implements OcrService {
     @Override
     public BatchRecognizeResponse batchUploadAndRecognize(MultipartFile[] files, Long userId) {
         String batchId = String.valueOf(snowflakeIdGenerator.nextId());
-        logger.info("开始处理批量OCR识别任务 - batchId: {}, fileCount: {}, userId: {}",
+        logger.info("开始处理批量OCR识别任务 - batchId: {}, fileCount: {}, userId (雪花算法ID): {}",
                 batchId, files.length, userId);
+
+        // 根据雪花算法 user_id 查询实际的自增主键 id
+        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(SysUser::getUserId, userId);
+        SysUser user = userMapper.selectOne(queryWrapper);
+
+        if (user == null) {
+            logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
+            throw new RuntimeException("用户不存在");
+        }
+
+        Long actualUserId = user.getId();
+        logger.info("用户ID转换成功 - 雪花算法ID: {}, 自增主键ID: {}", userId, actualUserId);
 
         BatchRecognizeResponse response = new BatchRecognizeResponse();
         response.setBatchId(batchId);
@@ -276,7 +307,7 @@ public class OcrServiceImpl implements OcrService {
 
                 // 创建OCR记录
                 OcrRecord ocrRecord = new OcrRecord();
-                ocrRecord.setUserId(userId);
+                ocrRecord.setUserId(actualUserId);  // 使用自增主键ID
                 ocrRecord.setImageUrl(imageUrl);
                 ocrRecord.setStatus(OcrRecord.Status.PENDING.getCode());
                 ocrRecordMapper.insert(ocrRecord);
