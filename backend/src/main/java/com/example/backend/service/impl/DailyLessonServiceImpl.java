@@ -18,8 +18,10 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -74,8 +76,9 @@ public class DailyLessonServiceImpl implements DailyLessonService {
             return null;
         }
         // 过滤掉需排除的疾病，避免同一天重复主题
+        Set<String> excludeSet = excludeDiseases == null ? Collections.emptySet() : new HashSet<>(excludeDiseases);
         List<String> candidates = diseases.stream()
-                .filter(d -> excludeDiseases == null || !excludeDiseases.contains(d))
+                .filter(d -> !excludeSet.contains(d))
                 .collect(Collectors.toList());
         // 若全部已被排除（所有主题当天都用过），回退到全部慢病列表，保证总有内容可生成
         if (candidates.isEmpty()) {
