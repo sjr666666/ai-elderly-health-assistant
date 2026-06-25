@@ -63,14 +63,26 @@ public class DailyLessonServiceImpl implements DailyLessonService {
     }
 
     /**
-     * 根据当日dayOfYear轮换选择一个慢病
+     * 根据当日dayOfYear轮换选择一个慢病，避开当天已生成过的主题
+     *
+     * @param diseases        用户慢病列表
+     * @param excludeDiseases 需排除的疾病（如当天已生成过的主题），可为空
+     * @return 选中的慢病名称；无可用慢病时返回null
      */
-    private String pickDiseaseForToday(List<String> diseases) {
+    private String pickDiseaseForToday(List<String> diseases, List<String> excludeDiseases) {
         if (diseases.isEmpty()) {
             return null;
         }
-        int index = LocalDate.now().getDayOfYear() % diseases.size();
-        return diseases.get(index);
+        // 过滤掉需排除的疾病，避免同一天重复主题
+        List<String> candidates = diseases.stream()
+                .filter(d -> excludeDiseases == null || !excludeDiseases.contains(d))
+                .collect(Collectors.toList());
+        // 若全部已被排除（所有主题当天都用过），回退到全部慢病列表，保证总有内容可生成
+        if (candidates.isEmpty()) {
+            candidates = diseases;
+        }
+        int index = LocalDate.now().getDayOfYear() % candidates.size();
+        return candidates.get(index);
     }
 
     /**
@@ -131,7 +143,7 @@ public class DailyLessonServiceImpl implements DailyLessonService {
         // 4. 上次生成失败，重试
         if (existing != null && existing.getIsGenerated() == 0) {
             logger.info("上次生成失败，重试 - lessonId: {}", existing.getId());
-            return doGenerateAndSave(existing, user);
+            return doGenerateAndSave(existing, user, Collections.emptyList());
         }
 
         // 5. 无记录，新建并生成
@@ -142,15 +154,17 @@ public class DailyLessonServiceImpl implements DailyLessonService {
         placeholder.setIsGenerated(0);
         dailyLessonMapper.insert(placeholder);
 
-        return doGenerateAndSave(placeholder, user);
+        return doGenerateAndSave(placeholder, user, Collections.emptyList());
     }
 
     /**
      * 执行AI生成并更新数据库
+     *
+     * @param excludeDiseases 需排除的疾病主题（如当天已生成过的），可为空
      */
-    private DailyLessonDTO doGenerateAndSave(DailyLesson record, SysUser user) {
+    private DailyLessonDTO doGenerateAndSave(DailyLesson record, SysUser user, List<String> excludeDiseases) {
         List<String> diseases = parseDiseases(user.getChronicDiseases());
-        String selectedDisease = pickDiseaseForToday(diseases);
+        String selectedDisease = pickDiseaseForToday(diseases, excludeDiseases);
 
         if (selectedDisease == null) {
             return DailyLessonDTO.builder()
@@ -208,17 +222,30 @@ public class DailyLessonServiceImpl implements DailyLessonService {
         LocalDate today = LocalDate.now();
         logger.info("强制重新生成今日科普 - userId: {}", userId);
 
+        // 物理删除前，先查询当天已成功生成过的疾病主题，作为本次轮换的排除集合，
+        // 避免同一天重复生成相同主题
+        LambdaQueryWrapper<DailyLesson> todayGeneratedQuery = new LambdaQueryWrapper<>();
+        todayGeneratedQuery.eq(DailyLesson::getUserId, userId)
+                           .eq(DailyLesson::getLessonDate, today)
+                           .eq(DailyLesson::getIsGenerated, 1)
+                           .isNotNull(DailyLesson::getChronicDisease)
+                           .ne(DailyLesson::getChronicDisease, "");
+        List<String> excludeDiseases = dailyLessonMapper.selectList(todayGeneratedQuery).stream()
+                .map(DailyLesson::getChronicDisease)
+                .distinct()
+                .collect(Collectors.toList());
+
         // 物理删除今日已有记录（避免逻辑删除导致唯一键冲突）
         dailyLessonMapper.physicalDeleteByUserAndDate(userId, today.toString());
 
-        // 新建并重新生成
+        // 新建并重新生成（排除当天已生成过的主题）
         DailyLesson placeholder = new DailyLesson();
         placeholder.setUserId(userId);
         placeholder.setLessonDate(today);
         placeholder.setIsGenerated(0);
         dailyLessonMapper.insert(placeholder);
 
-        return doGenerateAndSave(placeholder, user);
+        return doGenerateAndSave(placeholder, user, excludeDiseases);
     }
 
     @Override
@@ -280,7 +307,7 @@ public class DailyLessonServiceImpl implements DailyLessonService {
                     skippedCount++;
                     continue;
                 }
-                String selected = pickDiseaseForToday(diseases);
+                String selected = pickDiseaseForToday(diseases, Collections.emptyList());
 
                 // 插入占位行
                 DailyLesson placeholder = new DailyLesson();
