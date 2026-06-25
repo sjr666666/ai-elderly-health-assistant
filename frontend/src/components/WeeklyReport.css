@@ -1,0 +1,697 @@
+/* AI用药周报样式 - 老年友好版 */
+
+.weekly-report-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* 操作按钮区域 - 更大更易点击 */
+.weekly-report-actions {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.weekly-report-actions .btn {
+  flex: 1;
+  min-width: 140px;
+  padding: 16px 24px;
+  font-size: 17px;
+  font-weight: 600;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+}
+
+.weekly-report-actions .btn-primary {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  box-shadow: 0 3px 8px rgba(76, 175, 80, 0.3);
+}
+
+.weekly-report-actions .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 12px rgba(76, 175, 80, 0.4);
+}
+
+.weekly-report-actions .btn-secondary {
+  background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+  color: white;
+  box-shadow: 0 3px 8px rgba(255, 152, 0, 0.3);
+}
+
+.weekly-report-actions .btn-secondary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 12px rgba(255, 152, 0, 0.4);
+}
+
+.weekly-report-actions .btn-outline {
+  background: white;
+  color: #2196F3;
+  border: 3px solid #2196F3;
+  box-shadow: 0 2px 6px rgba(33, 150, 243, 0.2);
+}
+
+.weekly-report-actions .btn-outline:hover {
+  background: #E3F2FD;
+  transform: translateY(-2px);
+}
+
+/* 加载状态 - 更明显 */
+.weekly-report-loading {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.loading-spinner {
+  width: 60px;
+  height: 60px;
+  border: 5px solid #e0e0e0;
+  border-top: 5px solid #4CAF50;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 24px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.weekly-report-loading p {
+  font-size: 18px;
+  color: #555;
+  font-weight: 500;
+}
+
+/* 错误状态 - 红色醒目 */
+.weekly-report-error {
+  text-align: center;
+  padding: 80px 20px;
+  background: #FFF3E0;
+  border-radius: 20px;
+  border: 3px solid #FF9800;
+}
+
+.error-icon {
+  font-size: 56px;
+  margin-bottom: 20px;
+}
+
+.weekly-report-error p {
+  font-size: 18px;
+  color: #E65100;
+  margin-bottom: 24px;
+  font-weight: 500;
+}
+
+/* 空状态 - 温馨提示 */
+.weekly-report-empty {
+  text-align: center;
+  padding: 80px 20px;
+  background: #F5F5F5;
+  border-radius: 20px;
+  border: 2px dashed #BDBDBD;
+}
+
+.empty-icon {
+  font-size: 72px;
+  margin-bottom: 20px;
+}
+
+.weekly-report-empty h3 {
+  font-size: 24px;
+  color: #424242;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.weekly-report-empty p {
+  font-size: 17px;
+  color: #616161;
+  margin-bottom: 28px;
+  line-height: 1.6;
+}
+
+/* 周报内容区域（截图区域） - 更清晰 */
+.weekly-report-content {
+  background: white;
+  border-radius: 24px;
+  padding: 36px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
+  border: 2px solid #E0E0E0;
+}
+
+/* 头部 - 更大更清晰 */
+.report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 36px;
+  padding-bottom: 24px;
+  border-bottom: 4px solid #E0E0E0;
+}
+
+.report-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.title-icon {
+  font-size: 40px;
+}
+
+.report-title h2 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #2196F3;
+  margin: 0;
+}
+
+.report-date {
+  font-size: 18px;
+  color: #424242;
+  font-weight: 600;
+  padding: 10px 20px;
+  background: #E3F2FD;
+  border-radius: 12px;
+  border: 2px solid #BBDEFB;
+}
+
+/* 区块通用样式 - 更明显 */
+.report-section {
+  margin-bottom: 36px;
+  padding: 28px;
+  background: #FAFAFA;
+  border-radius: 20px;
+  border: 2px solid #E0E0E0;
+}
+
+.section-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+  margin: 0 0 24px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 合规率卡片 - 更醒目 */
+.compliance-card {
+  text-align: center;
+  padding: 40px 24px;
+  background: white;
+  border-radius: 20px;
+  border: 4px solid;
+  margin-bottom: 28px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.compliance-rate {
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+
+.compliance-label {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.compliance-detail {
+  font-size: 16px;
+  color: #555;
+  font-weight: 500;
+  margin-bottom: 20px;
+}
+
+/* 服药率进度条 */
+.compliance-progress-bar {
+  width: 100%;
+  height: 16px;
+  background: #E0E0E0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 8px;
+  transition: width 0.8s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* 统计网格 - 更大更易读 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 20px;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 20px 16px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+  border: 2px solid #E0E0E0;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-value {
+  font-size: 36px;
+  font-weight: 800;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 16px;
+  color: #555;
+  font-weight: 600;
+}
+
+/* 底部彩色条 */
+.stat-color-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  border-radius: 0 0 14px 14px;
+}
+
+.stat-total .stat-value {
+  color: #2196F3;
+}
+
+.stat-taken .stat-value {
+  color: #4CAF50;
+}
+
+.stat-missed .stat-value {
+  color: #F44336;
+}
+
+.stat-skipped .stat-value {
+  color: #FF9800;
+}
+
+.stat-drugs .stat-value {
+  color: #9C27B0;
+}
+
+/* 时段分析 - 颜色区分 */
+.timeslot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.timeslot-card {
+  text-align: center;
+  padding: 16px 12px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.timeslot-icon {
+  font-size: 24px;
+  margin-bottom: 6px;
+}
+
+.timeslot-label {
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.timeslot-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+}
+
+.timeslot-card.best {
+  border: 2px solid #4CAF50;
+  background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+}
+
+.timeslot-card.improve {
+  border: 2px solid #FF9800;
+  background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
+}
+
+/* 漏服药品 - 红色警示 */
+.missed-drugs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.missed-drug-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: white;
+  border-radius: 14px;
+  border-left: 6px solid #F44336;
+  box-shadow: 0 2px 8px rgba(244, 67, 54, 0.1);
+}
+
+.drug-bullet {
+  color: #F44336;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.drug-name {
+  font-size: 18px;
+  color: #333;
+  font-weight: 600;
+}
+
+.missed-tip {
+  font-size: 16px;
+  color: #666;
+  margin: 0;
+  padding: 16px 20px;
+  background: #FFF3E0;
+  border-radius: 12px;
+  border: 2px solid #FFB74D;
+  font-weight: 500;
+}
+
+/* 每日详情 - 更清晰 */
+.daily-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.daily-item {
+  padding: 20px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+  border: 2px solid #E0E0E0;
+}
+
+.daily-date {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.date-text {
+  font-size: 18px;
+  font-weight: 700;
+  color: #333;
+}
+
+.date-week {
+  font-size: 16px;
+  color: #555;
+  padding: 6px 14px;
+  background: #E3F2FD;
+  border-radius: 10px;
+  font-weight: 600;
+  border: 2px solid #BBDEFB;
+}
+
+.daily-progress {
+  height: 12px;
+  background: #E0E0E0;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.5s ease;
+}
+
+.daily-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.daily-taken {
+  font-size: 17px;
+  color: #555;
+  font-weight: 600;
+}
+
+.daily-rate {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.daily-drugs {
+  font-size: 16px;
+  color: #666;
+  padding-top: 12px;
+  border-top: 2px solid #E0E0E0;
+  font-weight: 500;
+}
+
+/* AI建议 - 整合到总体统计区域 */
+.ai-summary-box {
+  margin-top: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, #FFF9C4 0%, #FFF59D 100%);
+  border-radius: 16px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  border: 3px solid #FFEB3B;
+  box-shadow: 0 3px 10px rgba(255, 235, 59, 0.3);
+}
+
+.ai-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.ai-content {
+  flex: 1;
+}
+
+.ai-content p {
+  margin: 0 0 12px 0;
+  color: #333;
+  font-size: 17px;
+  line-height: 1.8;
+  font-weight: 500;
+}
+
+.ai-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* 底部信息 - 更明显 */
+.report-footer {
+  text-align: center;
+  padding-top: 28px;
+  border-top: 3px solid #E0E0E0;
+}
+
+.footer-text {
+  font-size: 17px;
+  color: #555;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.footer-time {
+  font-size: 16px;
+  color: #666;
+  font-weight: 500;
+}
+
+/* 历史记录面板 */
+.history-panel {
+  margin-top: 32px;
+  padding: 24px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+}
+
+.history-panel h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 16px 0;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.history-item:hover {
+  background: #f1f5f9;
+  transform: translateX(4px);
+}
+
+.history-date {
+  font-size: 14px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.history-rate {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .weekly-report-container {
+    padding: 12px;
+  }
+
+  .weekly-report-actions {
+    flex-direction: column;
+  }
+
+  .weekly-report-actions .btn {
+    width: 100%;
+  }
+
+  .weekly-report-content {
+    padding: 20px;
+  }
+
+  .report-header {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+
+  .report-title h2 {
+    font-size: 24px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .timeslot-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compliance-rate {
+    font-size: 48px;
+  }
+}
+
+/* 打印优化 */
+@media print {
+  .weekly-report-actions {
+    display: none;
+  }
+
+  .weekly-report-content {
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+}
+
+/* 紧凑模式（嵌入用药日历） */
+.weekly-report-container.compact {
+  max-width: 100%;
+  padding: 0;
+}
+
+.weekly-report-container.compact .weekly-report-actions {
+  display: none;
+}
+
+.weekly-report-container.compact .weekly-report-content {
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.weekly-report-container.compact .report-header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+}
+
+.weekly-report-container.compact .report-title h2 {
+  font-size: 22px;
+}
+
+.weekly-report-container.compact .report-section {
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.weekly-report-container.compact .section-title {
+  font-size: 20px;
+  margin-bottom: 18px;
+}
+
+.weekly-report-container.compact .compliance-card {
+  padding: 24px;
+}
+
+.weekly-report-container.compact .compliance-rate {
+  font-size: 48px;
+}
+
+.weekly-report-container.compact .stats-grid {
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+}
+
+.weekly-report-container.compact .stat-item {
+  padding: 16px 10px;
+}
+
+.weekly-report-container.compact .stat-value {
+  font-size: 28px;
+}
+
+.weekly-report-container.compact .timeslot-grid {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.weekly-report-container.compact .daily-item {
+  padding: 16px;
+}
+
+
