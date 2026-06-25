@@ -1482,6 +1482,11 @@ body {
   color: #dc2626;
 }
 
+.drug-list-status.not-in-calendar {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
 .drug-list-arrow {
   font-size: 12px;
   color: #9ca3af;

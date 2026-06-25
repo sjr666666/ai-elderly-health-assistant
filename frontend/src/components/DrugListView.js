@@ -418,6 +418,13 @@ function DrugListView({
                     {isExpired ? '已过期' : isExpiring ? '临期' : '正常'}
                   </span>
                   
+                  {/* 未加入日历标签 */}
+                  {!hasDrugPlan && !isExpired && (
+                    <span className="drug-list-status not-in-calendar">
+                      未加入日历
+                    </span>
+                  )}
+                  
                   {/* 展开箭头 */}
                   <span className="drug-list-arrow">
                     {isExpanded ? '▼' : '▶'}
