@@ -571,10 +571,13 @@ public class WeeklyReportServiceImpl implements WeeklyReportService {
             entity.setStartDate(report.getStartDate());
             entity.setEndDate(report.getEndDate());
             
-            // JSON字段序列化
-            entity.setStatisticsJson(objectMapper.writeValueAsString(statistics));
-            entity.setDailySummariesJson(objectMapper.writeValueAsString(dailySummaries));
-            entity.setMissedDrugsJson(objectMapper.writeValueAsString(missedDrugs));
+            // JSON字段序列化 - 需要将LocalDate转换为字符串
+            ObjectMapper jsonMapper = new ObjectMapper();
+            jsonMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+            
+            entity.setStatisticsJson(jsonMapper.writeValueAsString(statistics));
+            entity.setDailySummariesJson(jsonMapper.writeValueAsString(dailySummaries));
+            entity.setMissedDrugsJson(jsonMapper.writeValueAsString(missedDrugs));
             
             // AI生成内容
             entity.setAiSummary(report.getAiSummary());
