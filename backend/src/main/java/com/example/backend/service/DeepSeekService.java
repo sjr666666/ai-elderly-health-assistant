@@ -6,6 +6,7 @@ import com.example.backend.model.dto.DrugDetailResponse;
 import com.example.backend.model.dto.DrugSearchResponse;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * DeepSeek AI服务接口
@@ -91,4 +92,15 @@ public interface DeepSeekService {
      * @return Map包含 "title" 和 "content" 两个key，生成失败返回null
      */
     java.util.Map<String, String> generateDiseaseScienceLesson(String diseaseName, Integer age, String gender);
+
+    /**
+     * 使用DeepSeek AI回答用户关于药品的追问
+     * 基于药品信息和已有对话上下文，回答用户的后续问题
+     *
+     * @param drugDetail   药品详细信息
+     * @param question     用户的追问
+     * @param conversationHistory 已有的对话历史（角色: content 格式）
+     * @return AI回答文本，失败返回null
+     */
+    String answerFollowUpQuestion(DrugDetailResponse drugDetail, String question, List<Map<String, String>> conversationHistory);
 }
