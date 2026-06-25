@@ -1548,6 +1548,7 @@ function App() {
   }, [showMedicationReminder, missedReminders]);
 
   const audioRef = useRef(null);
+  const followUpAudioRef = useRef(null); // 追问消息专用音频元素，独立于全局播放
 
   const speak = async (text, rate = speechRate) => {
     // 剥离HTML标签，避免TTS朗读标签内容
@@ -1632,11 +1633,140 @@ function App() {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
+    // 停止追问消息的播放（避免音频重叠）
+    if (followUpAudioRef.current) {
+      followUpAudioRef.current.pause();
+      followUpAudioRef.current.currentTime = 0;
+    }
     // 停止浏览器语音
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
+    setIsFollowUpSpeaking(false);
+    setSpeakingFollowUpIdx(null);
+  };
+
+  // 追问消息专用语音播放（独立于全局isSpeaking，避免与用药说明播放按钮联动）
+  const speakFollowUp = async (text, rate = speechRate) => {
+    const cleanText = (text || '').replace(/<[^>]*>/g, '');
+    if (!cleanText || cleanText.trim() === '') { return; }
+    // 先停止所有播放（包括全局播放），避免音频重叠
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
+    if (followUpAudioRef.current) { followUpAudioRef.current.pause(); followUpAudioRef.current.currentTime = 0; }
+    if ('speechSynthesis' in window) { window.speechSynthesis.cancel(); }
+    setIsSpeaking(false);
+    try {
+      setIsFollowUpSpeaking(true);
+      const baiduRate = rate === 0.6 ? 3 : 5;
+      const response = await fetch(`/api/ai/tts?text=${encodeURIComponent(cleanText)}&speechRate=${baiduRate}`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.code === 200 && result.data) {
+          if (followUpAudioRef.current) {
+            followUpAudioRef.current.src = result.data;
+            followUpAudioRef.current.play().catch(err => {
+              setIsFollowUpSpeaking(false); setSpeakingFollowUpIdx(null);
+            });
+            return;
+          }
+        }
+      }
+      speakFollowUpWithBrowser(cleanText, rate);
+    } catch (error) {
+      speakFollowUpWithBrowser(cleanText, rate);
+    }
+  };
+
+  // 追问消息专用浏览器语音（备用方案）
+  const speakFollowUpWithBrowser = (text, rate) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'zh-CN';
+      utterance.rate = rate;
+      utterance.volume = 1;
+      const voices = window.speechSynthesis.getVoices();
+      const chineseVoice = voices.find(v => v.lang.includes('zh') && v.name.includes('Female'));
+      if (chineseVoice) { utterance.voice = chineseVoice; }
+      utterance.onend = () => { setIsFollowUpSpeaking(false); setSpeakingFollowUpIdx(null); };
+      utterance.onerror = () => { setIsFollowUpSpeaking(false); setSpeakingFollowUpIdx(null); };
+      window.speechSynthesis.speak(utterance);
+    } else {
+      showToast('您的浏览器不支持语音播报功能', 'error');
+      setIsFollowUpSpeaking(false);
+      setSpeakingFollowUpIdx(null);
+    }
+  };
+
+  // 仅停止追问消息的播放（不影响全局isSpeaking）
+  const stopFollowUpSpeaking = () => {
+    if (followUpAudioRef.current) {
+      followUpAudioRef.current.pause();
+      followUpAudioRef.current.currentTime = 0;
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsFollowUpSpeaking(false);
+    setSpeakingFollowUpIdx(null);
+  };
+
+  // 切换追问消息的语音播放
+  const toggleFollowUpSpeech = (idx, text) => {
+    if (speakingFollowUpIdx === idx && isFollowUpSpeaking) {
+      stopFollowUpSpeaking();
+    } else {
+      setSpeakingFollowUpIdx(idx);
+      speakFollowUp(text);
+    }
+  };
+
+  // 调用后端追问API
+  const handleAskFollowUp = async () => {
+    if (!followUpQuestion.trim() || isFollowUpLoading) return;
+
+    const userMessage = { role: 'user', content: followUpQuestion.trim() };
+    const newMessages = [...followUpMessages, userMessage];
+    setFollowUpMessages(newMessages);
+    setFollowUpQuestion('');
+    setIsFollowUpLoading(true);
+
+    try {
+      // 构造药品详细信息对象
+      const drugDetail = {
+        genericName: selectedDrug.name,
+        tradeName: selectedDrug.tradeName || '',
+        specification: selectedDrug.spec || selectedDrug.specification || '',
+        manufacturer: selectedDrug.manufacturer || '',
+        ingredient: selectedDrug.ingredient || '',
+        indications: selectedDrug.indications || '',
+        usage: selectedDrug.usage || selectedDrug.dosage || '',
+        precautions: selectedDrug.precautions || '',
+        adverseReactions: selectedDrug.adverseReactions || ''
+      };
+
+      const response = await fetch('/api/ai/follow-up-question', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          drugDetail,
+          question: userMessage.content,
+          conversationHistory: newMessages.slice(-12).map(m => ({ role: m.role, content: m.content }))
+        })
+      });
+
+      const data = await response.json();
+      if (data.code === 200 && data.data) {
+        setFollowUpMessages(prev => [...prev, { role: 'assistant', content: data.data }]);
+      } else {
+        setFollowUpMessages(prev => [...prev, { role: 'assistant', content: '抱歉，我暂时无法回答这个问题，请稍后再试。' }]);
+      }
+    } catch (error) {
+      setFollowUpMessages(prev => [...prev, { role: 'assistant', content: '网络异常，请检查网络连接后重试。' }]);
+    } finally {
+      setIsFollowUpLoading(false);
+    }
   };
 
   // 监听音频播放结束
@@ -1644,6 +1774,19 @@ function App() {
     const audio = audioRef.current;
     if (audio) {
       const handleEnded = () => setIsSpeaking(false);
+      audio.addEventListener('ended', handleEnded);
+      return () => audio.removeEventListener('ended', handleEnded);
+    }
+  }, []);
+
+  // 监听追问音频播放结束（独立重置追问播放状态）
+  useEffect(() => {
+    const audio = followUpAudioRef.current;
+    if (audio) {
+      const handleEnded = () => {
+        setIsFollowUpSpeaking(false);
+        setSpeakingFollowUpIdx(null);
+      };
       audio.addEventListener('ended', handleEnded);
       return () => audio.removeEventListener('ended', handleEnded);
     }
@@ -1702,12 +1845,21 @@ function App() {
   const [ocrPolling, setOcrPolling] = useState(false);
   const [elderlyGuide, setElderlyGuide] = useState(''); // 老年友好用药指导
   const [isLoadingGuide, setIsLoadingGuide] = useState(false); // 是否正在加载AI指导
+  const [followUpMessages, setFollowUpMessages] = useState([]); // 追问对话消息列表
+  const [followUpQuestion, setFollowUpQuestion] = useState(''); // 当前追问输入
+  const [isFollowUpLoading, setIsFollowUpLoading] = useState(false); // 追问加载中
+  const [isFollowUpSpeaking, setIsFollowUpSpeaking] = useState(false); // 追问语音播放中（独立于全局isSpeaking）
+  const [speakingFollowUpIdx, setSpeakingFollowUpIdx] = useState(null); // 当前正在播放语音的追问消息索引
 
   // 当selectedDrug变化时，自动调用AI生成老年友好指导
   useEffect(() => {
     if (selectedDrug && selectedDrug.name) {
       fetchElderlyGuide(selectedDrug);
     }
+    // 切换药品时清空追问消息和播放状态
+    setFollowUpMessages([]);
+    setFollowUpQuestion('');
+    stopFollowUpSpeaking();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDrug?.name, selectedDrug?.usage, selectedDrug?.precautions]);
 
@@ -4498,6 +4650,154 @@ function App() {
             </div>
           </div>
 
+          {/* 追问功能区域 */}
+          <div style={{
+            marginTop: '16px',
+            borderRadius: '12px',
+            border: '1px solid #bfdbfe',
+            overflow: 'hidden',
+            background: '#fff'
+          }}>
+            {/* 标题栏 - 蓝色渐变 */}
+            <div style={{
+              padding: '10px 16px',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+              color: '#fff',
+              fontSize: '15px',
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              💬 向药师追问
+              <span style={{ fontSize: '11px', fontWeight: 'normal', opacity: 0.8 }}>有疑问随时问</span>
+            </div>
+
+            {/* 对话消息区域 */}
+            <div style={{
+              maxHeight: '300px',
+              overflowY: 'auto',
+              padding: '12px',
+              background: '#f8fafc'
+            }}>
+              {followUpMessages.length === 0 && !isFollowUpLoading && (
+                <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '14px', padding: '20px 0' }}>
+                  如果对用药说明有疑问，请在下方输入您的问题
+                </p>
+              )}
+              {followUpMessages.map((msg, idx) => {
+                const isAssistant = msg.role === 'assistant';
+                const isThisSpeaking = speakingFollowUpIdx === idx && isFollowUpSpeaking;
+                return (
+                  <div key={idx} style={{
+                    display: 'flex',
+                    gap: '8px',
+                    marginBottom: '10px',
+                    flexDirection: isAssistant ? 'row' : 'row-reverse'
+                  }}>
+                    {isAssistant && (
+                      <div style={{
+                        width: '32px', height: '32px', borderRadius: '50%',
+                        background: '#3b82f6', color: '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '16px', flexShrink: 0
+                      }}>👨‍⚕️</div>
+                    )}
+                    <div style={{
+                      display: 'flex', flexDirection: 'column',
+                      maxWidth: '75%',
+                      alignItems: isAssistant ? 'flex-start' : 'stretch'
+                    }}>
+                      <div style={{
+                        padding: '10px 14px',
+                        borderRadius: '12px',
+                        fontSize: '15px',
+                        lineHeight: '1.6',
+                        whiteSpace: 'pre-wrap',
+                        background: isAssistant ? '#fff' : '#3b82f6',
+                        color: isAssistant ? '#1e293b' : '#fff',
+                        border: isAssistant ? '1px solid #e2e8f0' : 'none',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      }}>
+                        {msg.content}
+                      </div>
+                      {isAssistant && msg.content && (
+                        <button
+                          onClick={() => toggleFollowUpSpeech(idx, msg.content)}
+                          title={isThisSpeaking ? '停止播放' : '播放语音'}
+                          style={{
+                            marginTop: '4px', padding: '4px 8px', fontSize: '16px',
+                            color: isThisSpeaking ? '#dc2626' : '#2563eb',
+                            background: '#fff',
+                            border: `1px solid ${isThisSpeaking ? '#fecaca' : '#bfdbfe'}`,
+                            borderRadius: '50%', cursor: 'pointer',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: '32px', height: '32px', alignSelf: 'flex-start', lineHeight: 1
+                          }}
+                        >
+                          {isThisSpeaking ? '🔇' : '🔊'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {isFollowUpLoading && (
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                  <div style={{
+                    width: '32px', height: '32px', borderRadius: '50%',
+                    background: '#3b82f6', color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '16px', flexShrink: 0
+                  }}>👨‍⚕️</div>
+                  <div style={{
+                    padding: '10px 14px', borderRadius: '12px',
+                    background: '#fff', border: '1px solid #e2e8f0',
+                    fontSize: '14px', color: '#64748b'
+                  }}>
+                    正在思考...
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 输入区域 */}
+            <div style={{
+              padding: '10px 12px',
+              borderTop: '1px solid #e2e8f0',
+              background: '#fff',
+              display: 'flex',
+              gap: '8px'
+            }}>
+              <input
+                type="text"
+                value={followUpQuestion}
+                onChange={(e) => setFollowUpQuestion(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAskFollowUp(); } }}
+                placeholder="输入您的问题，回车发送..."
+                disabled={isFollowUpLoading}
+                style={{
+                  flex: 1, padding: '8px 12px', fontSize: '15px',
+                  border: '1px solid #cbd5e1', borderRadius: '8px',
+                  outline: 'none'
+                }}
+              />
+              <button
+                onClick={handleAskFollowUp}
+                disabled={!followUpQuestion.trim() || isFollowUpLoading}
+                style={{
+                  padding: '8px 16px', fontSize: '15px',
+                  background: (!followUpQuestion.trim() || isFollowUpLoading) ? '#94a3b8' : '#3b82f6',
+                  color: '#fff', border: 'none', borderRadius: '8px',
+                  cursor: (!followUpQuestion.trim() || isFollowUpLoading) ? 'not-allowed' : 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                发送
+              </button>
+            </div>
+          </div>
+
           {/* 下方区域：药品信息 */}
           <div className="drug-details-section">
             <div className="left-drug-column">
@@ -6034,6 +6334,7 @@ function App() {
     <>
       {/* 百度TTS音频播放器 */}
       <audio ref={audioRef} style={{ display: 'none' }} />
+      <audio ref={followUpAudioRef} style={{ display: 'none' }} />
 
       <div className="watermark-bg"></div>
       {showRegister ? (
