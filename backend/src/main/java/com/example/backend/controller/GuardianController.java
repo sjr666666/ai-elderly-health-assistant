@@ -46,6 +46,17 @@ public class GuardianController {
         }
     }
 
+    @GetMapping("/by-elder")
+    public ResponseResult<List<GuardianSummaryDTO>> getGuardianList(@RequestParam Long elderId) {
+        log.info("老人查询已绑定家属列表 - elderId: {}", elderId);
+        try {
+            return ResponseResult.success(guardianService.getGuardianList(elderId));
+        } catch (Exception e) {
+            log.error("获取家属列表失败 - elderId: {}", elderId, e);
+            return ResponseResult.fail("获取家属列表失败：" + e.getMessage());
+        }
+    }
+
     @GetMapping("/elders/{elderId}")
     public ResponseResult<ElderSummaryDTO> getElderDetail(@RequestParam Long guardianId, @PathVariable Long elderId) {
         log.info("获取老人详细信息 - guardianId: {}, elderId: {}", guardianId, elderId);

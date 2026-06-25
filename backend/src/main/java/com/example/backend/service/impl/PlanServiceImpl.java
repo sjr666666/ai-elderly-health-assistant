@@ -120,6 +120,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             item.setTimeSlot(plan.getTimeSlot());
             item.setTimeSlotLabel(getTimeSlotLabel(plan.getTimeSlot()));
             item.setRemindBefore(plan.getRemindBefore());
+            item.setReminderStage(plan.getReminderStage());
             item.setStatus(planStatusMap.getOrDefault(plan.getId(), "pending"));
             return item;
         }).collect(Collectors.toList());
@@ -305,6 +306,8 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
                 item.setTimeSlot(timeSlot);
                 item.setTimeSlotLabel(getTimeSlotLabel(timeSlot));
                 item.setRemindBefore(15); // 默认提前15分钟提醒
+                item.setReminderStage(existingPlanMap.containsKey(key) ?
+                        (existingPlanMap.get(key).getReminderStage() != null ? existingPlanMap.get(key).getReminderStage() : "none") : "none");
 
                 // 设置药箱条目ID和剩余数量（用于更新库存）
                 item.setBoxItemId(boxItem.getId());

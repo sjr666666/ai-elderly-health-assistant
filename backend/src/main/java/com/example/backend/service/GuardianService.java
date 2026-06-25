@@ -5,6 +5,7 @@ import com.example.backend.model.dto.ElderSummaryDTO;
 import com.example.backend.model.dto.ExpiringDrugDTO;
 import com.example.backend.model.dto.GuardianDashboardDTO;
 import com.example.backend.model.dto.GuardianRelationRequest;
+import com.example.backend.model.dto.GuardianSummaryDTO;
 import com.example.backend.model.entity.GuardianElderRelation;
 
 import java.util.List;
@@ -29,6 +30,14 @@ public interface GuardianService {
      * @return 老人摘要列表
      */
     List<ElderSummaryDTO> getElderList(Long guardianId);
+
+    /**
+     * 老人端查询已绑定自己的家属列表
+     *
+     * @param elderId 老人ID
+     * @return 家属摘要列表
+     */
+    List<GuardianSummaryDTO> getGuardianList(Long elderId);
 
     /**
      * 获取老人详细信息

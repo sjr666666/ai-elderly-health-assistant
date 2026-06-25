@@ -140,6 +140,23 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
         return ResponseResult.success(response);
     }
 
+    // 对话历史最大保留轮数
+    private static final int MAX_HISTORY_ROUNDS = 10;
+
+    /**
+     * 截断对话历史，只保留最近N轮（1轮=1条user+1条assistant）
+     * 如果历史超出限制，丢弃最旧的消息
+     */
+    private List<Map<String, String>> truncateHistory(List<Map<String, String>> history) {
+        if (history == null || history.size() <= MAX_HISTORY_ROUNDS * 2) {
+            return history;
+        }
+        // 保留最近10轮（20条消息）
+        int keepCount = MAX_HISTORY_ROUNDS * 2;
+        logger.info("对话历史超出{}轮限制，截断前{}条 -> 保留最近{}条", MAX_HISTORY_ROUNDS, history.size(), keepCount);
+        return history.subList(history.size() - keepCount, history.size());
+    }
+
     /**
      * 调用DeepSeek AI处理紧急问题
      */
@@ -171,9 +188,10 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
             systemMessage.put("content", systemPrompt);
             messages.add(systemMessage);
 
-            // 2. 历史对话
-            if (history != null && !history.isEmpty()) {
-                for (Map<String, String> hist : history) {
+            // 2. 历史对话（截断保留最近10轮）
+            List<Map<String, String>> truncatedHistory = truncateHistory(history);
+            if (truncatedHistory != null && !truncatedHistory.isEmpty()) {
+                for (Map<String, String> hist : truncatedHistory) {
                     Map<String, String> histMessage = new HashMap<>();
                     histMessage.put("role", hist.getOrDefault("role", "user"));
                     histMessage.put("content", hist.getOrDefault("content", ""));

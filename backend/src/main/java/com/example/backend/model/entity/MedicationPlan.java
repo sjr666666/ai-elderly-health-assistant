@@ -78,6 +78,14 @@ public class MedicationPlan extends BaseEntity {
     private Integer remindBefore;
 
     /**
+     * 提醒阶段
+     * none（未触发）/ pre_remind（提前提醒）/ due_now（到时提醒）/ overdue（超时提醒）/ notify_family（已通知家属）
+     * 默认值：none
+     */
+    @TableField("reminder_stage")
+    private String reminderStage;
+
+    /**
      * 时段枚举
      */
     public enum TimeSlot {
