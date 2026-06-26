@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from '../Toast';
 import './guardian.css';
 
 function GuardianElderDetail({ guardianId, elderId, onBack }) {
+  const { showToast } = useToast();
   const [elder, setElder] = useState(null);
   const [events, setEvents] = useState([]);
   const [expiringDrugs, setExpiringDrugs] = useState([]);
@@ -66,8 +68,8 @@ function GuardianElderDetail({ guardianId, elderId, onBack }) {
       const res = await fetch(`/api/v1/guardian/unbind?guardianId=${guardianId}&elderId=${elderId}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.code === 200) onBack(true);
-      else alert(data.message || '解绑失败');
-    } catch { alert('网络连接失败'); }
+      else showToast(data.message || '解绑失败', 'error');
+    } catch { showToast('网络连接失败', 'error'); }
     finally { setIsUnbinding(false); setShowUnbindConfirm(false); }
   };
 

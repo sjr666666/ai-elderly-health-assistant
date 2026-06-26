@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
+import { useToast } from './Toast';
 import './WeeklyReport.css';
 
 /**
@@ -9,6 +10,7 @@ import './WeeklyReport.css';
  * @param {boolean} props.compact - 是否使用紧凑模式（用于嵌入其他页面）
  */
 const WeeklyReport = ({ userId, compact = false }) => {
+  const { showToast } = useToast();
   const [report, setReport] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -61,7 +63,7 @@ const WeeklyReport = ({ userId, compact = false }) => {
       link.click();
     } catch (err) {
       console.error('截图失败:', err);
-      alert('截图失败，请稍后重试');
+      showToast('截图失败，请稍后重试', 'error');
     }
   };
 
@@ -71,10 +73,10 @@ const WeeklyReport = ({ userId, compact = false }) => {
 
     try {
       await navigator.clipboard.writeText(report.fullReportText);
-      alert('报告已复制到剪贴板！');
+      showToast('报告已复制到剪贴板！', 'success');
     } catch (err) {
       console.error('复制失败:', err);
-      alert('复制失败，请手动选择文本复制');
+      showToast('复制失败，请手动选择文本复制', 'error');
     }
   };
 

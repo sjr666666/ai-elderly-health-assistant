@@ -24,7 +24,8 @@ import java.util.List;
 
 /**
  * 渐进式提醒服务实现
- * 阶段推进：none → pre_remind(提前15min) → due_now(到时) → overdue(超时10min) → notify_family(通知家属)
+ * 阶段推进：none → pre_remind(提前15min) → due_now(到时) → notify_family(超时10min通知家属)
+ * 说明：原 overdue 阶段已合并到 notify_family，避免到时提醒关闭后1分钟又反复弹窗。
  */
 @Slf4j
 @Service
@@ -38,7 +39,7 @@ public class ProgressiveReminderServiceImpl implements ProgressiveReminderServic
     private final GuardianElderRelationMapper guardianElderRelationMapper;
     private final UserMapper userMapper;
 
-    /** 超时阈值：超过该分钟数后通知家属 */
+    /** 超时阈值：超过用药时间该分钟数后通知家属 */
     private static final int OVERDUE_FAMILY_THRESHOLD = 10;
 
     @Override
@@ -54,7 +55,6 @@ public class ProgressiveReminderServiceImpl implements ProgressiveReminderServic
 
         int preRemindCount = 0;
         int dueNowCount = 0;
-        int overdueCount = 0;
         int familyNotifyCount = 0;
 
         for (MedicationPlan plan : pendingPlans) {
@@ -81,14 +81,10 @@ public class ProgressiveReminderServiceImpl implements ProgressiveReminderServic
                     newStage = "due_now";
                     dueNowCount++;
                 }
-            } else if ("due_now".equals(currentStage)) {
-                // 阶段3：超时提醒
-                if (now.isAfter(slotTime.plusMinutes(1))) {
-                    newStage = "overdue";
-                    overdueCount++;
-                }
-            } else if ("overdue".equals(currentStage)) {
-                // 阶段4：超时10分钟，通知家属
+            } else if ("due_now".equals(currentStage) || "overdue".equals(currentStage)) {
+                // 阶段3：超时10分钟，通知家属
+                // 说明：原 overdue 阶段已合并，到时提醒后直接在超时10分钟时通知家属，
+                // 避免用户关闭到时提醒后1分钟又被反复打扰；overdue 分支兼容历史数据。
                 if (!now.isBefore(familyNotifyTime)) {
                     newStage = "notify_family";
                     familyNotifyCount++;
@@ -107,9 +103,6 @@ public class ProgressiveReminderServiceImpl implements ProgressiveReminderServic
                     case "due_now":
                         sendDueNowNotification(plan);
                         break;
-                    case "overdue":
-                        sendOverdueNotification(plan);
-                        break;
                     case "notify_family":
                         notifyFamily(plan);
                         break;
@@ -117,9 +110,9 @@ public class ProgressiveReminderServiceImpl implements ProgressiveReminderServic
             }
         }
 
-        if (preRemindCount + dueNowCount + overdueCount + familyNotifyCount > 0) {
-            log.info("渐进式提醒处理完成 - 提前提醒: {}, 到时: {}, 超时: {}, 通知家属: {}",
-                    preRemindCount, dueNowCount, overdueCount, familyNotifyCount);
+        if (preRemindCount + dueNowCount + familyNotifyCount > 0) {
+            log.info("渐进式提醒处理完成 - 提前提醒: {}, 到时: {}, 通知家属: {}",
+                    preRemindCount, dueNowCount, familyNotifyCount);
         }
     }
 
@@ -169,24 +162,7 @@ public class ProgressiveReminderServiceImpl implements ProgressiveReminderServic
     }
 
     /**
-     * 阶段3：超时提醒 - 通过WebSocket推送紧急提醒
-     */
-    private void sendOverdueNotification(MedicationPlan plan) {
-        String drugName = getDrugName(plan);
-        String timeSlotLabel = getTimeSlotLabel(plan.getTimeSlot());
-        String title = "服药超时提醒";
-        String content = String.format("您%s的%s已超时未服用，请尽快服药！", timeSlotLabel, drugName);
-
-        try {
-            elderNotificationService.createNotification(
-                    plan.getUserId(), "medication_reminder", title, content, null);
-        } catch (Exception e) {
-            log.warn("超时提醒推送失败 - planId: {}", plan.getId(), e);
-        }
-    }
-
-    /**
-     * 阶段4：通知家属 - 短信通知 + 标记漏服 + 老人端通知
+     * 阶段3：通知家属 - 短信通知 + 标记漏服 + 老人端通知
      */
     @Transactional(rollbackFor = Exception.class)
     public void notifyFamily(MedicationPlan plan) {
