@@ -81,6 +81,7 @@ function App() {
   const [missedReminders, setMissedReminders] = useState([]); // 超时未服用的用药计划
   const lastCheckedTimeRef = useRef(null); // 上次检查的时间，避免重复提醒
   const lastReminderTimeRef = useRef(null); // 上次弹窗提醒的时间，避免频繁提醒
+  const lastShownStageRef = useRef(null); // 上次已展示的最高阶段，只有阶段升级才再次提醒
   
   // 药品冲突检测相关状态
   const [conflictReport, setConflictReport] = useState(null); // 冲突检测报告
@@ -692,50 +693,6 @@ function App() {
     showToast('个人信息已更新！', 'success');
   };
 
-  // 手动触发用药提醒（用于调试）
-  const handleTriggerReminderManually = () => {
-    console.log('手动触发用药提醒');
-    
-    // 获取当前超时的用药计划
-    if (!calendarPlans || calendarPlans.length === 0) {
-      showToast('当前没有用药计划', 'warning');
-      return;
-    }
-
-    const now = new Date();
-    const currentHours = now.getHours();
-    const currentMinutes = now.getMinutes();
-    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
-
-    // 找出所有超时需要服用但还未服用的用药计划
-    const missed = calendarPlans.filter(reminder => {
-      if (reminder.taken || reminder.missed) {
-        return false;
-      }
-      const [hours, minutes] = reminder.time.split(':').map(Number);
-      const reminderTimeInMinutes = hours * 60 + minutes;
-      const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
-      return timeDiff >= 0;
-    });
-
-    if (missed.length === 0) {
-      showToast('当前没有需要服用的药物', 'info');
-      // 显示所有待服用的药物，即使还没超时
-      const pending = calendarPlans.filter(reminder => !reminder.taken && !reminder.missed);
-      if (pending.length > 0) {
-        setMissedReminders(pending);
-        setShowMedicationReminder(true);
-        lastReminderTimeRef.current = Date.now();
-      }
-      return;
-    }
-
-    setMissedReminders(missed);
-    setShowMedicationReminder(true);
-    lastReminderTimeRef.current = Date.now();
-    console.log('手动触发用药提醒:', missed);
-  };
-
   const handleAddContact = async () => {
     if (user && user.id) {
       await loadEmergencyContacts(user.id);
@@ -972,9 +929,21 @@ function App() {
     stopSpeaking();
     // 重置提醒ID，允许下次打开时重新播报
     lastReminderIdRef.current = null;
+    // 记录当前已展示的最高阶段，下次只有阶段升级才再次提醒
+    // （避免关闭 pre_remind 后1分钟又弹同一阶段）
+    if (missedReminders.length > 0) {
+      const stageOrder = ['pre_remind', 'due_now', 'overdue', 'notify_family'];
+      let highestIdx = -1;
+      missedReminders.forEach(r => {
+        const idx = stageOrder.indexOf(r.reminderStage);
+        if (idx > highestIdx) highestIdx = idx;
+      });
+      if (highestIdx >= 0) {
+        lastShownStageRef.current = stageOrder[highestIdx];
+      }
+    }
     setShowMedicationReminder(false);
     setMissedReminders([]);
-    // 不重置 lastReminderTimeRef，确保下次提醒要等3分钟后
   };
 
   // 从提醒弹窗中标记为已服用
@@ -1012,6 +981,8 @@ function App() {
       } else {
         // 所有药物都已服用，关闭弹窗
         console.log('所有药物都已服用，关闭弹窗');
+        // 重置阶段记录，下次有新药品时从 pre_remind 开始正常提醒
+        lastShownStageRef.current = null;
         handleCloseMedicationReminder();
       }
     }
@@ -1270,55 +1241,9 @@ function App() {
     setIsDragging(true);
   };
 
-  // 应用初始化时检查 localStorage 中的登录状态
+  // 应用初始化时清除 localStorage 中的登录状态，确保每次进入应用都跳转到登录页
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      try {
-        const userData = JSON.parse(savedUser);
-        if (userData && userData.userId) {
-          setUser(userData);
-          setIsLoggedIn(true);
-
-          // 从后端刷新用户档案，确保数据最新
-          fetch(`/api/v1/user/profile?userId=${userData.userId}`)
-            .then(res => res.json())
-            .then(data => {
-              if (data.code === 200 && data.data) {
-                const freshUser = { ...userData, ...data.data };
-                setUser(freshUser);
-                localStorage.setItem('user', JSON.stringify(freshUser));
-              }
-            })
-            .catch(err => console.error('刷新用户档案失败:', err));
-
-          // 家属角色不需要加载老人端数据
-          if (userData.role === 'family') {
-            return;
-          }
-
-          // 自动加载药箱列表和紧急联系人
-          loadMedicineBoxList(userData.userId);
-          loadShortageWarnings(userData.userId);
-          if (userData.id) {
-            loadEmergencyContacts(userData.id);
-          }
-          
-          // 检查已过期且未丢弃的药品
-          setTimeout(() => {
-            checkTodayExpiredMedicines(userData.userId);
-          }, 500); // 延迟500ms执行，确保药箱列表已加载
-
-          // 加载今日一课
-          if (userData.id) {
-            fetchDailyLesson(userData.id);
-          }
-        }
-      } catch (e) {
-        console.error('解析用户数据失败:', e);
-        localStorage.removeItem('user');
-      }
-    }
+    localStorage.removeItem('user');
   }, []);
 
   // WebSocket 连接管理 - 老人端实时通知
@@ -1415,7 +1340,8 @@ function App() {
       return;
     }
 
-    // 渐进式提醒检查：提前15min → 到时 → 超时 → 已通知家属
+    // 渐进式提醒检查：提前15min → 到时 → 超时10min通知家属
+    // 触发策略：只在"阶段升级"时弹窗，避免关闭后1分钟又弹同一阶段
     const checkProgressiveReminders = () => {
       if (!calendarPlans || calendarPlans.length === 0) {
         return;
@@ -1426,7 +1352,7 @@ function App() {
       const currentMinutes = now.getMinutes();
       const currentTimeInMinutes = currentHours * 60 + currentMinutes;
 
-      // 找出需要提醒的用药计划（提前15分钟、到时、超时都提醒）
+      // 找出需要提醒的用药计划（提前15分钟、到时、超时10分钟通知家属）
       const needRemind = calendarPlans.filter(reminder => {
         if (reminder.taken || reminder.missed) {
           return false;
@@ -1454,10 +1380,10 @@ function App() {
 
         let stage = reminder.reminderStage;
         if (!stage || stage === 'none') {
+          // 阶段简化：pre_remind → due_now → notify_family（超时10分钟）
+          // 原 overdue 阶段已合并，到时提醒后10分钟内保持 due_now，不再反复打扰
           if (timeDiff >= 10) {
             stage = 'notify_family';
-          } else if (timeDiff >= 1) {
-            stage = 'overdue';
           } else if (timeDiff >= 0) {
             stage = 'due_now';
           } else if (timeDiff >= -remindBefore) {
@@ -1469,15 +1395,26 @@ function App() {
       });
 
       if (needRemind.length > 0) {
-        const nowMs = Date.now();
-        const shouldRemind = !lastReminderTimeRef.current ||
-                            (nowMs - lastReminderTimeRef.current) >= 60 * 1000; // 1分钟间隔
+        // 计算当前最高阶段
+        const stageOrder = ['pre_remind', 'due_now', 'overdue', 'notify_family'];
+        let currentHighestIdx = -1;
+        needRemind.forEach(r => {
+          const idx = stageOrder.indexOf(r.reminderStage);
+          if (idx > currentHighestIdx) currentHighestIdx = idx;
+        });
+
+        // 只有阶段升级时才再次提醒（避免关闭后1分钟又弹同一阶段）
+        const lastShownStage = lastShownStageRef.current;
+        const shouldRemind = currentHighestIdx >= 0 && (
+          !lastShownStage ||
+          currentHighestIdx > stageOrder.indexOf(lastShownStage)
+        );
 
         if (shouldRemind) {
           setMissedReminders(needRemind);
           setShowMedicationReminder(true);
-          lastReminderTimeRef.current = nowMs;
-          console.log('触发渐进式用药提醒:', needRemind.map(r => ({
+          lastReminderTimeRef.current = Date.now();
+          console.log('触发渐进式用药提醒（阶段升级）:', needRemind.map(r => ({
             drug: r.drug || r.drugName,
             stage: r.reminderStage
           })));
@@ -5723,21 +5660,6 @@ function App() {
           {calendarViewMode === 'today' ? '今日用药时间轴' : '一周用药记录'}
         </h2>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {/* 调试按钮：手动触发提醒 */}
-          <button
-            className="btn btn-warning"
-            onClick={handleTriggerReminderManually}
-            style={{ 
-              minHeight: '40px',
-              fontSize: '14px',
-              background: '#ff9800',
-              color: 'white',
-              border: 'none'
-            }}
-            title="手动触发用药提醒（调试用）"
-          >
-             测试提醒
-          </button>
           {/* AI周报显示/隐藏按钮 - 仅在周视图显示 */}
           {calendarViewMode === 'week' && (
             <button

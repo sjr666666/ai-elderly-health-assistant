@@ -2,6 +2,17 @@ import { useState, useEffect, useRef } from 'react';
 import ContactModal from './ContactModal';
 import ConfirmDialog from './ConfirmDialog';
 
+/**
+ * 检测是否为移动端设备
+ * 移动端：直接 tel: 协议拨号
+ * 桌面端：弹出友好提示，告知用户该功能仅在手机端可用
+ */
+const isMobileDevice = () => {
+  if (typeof navigator === 'undefined') return false;
+  return /Android|iPhone|iPad|iPod|Windows Phone|Mobile/i.test(navigator.userAgent)
+    || (typeof window !== 'undefined' && 'ontouchstart' in window && window.innerWidth < 1024);
+};
+
 const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
@@ -13,7 +24,8 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
   const [activeCategory, setActiveCategory] = useState(null);
   const [randomPresets, setRandomPresets] = useState([]);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
-  
+  const [showDesktopTip, setShowDesktopTip] = useState(false); // 桌面端不支持拨号提示
+
   const messagesEndRef = useRef(null);
 
   // 紧急情况分类标签
@@ -297,12 +309,22 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
     setError('');
   };
 
-  // 处理一键呼叫家人 - 优先直接拨打主要联系人
+  // 处理一键呼叫家人
+  // 移动端：直接 tel: 协议拨号
+  // 桌面端：弹出友好提示，告知用户该功能仅在手机端可用
   const handleCallFamily = () => {
     if (!emergencyContacts || emergencyContacts.length === 0) {
       setError('请先添加紧急联系人');
       return;
     }
+
+    // 桌面端：不支持 tel: 协议，弹出提示
+    if (!isMobileDevice()) {
+      setShowDesktopTip(true);
+      return;
+    }
+
+    // 移动端：原有 tel: 协议逻辑
     // 如果只有一个联系人，直接拨打
     if (emergencyContacts.length === 1) {
       window.location.href = `tel:${emergencyContacts[0].phone}`;
@@ -646,6 +668,17 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
         isOpen={showContactModal}
         onClose={() => setShowContactModal(false)}
         contacts={emergencyContacts}
+      />
+
+      {/* 桌面端不支持拨号提示弹窗 */}
+      <ConfirmDialog
+        isOpen={showDesktopTip}
+        title="功能仅在手机端可用"
+        message="一键呼叫家人需要手机拨号功能，电脑端暂不支持。请您用手机登录老人端使用此功能，给您带来不便敬请谅解。"
+        confirmText="我知道了"
+        hideCancel
+        onConfirm={() => setShowDesktopTip(false)}
+        onCancel={() => setShowDesktopTip(false)}
       />
 
       {/* 关闭紧急模式确认弹窗 */}
