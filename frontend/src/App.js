@@ -1486,6 +1486,7 @@ function App() {
 
   const audioRef = useRef(null);
   const followUpAudioRef = useRef(null); // 追问消息专用音频元素，独立于全局播放
+  const followUpMessagesRef = useRef(null); // 追问消息容器，用于自动滚动到底部
 
   const speak = async (text, rate = speechRate) => {
     // 剥离HTML标签，避免TTS朗读标签内容
@@ -1787,6 +1788,13 @@ function App() {
   const [isFollowUpLoading, setIsFollowUpLoading] = useState(false); // 追问加载中
   const [isFollowUpSpeaking, setIsFollowUpSpeaking] = useState(false); // 追问语音播放中（独立于全局isSpeaking）
   const [speakingFollowUpIdx, setSpeakingFollowUpIdx] = useState(null); // 当前正在播放语音的追问消息索引
+
+  // 追问消息变化时自动滚动到底部（用户发送新问题后跳到最下方）
+  useEffect(() => {
+    if (followUpMessagesRef.current) {
+      followUpMessagesRef.current.scrollTop = followUpMessagesRef.current.scrollHeight;
+    }
+  }, [followUpMessages, isFollowUpLoading]);
 
   // 当selectedDrug变化时，自动调用AI生成老年友好指导
   useEffect(() => {
@@ -4611,7 +4619,7 @@ function App() {
             </div>
 
             {/* 对话消息区域 */}
-            <div style={{
+            <div ref={followUpMessagesRef} style={{
               maxHeight: '300px',
               overflowY: 'auto',
               padding: '12px',
@@ -4672,7 +4680,7 @@ function App() {
                             width: '32px', height: '32px', alignSelf: 'flex-start', lineHeight: 1
                           }}
                         >
-                          {isThisSpeaking ? '🔇' : '🔊'}
+                          {isThisSpeaking ? '🔊' : '🔇'}
                         </button>
                       )}
                     </div>
