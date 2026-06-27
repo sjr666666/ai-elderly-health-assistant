@@ -82,6 +82,13 @@ function App() {
   const lastCheckedTimeRef = useRef(null); // 上次检查的时间，避免重复提醒
   const lastReminderTimeRef = useRef(null); // 上次弹窗提醒的时间，避免频繁提醒
   const lastShownStageRef = useRef(null); // 上次已展示的最高阶段，只有阶段升级才再次提醒
+  // 获取本地日期 key（YYYY-MM-DD），避免 toISOString() 返回 UTC 日期导致凌晨跨日判断错误
+  const getLocalDateKey = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const lastDateRef = useRef(getLocalDateKey()); // 跨日检测：记录当前日期(YYYY-MM-DD)
+  const loadCalendarPlansRef = useRef(null); // 跨日检测：持有最新的 loadCalendarPlans 引用，避免闭包陈旧
   
   // 药品冲突检测相关状态
   const [conflictReport, setConflictReport] = useState(null); // 冲突检测报告
@@ -447,6 +454,9 @@ function App() {
       setIsLoadingCalendar(false);
     }
   };
+
+  // 保持 ref 始终指向最新的 loadCalendarPlans，供跨日检测使用
+  loadCalendarPlansRef.current = loadCalendarPlans;
 
   // 从后端加载一周用药记录（包括已删除但在查询范围内的记录）
   const loadWeeklyMedication = async () => {
@@ -1429,6 +1439,31 @@ function App() {
       clearInterval(intervalId);
     };
   }, [isLoggedIn, calendarPlans]);
+
+  // 跨日检测：页面长时间不刷新时，发现日期变化则自动刷新今日用药计划
+  // 解决"昨天开着页面到今天，日历仍是昨天数据"的问题
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const checkDateChange = () => {
+      const todayKey = getLocalDateKey();
+      if (lastDateRef.current && lastDateRef.current !== todayKey) {
+        console.log(`检测到跨日变化: ${lastDateRef.current} -> ${todayKey}，自动刷新用药计划`);
+        lastDateRef.current = todayKey;
+        // 清空昨日缓存，避免断网时误读昨天的计划
+        localStorage.removeItem(TODAY_PLANS_CACHE_KEY);
+        // 重新加载今日用药计划（通过 ref 调用最新版本，避免闭包陈旧）
+        if (loadCalendarPlansRef.current) {
+          loadCalendarPlansRef.current();
+        }
+      } else if (!lastDateRef.current) {
+        lastDateRef.current = todayKey;
+      }
+    };
+
+    const intervalId = setInterval(checkDateChange, 60 * 1000); // 每分钟检查一次
+    return () => clearInterval(intervalId);
+  }, [isLoggedIn]);
 
   // 监听弹窗显示，自动播报（只在弹窗首次打开时播报一次）
   const lastReminderIdRef = useRef(null);
