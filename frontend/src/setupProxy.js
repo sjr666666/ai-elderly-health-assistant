@@ -13,6 +13,10 @@ module.exports = function(app) {
         },
         onProxyReq: (proxyReq, req, res) => {
           console.log('[Proxy] Forwarding:', req.method, req.url);
+          // 转发Cookie
+          if (req.headers.cookie) {
+            proxyReq.setHeader('Cookie', req.headers.cookie);
+          }
           // 只在Content-Type为application/json时设置charset
           const contentType = proxyReq.getHeader('Content-Type');
           if (contentType && contentType.includes('application/json')) {

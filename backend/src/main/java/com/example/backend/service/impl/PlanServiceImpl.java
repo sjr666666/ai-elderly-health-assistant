@@ -7,7 +7,7 @@ import com.example.backend.model.entity.*;
 import com.example.backend.mapper.*;
 import com.example.backend.model.dto.*;
 import com.example.backend.service.PlanService;
-import com.example.backend.common.BusinessException;
+import com.example.backend.exception.BusinessException;
 import com.example.backend.common.ResponseCode;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -38,7 +38,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         if (principal instanceof SysUser) {
             return ((SysUser) principal).getId();
         }
-        throw new BusinessException(ResponseCode.UNAUTHORIZED, "用户未登录");
+        throw new BusinessException(ResponseCode.UNAUTHORIZED.getCode(), "用户未登录");
     }
 
     private String getTimeSlotLabel(String timeSlot) {
@@ -59,7 +59,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
                 .eq(MedicationPlan::getId, planId)
                 .eq(MedicationPlan::getUserId, userId));
         if (plan == null) {
-            throw new BusinessException(ResponseCode.PARAM_ERROR, "用药计划不存在");
+            throw new BusinessException(ResponseCode.PARAM_ERROR.getCode(), "用药计划不存在");
         }
         return plan;
     }
@@ -69,7 +69,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         Long count = medicationLogMapper.selectCount(new LambdaQueryWrapper<MedicationLog>()
                 .eq(MedicationLog::getPlanId, planId));
         if (count > 0) {
-            throw new BusinessException(ResponseCode.PARAM_ERROR, "今日该时段已记录过");
+            throw new BusinessException(ResponseCode.PARAM_ERROR.getCode(), "今日该时段已记录过");
         }
     }
 
@@ -399,7 +399,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         SysUser user = userMapper.selectOne(userQueryWrapper);
         
         if (user == null) {
-            throw new BusinessException(ResponseCode.PARAM_ERROR, "用户不存在");
+            throw new BusinessException(ResponseCode.PARAM_ERROR.getCode(), "用户不存在");
         }
         
         Long actualUserId = user.getId();
@@ -408,20 +408,20 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         // 1. 查询药箱条目
         UserMedicineBox boxItem = userMedicineBoxMapper.selectById(boxItemId);
         if (boxItem == null) {
-            throw new BusinessException(ResponseCode.PARAM_ERROR, "药箱条目不存在");
+            throw new BusinessException(ResponseCode.PARAM_ERROR.getCode(), "药箱条目不存在");
         }
 
         // 2. 验证该条目属于当前用户
         if (!boxItem.getUserId().equals(actualUserId)) {
-            throw new BusinessException(ResponseCode.UNAUTHORIZED, "无权操作该药品");
+            throw new BusinessException(ResponseCode.UNAUTHORIZED.getCode(), "无权操作该药品");
         }
 
         // 3. 验证该药品是否在有效期内
         if (boxItem.getStartDate() != null && boxItem.getStartDate().isAfter(today)) {
-            throw new BusinessException(ResponseCode.PARAM_ERROR, "该药品尚未到开始服用日期");
+            throw new BusinessException(ResponseCode.PARAM_ERROR.getCode(), "该药品尚未到开始服用日期");
         }
         if (boxItem.getEndDate() != null && boxItem.getEndDate().isBefore(today)) {
-            throw new BusinessException(ResponseCode.PARAM_ERROR, "该药品已过服用结束日期");
+            throw new BusinessException(ResponseCode.PARAM_ERROR.getCode(), "该药品已过服用结束日期");
         }
 
         // 4. 为每个选中的时间段创建用药计划
@@ -470,7 +470,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             SysUser user = userMapper.selectOne(userQueryWrapper);
             
             if (user == null) {
-                throw new BusinessException(ResponseCode.PARAM_ERROR, "用户不存在");
+                throw new BusinessException(ResponseCode.PARAM_ERROR.getCode(), "用户不存在");
             }
             
             Long actualUserId = user.getId();
@@ -492,7 +492,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             userQueryWrapper.eq(SysUser::getUserId, userId);
             SysUser user = userMapper.selectOne(userQueryWrapper);
             if (user == null) {
-                throw new BusinessException(ResponseCode.PARAM_ERROR, "用户不存在");
+                throw new BusinessException(ResponseCode.PARAM_ERROR.getCode(), "用户不存在");
             }
             actualUserId = user.getId();
         } else {
@@ -585,14 +585,14 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         SysUser user = userMapper.selectOne(userQueryWrapper);
 
         if (user == null) {
-            throw new BusinessException(ResponseCode.PARAM_ERROR, "用户不存在");
+            throw new BusinessException(ResponseCode.PARAM_ERROR.getCode(), "用户不存在");
         }
 
         Long actualUserId = user.getId();
         // action 接口允许操作软删除的计划（撤销历史记录等场景），不走逻辑删除过滤
         MedicationPlan plan = medicationPlanMapper.selectByIdIgnoreDeleted(planId, actualUserId);
         if (plan == null) {
-            throw new BusinessException(ResponseCode.PARAM_ERROR, "用药计划不存在");
+            throw new BusinessException(ResponseCode.PARAM_ERROR.getCode(), "用药计划不存在");
         }
 
         switch (action.toLowerCase()) {
@@ -605,7 +605,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
                 executeUndoAction(planId, actualUserId, plan);
                 return new ConfirmMedicationResponseDTO();
             default:
-                throw new BusinessException(ResponseCode.PARAM_ERROR, "不支持的操作类型: " + action);
+                throw new BusinessException(ResponseCode.PARAM_ERROR.getCode(), "不支持的操作类型: " + action);
         }
     }
 
