@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { saveToken } from '../utils/elderApi';
 
-function Login({ onLogin, onShowRegister }) {
+function Login({ onLogin, onShowRegister, onSwitchToGuardian }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -50,8 +51,21 @@ function Login({ onLogin, onShowRegister }) {
       const data = await response.json();
 
       if (response.ok && data.code === 200) {
-        // 直接传递后端返回的用户数据
-        onLogin(data.data);
+        const userData = data.data;
+        // 老人端登录界面仅允许老人账号登录，家属账号请使用家属端登录
+        if (userData.role === 'family') {
+          setError('家属账号请使用家属端登录');
+          setIsLoading(false);
+          return;
+        }
+        // 保存JWT token
+        if (userData.token) {
+          saveToken(userData.token);
+        }
+        // 传递用户数据（不含token）
+        const userInfo = { ...userData };
+        delete userInfo.token;
+        onLogin(userInfo);
       } else {
         setError(data.message || '用户名或密码错误');
       }
@@ -307,6 +321,32 @@ function Login({ onLogin, onShowRegister }) {
             }}
           >
             立即注册
+          </button>
+        </div>
+
+        {/* 家属端登录入口 */}
+        <div style={{
+          marginTop: '16px',
+          textAlign: 'center',
+          fontSize: '14px',
+          color: '#999'
+        }}>
+          <span>家属账号？</span>
+          <button
+            type="button"
+            onClick={() => onSwitchToGuardian && onSwitchToGuardian()}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#3A7BC8',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              marginLeft: '4px',
+              padding: 0
+            }}
+          >
+            家属端登录 →
           </button>
         </div>
         </form>

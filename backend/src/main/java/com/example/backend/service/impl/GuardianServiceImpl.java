@@ -222,9 +222,9 @@ public class GuardianServiceImpl implements GuardianService {
     }
 
     @Override
-    public GuardianElderRelation bindRelation(GuardianRelationRequest request) {
+    public GuardianElderRelation bindRelation(Long guardianId, GuardianRelationRequest request) {
         log.info("绑定监护关系 - guardianId: {}, elderId: {}, elderUsername: {}",
-                request.getGuardianId(), request.getElderId(), request.getElderUsername());
+                guardianId, request.getElderId(), request.getElderUsername());
 
         Long elderId = request.getElderId();
 
@@ -244,9 +244,18 @@ public class GuardianServiceImpl implements GuardianService {
             throw new RuntimeException("请提供elderId或elderUsername");
         }
 
+        // 验证elderId对应的用户角色是否为"elder"
+        SysUser elderUser = userMapper.selectById(elderId);
+        if (elderUser == null) {
+            throw new RuntimeException("未找到该用户：elderId=" + elderId);
+        }
+        if (!"elder".equals(elderUser.getRole())) {
+            throw new RuntimeException("只能绑定老人角色的用户，该用户角色为：" + elderUser.getRole());
+        }
+
         // 检查是否已存在active关联
         LambdaQueryWrapper<GuardianElderRelation> existQuery = new LambdaQueryWrapper<>();
-        existQuery.eq(GuardianElderRelation::getGuardianId, request.getGuardianId())
+        existQuery.eq(GuardianElderRelation::getGuardianId, guardianId)
                 .eq(GuardianElderRelation::getElderId, elderId)
                 .eq(GuardianElderRelation::getStatus, "active");
         if (guardianElderRelationMapper.selectCount(existQuery) > 0) {
@@ -255,7 +264,7 @@ public class GuardianServiceImpl implements GuardianService {
 
         // 检查是否存在inactive关联（解绑过的），如果有则恢复
         LambdaQueryWrapper<GuardianElderRelation> inactiveQuery = new LambdaQueryWrapper<>();
-        inactiveQuery.eq(GuardianElderRelation::getGuardianId, request.getGuardianId())
+        inactiveQuery.eq(GuardianElderRelation::getGuardianId, guardianId)
                 .eq(GuardianElderRelation::getElderId, elderId)
                 .eq(GuardianElderRelation::getStatus, "inactive");
         GuardianElderRelation inactiveRelation = guardianElderRelationMapper.selectOne(inactiveQuery);
@@ -265,12 +274,12 @@ public class GuardianServiceImpl implements GuardianService {
             guardianElderRelationMapper.updateById(inactiveRelation);
             log.info("监护关系恢复成功 - id: {}", inactiveRelation.getId());
             // 通知老人
-            sendBindNotification(request.getGuardianId(), elderId, request.getRelationType());
+            sendBindNotification(guardianId, elderId, request.getRelationType());
             return inactiveRelation;
         }
 
         GuardianElderRelation relation = new GuardianElderRelation();
-        relation.setGuardianId(request.getGuardianId());
+        relation.setGuardianId(guardianId);
         relation.setElderId(elderId);
         relation.setRelationType(request.getRelationType());
         relation.setStatus("active");
@@ -279,7 +288,7 @@ public class GuardianServiceImpl implements GuardianService {
 
         log.info("监护关系绑定成功 - id: {}", relation.getId());
         // 通知老人
-        sendBindNotification(request.getGuardianId(), elderId, request.getRelationType());
+        sendBindNotification(guardianId, elderId, request.getRelationType());
         return relation;
     }
 
@@ -516,7 +525,9 @@ public class GuardianServiceImpl implements GuardianService {
         if (minutes < 0) {
             minutes = 0;
         }
-        if (minutes < 60) {
+        if (minutes == 0) {
+            return "刚刚";
+        } else if (minutes < 60) {
             return minutes + "分钟前";
         } else if (minutes < 1440) {
             return (minutes / 60) + "小时前";

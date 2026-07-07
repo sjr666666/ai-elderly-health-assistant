@@ -9,6 +9,8 @@ import com.example.backend.model.dto.UserRegisterRequest;
 import com.example.backend.model.dto.UserRegisterResponse;
 import com.example.backend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
@@ -22,6 +24,17 @@ public class UserController {
     @Autowired
     public UserController(UserService userService) {
         this.userService = userService;
+    }
+
+    /**
+     * 获取当前认证用户的ID（数据库主键）
+     */
+    private Long getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("用户未认证");
+        }
+        return (Long) authentication.getPrincipal();
     }
 
     @PostMapping("/register")
@@ -49,14 +62,11 @@ public class UserController {
      * GET /api/v1/user/profile
      */
     @GetMapping("/profile")
-    public ResponseResult<UserProfileResponse> getProfile(@RequestParam String userId) {
+    public ResponseResult<UserProfileResponse> getProfile() {
         try {
-            // 将 String 转换为 Long，避免精度丢失
-            Long userIdLong = Long.parseLong(userId);
-            UserProfileResponse profile = userService.getUserProfile(userIdLong);
+            Long userId = getCurrentUserId();
+            UserProfileResponse profile = userService.getUserProfile(userId);
             return ResponseResult.success("success", profile);
-        } catch (NumberFormatException e) {
-            return ResponseResult.fail("无效的用户ID格式");
         } catch (Exception e) {
             return ResponseResult.fail("获取用户信息失败: " + e.getMessage());
         }
@@ -67,15 +77,11 @@ public class UserController {
      * PUT /api/v1/user/profile
      */
     @PutMapping("/profile")
-    public ResponseResult<Void> updateProfile(
-            @RequestParam String userId,
-            @RequestBody UserProfileUpdateRequest request) {
+    public ResponseResult<Void> updateProfile(@RequestBody UserProfileUpdateRequest request) {
         try {
-            Long userIdLong = Long.parseLong(userId);
-            userService.updateUserProfile(userIdLong, request);
+            Long userId = getCurrentUserId();
+            userService.updateUserProfile(userId, request);
             return ResponseResult.success("更新成功", null);
-        } catch (NumberFormatException e) {
-            return ResponseResult.fail("无效的用户ID格式");
         } catch (Exception e) {
             return ResponseResult.fail("更新失败: " + e.getMessage());
         }
@@ -86,20 +92,16 @@ public class UserController {
      * PUT /api/v1/user/password
      */
     @PutMapping("/password")
-    public ResponseResult<Void> changePassword(
-            @RequestParam String userId,
-            @RequestBody java.util.Map<String, String> body) {
+    public ResponseResult<Void> changePassword(@RequestBody java.util.Map<String, String> body) {
         try {
-            Long userIdLong = Long.parseLong(userId);
+            Long userId = getCurrentUserId();
             String oldPassword = body.get("oldPassword");
             String newPassword = body.get("newPassword");
             if (oldPassword == null || newPassword == null) {
                 return ResponseResult.fail("旧密码和新密码不能为空");
             }
-            userService.changePassword(userIdLong, oldPassword, newPassword);
+            userService.changePassword(userId, oldPassword, newPassword);
             return ResponseResult.success("密码修改成功", null);
-        } catch (NumberFormatException e) {
-            return ResponseResult.fail("无效的用户ID格式");
         } catch (Exception e) {
             return ResponseResult.fail(e.getMessage());
         }

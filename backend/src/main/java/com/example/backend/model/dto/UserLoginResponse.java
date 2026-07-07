@@ -30,4 +30,5 @@ public class UserLoginResponse {
     private Integer isSmoking;
     private Integer isDrinking;
     private String role;
+    private String token;  // JWT令牌，用于身份认证
 }

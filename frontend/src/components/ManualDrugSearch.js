@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { getToken } from '../utils/elderApi';
 
 function ManualDrugSearch({ onSelectDrug }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -11,8 +12,14 @@ function ManualDrugSearch({ onSelectDrug }) {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [displayCount, setDisplayCount] = useState(3); // 当前显示的药品数量，默认3条
+  const [isListening, setIsListening] = useState(false); // 语音输入监听状态
+  const [voiceSupported] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  });
   const inputRef = useRef(null);
   const debounceRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   const searchDrugs = async (query) => {
     if (!query || query.trim().length < 1) {
@@ -26,7 +33,9 @@ function ManualDrugSearch({ onSelectDrug }) {
     setDisplayCount(3); // 每次新搜索都重置为显示3条
 
     try {
-      const response = await fetch(`/api/v1/drug/search?keyword=${encodeURIComponent(query)}`);
+      const response = await fetch(`/api/v1/drug/search?keyword=${encodeURIComponent(query)}`, {
+        headers: { 'Authorization': `Bearer ${getToken()}` },
+      });
       const data = await response.json();
 
       if (data.code === 200 && data.data && data.data.length > 0) {
@@ -44,7 +53,9 @@ function ManualDrugSearch({ onSelectDrug }) {
         setShowResults(true);
         setSelectedIndex(-1);
       } else {
-        const aiResponse = await fetch(`/api/v1/drug/ai-search?keyword=${encodeURIComponent(query)}`);
+        const aiResponse = await fetch(`/api/v1/drug/ai-search?keyword=${encodeURIComponent(query)}`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` },
+        });
         const aiData = await aiResponse.json();
         
         if (aiData.code === 200 && aiData.data && aiData.data.length > 0) {
@@ -438,6 +449,40 @@ function ManualDrugSearch({ onSelectDrug }) {
     }
   };
 
+  // 切换语音输入
+  const toggleVoiceInput = () => {
+    if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'zh-CN';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setIsListening(true);
+
+    recognition.onresult = (event) => {
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      setSearchQuery(transcript);
+    };
+
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
   // 加载更多药品
   const handleLoadMore = () => {
     setDisplayCount(prev => prev + 3); // 每次再加载3条
@@ -653,12 +698,12 @@ function ManualDrugSearch({ onSelectDrug }) {
             }
           }}
           disabled={isLoading}
-          placeholder="请输入药品名称、症状或类别，如：感冒药、甲状腺、摔伤..."
+          placeholder={isListening ? '正在聆听，请说出药品名称...' : '请输入药品名称、症状或类别，如：感冒药、甲状腺、摔伤...'}
           style={{
             flex: 1,
             padding: '20px 24px 20px 64px',
             fontSize: '20px',
-            border: '3px solid #F0EBE3',
+            border: isListening ? '3px solid var(--danger-red, #E74C3C)' : '3px solid #F0EBE3',
             borderRadius: '20px',
             outline: 'none',
             transition: 'all 0.3s ease',
@@ -670,8 +715,13 @@ function ManualDrugSearch({ onSelectDrug }) {
           }}
           onFocus={(e) => {
             if (!isLoading) {
-              e.target.style.borderColor = '#4A90E2';
-              e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
+              if (isListening) {
+                e.target.style.borderColor = 'var(--danger-red, #E74C3C)';
+                e.target.style.boxShadow = '0 0 0 6px rgba(231, 76, 60, 0.15)';
+              } else {
+                e.target.style.borderColor = '#4A90E2';
+                e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
+              }
               e.target.style.background = 'white';
             }
           }}
@@ -695,6 +745,47 @@ function ManualDrugSearch({ onSelectDrug }) {
         }}>
           🔍
         </span>
+        {voiceSupported && (
+          <button
+            onClick={toggleVoiceInput}
+            disabled={isLoading}
+            title={isListening ? '停止语音输入' : '语音输入'}
+            style={{
+              padding: '16px',
+              fontSize: '18px',
+              fontWeight: '600',
+              border: 'none',
+              borderRadius: '16px',
+              background: isListening 
+                ? 'linear-gradient(135deg, #F87171 0%, #C0392B 100%)' 
+                : 'linear-gradient(135deg, #5B9EF0 0%, var(--tech-blue-dark, #357ABD) 100%)',
+              color: 'white',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.3s ease',
+              boxShadow: isListening 
+                ? '0 4px 16px rgba(231, 76, 60, 0.4)' 
+                : '0 4px 16px rgba(74, 144, 226, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: isLoading ? 0.6 : 1
+            }}
+            onMouseEnter={(e) => {
+              if (!isLoading) {
+                e.target.style.transform = 'translateY(-2px)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = 'translateY(0)';
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+            </svg>
+          </button>
+        )}
         <button
           onClick={handleSmartSearch}
           disabled={!searchQuery.trim() || isSearching || isLoading}

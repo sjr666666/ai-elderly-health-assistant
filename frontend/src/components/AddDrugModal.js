@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from './Toast';
+import { getToken } from '../utils/elderApi';
 
 /**
  * 添加新药弹窗组件
@@ -51,7 +52,9 @@ function AddDrugModal({ onClose, onAdd, userId }) {
     const fetchDrugList = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/v1/drug/list');
+        const response = await fetch('/api/v1/drug/list', {
+          headers: { 'Authorization': `Bearer ${getToken()}` },
+        });
         const data = await response.json();
         
         console.log('=== 药品列表响应 ===');
@@ -180,10 +183,11 @@ function AddDrugModal({ onClose, onAdd, userId }) {
       console.log('用户 ID:', userId);
 
       // 调用后端API
-      const response = await fetch(`/api/v1/box?userId=${userId}`, {
+      const response = await fetch(`/api/v1/box`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`,
         },
         body: JSON.stringify(drugData)
       });

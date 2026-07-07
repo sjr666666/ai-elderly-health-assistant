@@ -4,10 +4,16 @@ import GuardianDashboard from './GuardianDashboard';
 import GuardianElderDetail from './GuardianElderDetail';
 import GuardianNotification from './GuardianNotification';
 import GuardianProfile from './GuardianProfile';
+import { getGuardianUser, clearAuth, isAuthenticated, guardianApi } from '../../utils/guardianApi';
 import './guardian.css';
 
 function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
-  const [localUser, setLocalUser] = useState(null);
+  // 家属端独立认证：优先使用 propUser（兼容旧调用），否则惰性初始化从 guardianApi 读取
+  const [localUser, setLocalUser] = useState(() => {
+    if (propUser) return null;
+    const savedUser = getGuardianUser();
+    return (savedUser && savedUser.role === 'family' && isAuthenticated()) ? savedUser : null;
+  });
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedElderId, setSelectedElderId] = useState(null);
   const [dashboardKey, setDashboardKey] = useState(0);
@@ -16,28 +22,39 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
   const user = propUser || localUser;
 
   const fetchUnreadCount = useCallback(() => {
-    if (!user) return;
-    fetch(`/api/v1/guardian/notifications/unread-count?guardianId=${user.id}`)
-      .then(res => res.json())
+    if (!isAuthenticated()) return;
+    guardianApi.getUnreadCount()
       .then(data => { if (data.code === 200) setUnreadCount(data.data); })
       .catch(e => console.error('获取未读通知数失败:', e));
-  }, [user]);
+  }, []);
 
   useEffect(() => {
-    if (!propUser) {
-      const savedUser = localStorage.getItem('guardianUser');
-      if (savedUser) {
-        try {
-          const userData = JSON.parse(savedUser);
-          if (userData.role === 'family') setLocalUser(userData);
-        } catch (e) { console.error('解析家属用户数据失败:', e); localStorage.removeItem('guardianUser'); }
+    // 家属端独立认证：propUser 为空时确保从 guardianApi 读取本地用户信息
+    if (!propUser && !localUser) {
+      const savedUser = getGuardianUser();
+      if (savedUser && savedUser.role === 'family' && isAuthenticated()) {
+        setLocalUser(savedUser);
+      } else if (!isAuthenticated()) {
+        clearAuth();
       }
     }
-  }, [propUser]);
+  }, [propUser, localUser]);
+
+  // 监听认证过期事件
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setLocalUser(null);
+      setActiveTab('dashboard');
+      setSelectedElderId(null);
+      setUnreadCount(0);
+    };
+    window.addEventListener('guardian-auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('guardian-auth-expired', handleAuthExpired);
+  }, []);
 
   // 登录后轮询未读数（3秒间隔，近实时更新）
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isAuthenticated()) return;
     fetchUnreadCount();
     const timer = setInterval(fetchUnreadCount, 3000);
     // 页面聚焦时立即刷新
@@ -53,7 +70,7 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
     setActiveTab('dashboard');
     setSelectedElderId(null);
     setUnreadCount(0);
-    localStorage.removeItem('guardianUser');
+    clearAuth();
     if (propOnLogout) propOnLogout();
   };
 
@@ -77,20 +94,20 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
     fetchUnreadCount();
   };
 
-  if (!user) return <GuardianLogin onLogin={handleLogin} />;
+  if (!user || !isAuthenticated()) return <GuardianLogin onLogin={handleLogin} />;
 
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <GuardianDashboard key={dashboardKey} guardianId={user.id} onViewElder={handleViewElder} />;
+        return <GuardianDashboard key={dashboardKey} onViewElder={handleViewElder} />;
       case 'elderDetail':
-        return <GuardianElderDetail guardianId={user.id} elderId={selectedElderId} onBack={handleBackToDashboard} />;
+        return <GuardianElderDetail elderId={selectedElderId} onBack={handleBackToDashboard} />;
       case 'notification':
-        return <GuardianNotification guardianId={user.id} onRead={handleNotificationsRead} />;
+        return <GuardianNotification onRead={handleNotificationsRead} />;
       case 'profile':
         return <GuardianProfile user={user} onLogout={handleLogout} />;
       default:
-        return <GuardianDashboard key={dashboardKey} guardianId={user.id} onViewElder={handleViewElder} />;
+        return <GuardianDashboard key={dashboardKey} onViewElder={handleViewElder} />;
     }
   };
 

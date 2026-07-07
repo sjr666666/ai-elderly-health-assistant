@@ -7,17 +7,13 @@ import lombok.NoArgsConstructor;
 
 /**
  * 监护关系绑定请求DTO
+ * guardianId从SecurityContext获取，不接受前端传入
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class GuardianRelationRequest {
-
-    /**
-     * 监护人ID
-     */
-    private Long guardianId;
 
     /**
      * 老人ID（与elderUsername二选一）

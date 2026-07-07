@@ -525,7 +525,7 @@ public class WeeklyReportServiceImpl implements WeeklyReportService {
         }
         
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SysUser::getUserId, userId);
+        wrapper.eq(SysUser::getId, userId);
         SysUser user = userMapper.selectOne(wrapper);
         
         return user != null ? user.getId() : null;

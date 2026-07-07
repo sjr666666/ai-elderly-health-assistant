@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from '../Toast';
+import { getToken } from '../../utils/guardianApi';
 
 function GuardianProfile({ user, onLogout }) {
   const { showToast } = useToast();
@@ -24,7 +25,9 @@ function GuardianProfile({ user, onLogout }) {
 
   const loadProfile = async () => {
     try {
-      const res = await fetch(`/api/v1/user/profile?userId=${user.userId}`);
+      const res = await fetch(`/api/v1/user/profile`, {
+        headers: { 'Authorization': `Bearer ${getToken()}` },
+      });
       const data = await res.json();
       if (data.code === 200) {
         setProfile(data.data);
@@ -41,9 +44,12 @@ function GuardianProfile({ user, onLogout }) {
     if (!newPhone.trim()) return;
     setPhoneSaving(true);
     try {
-      const res = await fetch(`/api/v1/user/profile?userId=${user.userId}`, {
+      const res = await fetch(`/api/v1/user/profile`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`,
+        },
         body: JSON.stringify({ phone: newPhone.trim() }),
       });
       const data = await res.json();
@@ -75,9 +81,12 @@ function GuardianProfile({ user, onLogout }) {
     }
     setPwdSaving(true);
     try {
-      const res = await fetch(`/api/v1/user/password?userId=${user.userId}`, {
+      const res = await fetch(`/api/v1/user/password`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`,
+        },
         body: JSON.stringify({ oldPassword: oldPwd, newPassword: newPwd }),
       });
       const data = await res.json();

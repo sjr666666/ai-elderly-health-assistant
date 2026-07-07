@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useToast } from './Toast';
+import { getToken } from '../utils/elderApi';
 
 /**
  * 批量识别药品弹窗组件
@@ -156,7 +157,7 @@ function BatchRecognizeModal({ onClose, onAddToBox, userId }) {
       const response = await fetch('/api/v1/drug/recognize/batch-upload', {
         method: 'POST',
         headers: {
-          'X-User-Id': userId || '1'
+          'Authorization': `Bearer ${getToken()}`
         },
         body: formData
       });
@@ -258,10 +259,11 @@ function BatchRecognizeModal({ onClose, onAddToBox, userId }) {
         if (!img.result?.drugId) continue;
 
         try {
-          const response = await fetch(`/api/v1/box?userId=${userId}`, {
+          const response = await fetch(`/api/v1/box`, {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${getToken()}`,
             },
             body: JSON.stringify({
               drugId: img.result.drugId,

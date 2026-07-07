@@ -145,22 +145,33 @@
   -webkit-overflow-scrolling: touch;
 }
 
-/* ============ 登录页 ============ */
+/* ============ 登录页（移动端专用） ============ */
 .g-login {
   min-height: 100vh;
+  min-height: 100dvh; /* iOS 适配动态视口 */
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--primary);
-  padding: 24px;
+  background: linear-gradient(160deg, var(--primary) 0%, var(--primary-dark) 100%);
+  padding: 24px 20px;
+  /* iOS Safari 安全区域 */
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
 }
 
 .g-login-card {
   background: white;
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 36px 24px 28px;
   width: 100%;
-  max-width: 340px;
+  max-width: 360px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  animation: g-login-in 0.4s ease-out;
+}
+
+@keyframes g-login-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .g-login-header {
@@ -168,13 +179,26 @@
   margin-bottom: 32px;
 }
 
+.g-login-logo {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 16px;
+  background: var(--primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px rgba(58, 123, 200, 0.3);
+}
+
 .g-login-icon { font-size: 48px; margin-bottom: 12px; }
 
 .g-login-header h1 {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
   color: var(--text);
-  margin: 0 0 4px;
+  margin: 0 0 6px;
+  letter-spacing: 1px;
 }
 
 .g-login-header p {
@@ -187,30 +211,54 @@
 
 .g-form-group label {
   display: block;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-sub);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .g-required { color: var(--danger); }
 
+/* 带图标的输入框容器 */
+.g-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.g-input-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-hint);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .g-form-group input {
   width: 100%;
-  padding: 11px 14px;
-  font-size: 15px;
+  /* 触控友好：高度 ≥ 44px (iOS HIG) / 48dp (Material) */
+  padding: 12px 14px 12px 40px;
+  font-size: 16px; /* ≥16px 防止 iOS Safari 自动缩放 */
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   outline: none;
   background: #FAFAFA;
   font-family: inherit;
   box-sizing: border-box;
-  transition: border-color 0.15s;
+  transition: all 0.2s ease;
+  -webkit-appearance: none; /* 移除 iOS 默认样式 */
+  appearance: none;
 }
 
 .g-form-group input:focus {
   border-color: var(--primary);
   background: white;
+  box-shadow: 0 0 0 3px rgba(58, 123, 200, 0.1);
+}
+
+.g-form-group input:disabled {
+  background: #F0F0F0;
+  color: var(--text-hint);
 }
 
 .g-pwd-wrapper { position: relative; }
@@ -224,17 +272,102 @@
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 16px;
-  padding: 4px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-hint);
+  border-radius: 6px;
+  transition: color 0.15s;
+  z-index: 1;
+}
+
+.g-pwd-toggle:active { color: var(--primary); }
+
+/* 忘记密码链接 */
+.g-login-forgot {
+  text-align: right;
+  margin: -4px 0 20px;
+}
+
+.g-login-forgot button {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: inherit;
+}
+
+.g-login-forgot button:active {
+  opacity: 0.7;
 }
 
 .g-error-tip {
   background: var(--danger-light);
   color: var(--danger);
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 13px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+  border: 1px solid #FFCDD2;
+}
+
+/* 登录按钮 */
+.g-login-submit {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  margin-top: 4px;
+  /* 触控友好高度 */
+  min-height: 48px;
+  letter-spacing: 2px;
+  box-shadow: 0 4px 12px rgba(58, 123, 200, 0.25);
+}
+
+.g-login-submit:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 2px 6px rgba(58, 123, 200, 0.2);
+}
+
+/* 登录加载动画 */
+.g-login-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: g-spin 0.7s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+/* 切换登录端入口 */
+.g-login-switch {
+  text-align: center;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #F0F0F0;
+}
+
+.g-login-switch button {
+  background: none;
+  border: none;
+  color: var(--text-hint);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px 16px;
+  font-family: inherit;
+  transition: color 0.15s;
+}
+
+.g-login-switch button:active {
+  color: var(--primary);
 }
 
 /* ============ 按钮 ============ */
@@ -613,7 +746,7 @@
 }
 
 .g-med-stat-ok { background: var(--success-light); color: var(--success); }
-.g-med-stat-pending { background: var(--primary-light); color: var(--primary); }
+.g-med-stat-pending { background: var(--warn-light); color: var(--warn); }
 .g-med-stat-miss { background: var(--danger-light); color: var(--danger); }
 
 .g-med-plan-list {

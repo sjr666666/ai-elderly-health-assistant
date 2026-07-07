@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useToast } from './Toast';
+import { getToken } from '../utils/elderApi';
 
 // 器官功能状态选项
 const ORGAN_FUNCTION_OPTIONS = [
@@ -106,7 +107,7 @@ function ProfileEdit({ user, onSave, onClose }) {
     if (!validateForm()) {
       return;
     }
-    if (!user || !user.userId) {
+    if (!user) {
       showToast('用户信息缺失，请重新登录', 'error');
       return;
     }
@@ -129,9 +130,12 @@ function ProfileEdit({ user, onSave, onClose }) {
         isDrinking: isDrinking ? 1 : 0
       };
 
-      const response = await fetch(`/api/v1/user/profile?userId=${user.userId}`, {
+      const response = await fetch(`/api/v1/user/profile`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`,
+        },
         body: JSON.stringify(payload),
       });
 

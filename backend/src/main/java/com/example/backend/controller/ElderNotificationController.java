@@ -6,13 +6,15 @@ import com.example.backend.model.entity.EmergencyContact;
 import com.example.backend.service.ElderNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 老人端通知控制器
+ * elderId 从 SecurityContext 获取，不接受前端传入
  */
 @Slf4j
 @RestController
@@ -24,12 +26,23 @@ public class ElderNotificationController {
     private final ElderNotificationService elderNotificationService;
 
     /**
+     * 获取当前认证用户的ID（数据库主键）
+     */
+    private Long getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("用户未认证");
+        }
+        return (Long) authentication.getPrincipal();
+    }
+
+    /**
      * 获取老人通知列表
      */
     @GetMapping
     public ResponseResult<List<ElderNotificationDTO>> getNotifications(
-            @RequestParam("elderId") Long elderId,
             @RequestParam(value = "limit", defaultValue = "20") Integer limit) {
+        Long elderId = getCurrentUserId();
         log.info("获取老人通知列表 - elderId: {}, limit: {}", elderId, limit);
         return ResponseResult.success(elderNotificationService.getNotifications(elderId, limit));
     }
@@ -38,7 +51,8 @@ public class ElderNotificationController {
      * 获取未读通知数量
      */
     @GetMapping("/unread-count")
-    public ResponseResult<Integer> getUnreadCount(@RequestParam("elderId") Long elderId) {
+    public ResponseResult<Integer> getUnreadCount() {
+        Long elderId = getCurrentUserId();
         return ResponseResult.success(elderNotificationService.getUnreadCount(elderId));
     }
 
@@ -55,7 +69,8 @@ public class ElderNotificationController {
      * 标记所有通知为已读
      */
     @PutMapping("/read-all")
-    public ResponseResult<String> markAllAsRead(@RequestParam("elderId") Long elderId) {
+    public ResponseResult<String> markAllAsRead() {
+        Long elderId = getCurrentUserId();
         elderNotificationService.markAllAsRead(elderId);
         return ResponseResult.success("已全部标记为已读");
     }
@@ -84,7 +99,8 @@ public class ElderNotificationController {
      * 清除已读通知
      */
     @DeleteMapping("/read")
-    public ResponseResult<String> deleteReadNotifications(@RequestParam("elderId") Long elderId) {
+    public ResponseResult<String> deleteReadNotifications() {
+        Long elderId = getCurrentUserId();
         int count = elderNotificationService.deleteReadNotifications(elderId);
         return ResponseResult.success("已清除" + count + "条已读通知");
     }

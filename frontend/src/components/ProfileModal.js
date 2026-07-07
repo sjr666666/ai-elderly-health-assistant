@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from './Toast';
+import { getToken } from '../utils/elderApi';
 
 // 常见慢性病预设选项
 const CHRONIC_DISEASE_OPTIONS = [
@@ -23,7 +24,9 @@ function ProfileModal({ onComplete, onClose, userId }) {
         return;
       }
       try {
-        const response = await fetch(`/api/v1/user/profile?userId=${userId}`);
+        const response = await fetch(`/api/v1/user/profile`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` },
+        });
         const data = await response.json();
         if (response.ok && data.code === 200) {
           setAllergyHistory(data.data.allergyHistory || '');
@@ -53,10 +56,11 @@ function ProfileModal({ onComplete, onClose, userId }) {
     setIsSubmitting(true);
     try {
       const diseasesStr = chronicDiseases.length > 0 ? chronicDiseases.join('、') : '';
-      const response = await fetch(`/api/v1/user/profile?userId=${userId}`, {
+      const response = await fetch(`/api/v1/user/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`,
         },
         body: JSON.stringify({
           allergyHistory: allergyHistory || null,

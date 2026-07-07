@@ -2543,7 +2543,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  background: var(--mint-green);
+  background: var(--warning-orange);
   color: white;
   padding: 12px 28px;
   border-radius: var(--radius-medium);
@@ -2555,7 +2555,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  background: var(--warning-orange);
+  background: var(--danger-red);
   color: white;
   padding: 12px 28px;
   border-radius: var(--radius-medium);
@@ -6035,6 +6035,49 @@ body {
   background: linear-gradient(135deg, var(--mint-green), var(--mint-green-dark));
 }
 
+/* 语音输入按钮 */
+.voice-input-btn {
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, #5B9EF0, var(--tech-blue-dark));
+  border: none;
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  transition: all var(--transition-medium);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(74, 144, 226, 0.3);
+}
+
+.voice-input-btn:hover:not(:disabled) {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+}
+
+.voice-input-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-input-btn.listening {
+  background: linear-gradient(135deg, #F87171, #C0392B);
+  box-shadow: 0 4px 16px rgba(231, 76, 60, 0.4);
+  animation: voice-btn-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes voice-btn-pulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(231, 76, 60, 0.4); }
+  50% { box-shadow: 0 4px 16px rgba(231, 76, 60, 0.4), 0 0 0 8px rgba(231, 76, 60, 0.15); }
+}
+
+/* 语音监听时输入框高亮 */
+.question-input.voice-active {
+  border-color: var(--danger-red);
+  box-shadow: 0 0 0 6px rgba(231, 76, 60, 0.1);
+}
+
 .btn-spinner {
   width: 24px;
   height: 24px;
@@ -7108,4 +7151,145 @@ body {
 @keyframes sosPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 23, 68, 0.5); }
   50% { box-shadow: 0 0 0 8px rgba(255, 23, 68, 0); }
+}
+
+/* ============ 浮动麦克风按钮 ============ */
+.floating-mic-wrapper {
+  position: fixed;
+  bottom: 32px;
+  right: 28px;
+  z-index: 8000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  animation: mic-fab-enter 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes mic-fab-enter {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 核心容器：仅包裹按钮+涟漪，确保涟漪以按钮为圆心 */
+.floating-mic-core {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.floating-mic-btn {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #5B9EF0 0%, var(--tech-blue) 55%, var(--tech-blue-dark) 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow:
+    0 6px 18px rgba(74, 144, 226, 0.35),
+    0 2px 4px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+  z-index: 2;
+}
+
+.floating-mic-btn:hover {
+  transform: scale(1.08);
+  box-shadow:
+    0 8px 26px rgba(74, 144, 226, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.floating-mic-btn:active {
+  transform: scale(0.94);
+}
+
+.floating-mic-btn svg {
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.15));
+}
+
+/* 监听状态 */
+.floating-mic-wrapper.listening .floating-mic-btn {
+  background: linear-gradient(135deg, #F87171 0%, var(--danger-red) 55%, #C0392B 100%);
+  box-shadow:
+    0 6px 18px rgba(231, 76, 60, 0.4),
+    0 2px 4px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.floating-mic-wrapper.listening .floating-mic-btn:hover {
+  box-shadow:
+    0 8px 26px rgba(231, 76, 60, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* 涟漪：绝对定位于 core，以按钮圆心为中心扩散 */
+.floating-mic-ripple {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid rgba(74, 144, 226, 0.4);
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.floating-mic-wrapper.listening .floating-mic-ripple {
+  border-color: rgba(231, 76, 60, 0.45);
+  animation: mic-ripple-expand 1.8s ease-out infinite;
+}
+
+.floating-mic-wrapper.listening .floating-mic-ripple--second {
+  animation-delay: 0.6s;
+}
+
+@keyframes mic-ripple-expand {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
+
+/* 文字标签 */
+.floating-mic-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-light);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(6px);
+  padding: 2px 10px;
+  border-radius: 10px;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  transition: all var(--transition-fast);
+  pointer-events: none;
+}
+
+.floating-mic-wrapper.listening .floating-mic-label {
+  color: #C0392B;
+  background: rgba(255, 235, 233, 0.92);
 }

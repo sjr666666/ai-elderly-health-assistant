@@ -11,6 +11,8 @@ import com.example.backend.mapper.UserMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -33,6 +35,17 @@ public class DrugConflictController {
 
     @Autowired
     private UserMapper userMapper;
+
+    /**
+     * 获取当前认证用户的ID（数据库主键）
+     */
+    private Long getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("用户未认证");
+        }
+        return (Long) authentication.getPrincipal();
+    }
 
     /**
      * 检测多种药品之间的冲突
@@ -137,31 +150,24 @@ public class DrugConflictController {
 
     /**
      * 结合用户健康档案进行全面冲突检测
-     * 根据用户ID自动获取身高体重、肾肝功能、孕期/哺乳期、吸烟饮酒等关键用药因素，进行药品冲突检测
+     * 根据当前登录用户自动获取身高体重、肾肝功能、孕期/哺乳期、吸烟饮酒等关键用药因素，进行药品冲突检测
      *
-     * @param userId 用户ID
      * @param drugNames 药品名称列表
      * @return 冲突检测报告
      */
     @PostMapping("/check-with-profile")
     public ResponseResult<DrugConflictResponse> checkWithUserProfile(
-            @RequestParam String userId,
             @RequestBody List<String> drugNames) {
         try {
+            Long userId = getCurrentUserId();
             logger.info("收到结合健康档案的冲突检测请求 - 用户ID: {}, 药品列表: {}", userId, drugNames);
-
-            if (userId == null || userId.trim().isEmpty()) {
-                return ResponseResult.fail("用户ID不能为空");
-            }
 
             if (drugNames == null || drugNames.isEmpty()) {
                 return ResponseResult.fail("药品列表不能为空");
             }
 
-            Long uid = Long.parseLong(userId);
-            LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
-            queryWrapper.eq(SysUser::getUserId, uid);
-            SysUser user = userMapper.selectOne(queryWrapper);
+            // userId 为数据库主键 id（由 SecurityContext 提供）
+            SysUser user = userMapper.selectById(userId);
 
             if (user == null) {
                 return ResponseResult.fail("用户不存在");

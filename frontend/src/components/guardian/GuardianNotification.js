@@ -1,45 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from '../Toast';
+import { guardianApi } from '../../utils/guardianApi';
 import './guardian.css';
 
-function GuardianNotification({ guardianId, onRead }) {
+function GuardianNotification({ onRead }) {
   const { showToast } = useToast();
   const [notifications, setNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => { loadNotifications(); }, [guardianId]);
+  useEffect(() => { loadNotifications(); }, []);
 
   const markAsRead = async () => {
     try {
-      await fetch(`/api/v1/guardian/notifications/read-all?guardianId=${guardianId}`, { method: 'PUT' });
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-      if (onRead) onRead();
-      showToast('已全部标记为已读', 'success');
-    } catch { showToast('操作失败', 'error'); }
+      const data = await guardianApi.markAllAsRead();
+      if (data.code === 200) {
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+        if (onRead) onRead();
+        showToast('已全部标记为已读', 'success');
+      } else {
+        showToast(data.message || '操作失败', 'error');
+      }
+    } catch (e) { showToast(e.message || '操作失败', 'error'); }
   };
 
   const clearRead = async () => {
     try {
-      const res = await fetch(`/api/v1/guardian/notifications/read?guardianId=${guardianId}`, { method: 'DELETE' });
-      const data = await res.json();
+      const data = await guardianApi.clearReadNotifications();
       if (data.code === 200) {
         setNotifications(prev => prev.filter(n => !n.isRead));
         showToast(data.message || '已清除', 'success');
       } else {
         showToast(data.message || '清除失败', 'error');
       }
-    } catch { showToast('清除失败', 'error'); }
+    } catch (e) { showToast(e.message || '清除失败', 'error'); }
   };
 
   const loadNotifications = async () => {
     setIsLoading(true); setError('');
     try {
-      const res = await fetch(`/api/v1/guardian/notifications?guardianId=${guardianId}&limit=20`);
-      const data = await res.json();
+      const data = await guardianApi.getNotifications();
       if (data.code === 200) setNotifications(data.data || []);
       else setError(data.message || '加载失败');
-    } catch { setError('网络连接失败'); }
+    } catch (e) { setError(e.message || '网络连接失败'); }
     finally { setIsLoading(false); }
   };
 

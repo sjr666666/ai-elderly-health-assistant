@@ -60,10 +60,11 @@ public interface GuardianService {
     /**
      * 绑定监护关系
      *
+     * @param guardianId 监护人ID（从SecurityContext获取）
      * @param request 绑定请求
      * @return 监护关系
      */
-    GuardianElderRelation bindRelation(GuardianRelationRequest request);
+    GuardianElderRelation bindRelation(Long guardianId, GuardianRelationRequest request);
 
     /**
      * 解绑监护关系

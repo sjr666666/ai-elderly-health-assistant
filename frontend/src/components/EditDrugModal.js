@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useToast } from './Toast';
+import { getToken } from '../utils/elderApi';
 
 /**
  * 编辑药品弹窗组件
@@ -60,10 +61,11 @@ const EditDrugModal = ({ onClose, onSave, drug, userId }) => {
       console.log('请求体:', requestBody);
       console.log('==================');
 
-      const response = await fetch(`/api/v1/box/${drug.boxItemId}?userId=${userId}`, {
+      const response = await fetch(`/api/v1/box/${drug.boxItemId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`,
         },
         body: JSON.stringify(requestBody),
       });

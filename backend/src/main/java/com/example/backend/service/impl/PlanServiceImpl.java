@@ -35,8 +35,8 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
 
     private Long getCurrentUserId() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        if (principal instanceof SysUser) {
-            return ((SysUser) principal).getId();
+        if (principal instanceof Long) {
+            return (Long) principal;
         }
         throw new BusinessException(ResponseCode.UNAUTHORIZED, "用户未登录");
     }
@@ -201,23 +201,11 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
 
     @Override
     public TodayPlanResponseDTO generateDailyPlanFromMedicineBox(Long userId) {
-        // 根据雪花算法 user_id 查询实际的自增主键 id
-        LambdaQueryWrapper<SysUser> userQueryWrapper = new LambdaQueryWrapper<>();
-        userQueryWrapper.eq(SysUser::getUserId, userId);
-        SysUser user = userMapper.selectOne(userQueryWrapper);
-        
-        if (user == null) {
-            TodayPlanResponseDTO emptyResponse = new TodayPlanResponseDTO();
-            emptyResponse.setDate(LocalDate.now());
-            emptyResponse.setItems(List.of());
-            return emptyResponse;
-        }
-        
-        Long actualUserId = user.getId();
+        // userId 为数据库主键 id（由 SecurityContext 提供）
         LocalDate today = LocalDate.now();
 
         // 1. 查询数据库中已有的今日用药计划
-        List<MedicationPlan> existingPlans = medicationPlanMapper.selectUserDailyPlans(actualUserId, today);
+        List<MedicationPlan> existingPlans = medicationPlanMapper.selectUserDailyPlans(userId, today);
         
         // 按药品ID分组已有的计划（用于判断哪些药品已有用户选择的时间段）
         Map<Long, List<MedicationPlan>> existingPlansByDrug = existingPlans.stream()
@@ -231,7 +219,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
 
         // 2. 查询家庭药箱中当前用户需要服用的药品（状态为active，且在服用日期范围内）
         LambdaQueryWrapper<UserMedicineBox> boxQuery = new LambdaQueryWrapper<>();
-        boxQuery.eq(UserMedicineBox::getUserId, actualUserId)
+        boxQuery.eq(UserMedicineBox::getUserId, userId)
                 .eq(UserMedicineBox::getStatus, "active")
                 .le(UserMedicineBox::getStartDate, today)
                 .and(w -> w.isNull(UserMedicineBox::getEndDate).or().ge(UserMedicineBox::getEndDate, today));
@@ -252,7 +240,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
                 .collect(Collectors.toMap(DrugBase::getId, drug -> drug));
 
         // 4. 获取今日服药记录
-        List<MedicationLog> logs = medicationLogMapper.selectUserDailyLogs(actualUserId, today);
+        List<MedicationLog> logs = medicationLogMapper.selectUserDailyLogs(userId, today);
         Map<Long, String> planStatusMap = logs.stream()
                 .collect(Collectors.toMap(MedicationLog::getPlanId, MedicationLog::getStatus));
 
@@ -393,16 +381,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void addBoxItemToMedicationPlan(Long userId, Long boxItemId, List<String> timeSlots) {
-        // 根据雪花算法 user_id 查询实际的自增主键 id
-        LambdaQueryWrapper<SysUser> userQueryWrapper = new LambdaQueryWrapper<>();
-        userQueryWrapper.eq(SysUser::getUserId, userId);
-        SysUser user = userMapper.selectOne(userQueryWrapper);
-        
-        if (user == null) {
-            throw new BusinessException(ResponseCode.PARAM_ERROR, "用户不存在");
-        }
-        
-        Long actualUserId = user.getId();
+        // userId 为数据库主键 id（由 SecurityContext 提供）
         LocalDate today = LocalDate.now();
 
         // 1. 查询药箱条目
@@ -412,7 +391,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         }
 
         // 2. 验证该条目属于当前用户
-        if (!boxItem.getUserId().equals(actualUserId)) {
+        if (!boxItem.getUserId().equals(userId)) {
             throw new BusinessException(ResponseCode.UNAUTHORIZED, "无权操作该药品");
         }
 
@@ -428,7 +407,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         for (String timeSlot : timeSlots) {
             // 检查今天是否已有该药品在该时间段的计划
             LambdaQueryWrapper<MedicationPlan> existingQuery = new LambdaQueryWrapper<>();
-            existingQuery.eq(MedicationPlan::getUserId, actualUserId)
+            existingQuery.eq(MedicationPlan::getUserId, userId)
                     .eq(MedicationPlan::getDrugId, boxItem.getDrugId())
                     .eq(MedicationPlan::getPlanDate, today)
                     .eq(MedicationPlan::getTimeSlot, timeSlot);
@@ -441,7 +420,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
 
             // 创建新的用药计划
             MedicationPlan plan = new MedicationPlan();
-            plan.setUserId(actualUserId);
+            plan.setUserId(userId);
             plan.setDrugId(boxItem.getDrugId());
             plan.setBoxItemId(boxItemId);
             plan.setPlanDate(today);
@@ -464,20 +443,10 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             deletedCount = medicationPlanMapper.delete(null);
             logger.info("已清空所有用药计划，共删除 {} 条记录", deletedCount);
         } else {
-            // 根据雪花算法 user_id 查询实际的自增主键 id
-            LambdaQueryWrapper<SysUser> userQueryWrapper = new LambdaQueryWrapper<>();
-            userQueryWrapper.eq(SysUser::getUserId, userId);
-            SysUser user = userMapper.selectOne(userQueryWrapper);
-            
-            if (user == null) {
-                throw new BusinessException(ResponseCode.PARAM_ERROR, "用户不存在");
-            }
-            
-            Long actualUserId = user.getId();
-            
+            // userId 为数据库主键 id（由 SecurityContext 提供）
             // 删除该用户的所有用药计划
             LambdaQueryWrapper<MedicationPlan> queryWrapper = new LambdaQueryWrapper<>();
-            queryWrapper.eq(MedicationPlan::getUserId, actualUserId);
+            queryWrapper.eq(MedicationPlan::getUserId, userId);
             
             deletedCount = medicationPlanMapper.delete(queryWrapper);
             logger.info("已清空用户 {} 的所有用药计划，共删除 {} 条记录", userId, deletedCount);
@@ -486,18 +455,8 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
 
     @Override
     public WeeklyMedicationResponseDTO getWeeklyMedicationRecords(Long userId) {
-        Long actualUserId;
-        if (userId != null) {
-            LambdaQueryWrapper<SysUser> userQueryWrapper = new LambdaQueryWrapper<>();
-            userQueryWrapper.eq(SysUser::getUserId, userId);
-            SysUser user = userMapper.selectOne(userQueryWrapper);
-            if (user == null) {
-                throw new BusinessException(ResponseCode.PARAM_ERROR, "用户不存在");
-            }
-            actualUserId = user.getId();
-        } else {
-            actualUserId = getCurrentUserId();
-        }
+        // userId 为数据库主键 id（由 SecurityContext 提供），为空时从安全上下文获取
+        Long actualUserId = (userId != null) ? userId : getCurrentUserId();
 
         LocalDate today = LocalDate.now();
         LocalDate startDate = today.minusDays(6);
@@ -579,30 +538,21 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
     public ConfirmMedicationResponseDTO executeMedicationAction(Long planId, Long userId, String action) {
         logger.info("执行用药操作 - planId: {}, userId: {}, action: {}", planId, userId, action);
 
-        // 根据雪花算法 user_id 查询实际的自增主键 id
-        LambdaQueryWrapper<SysUser> userQueryWrapper = new LambdaQueryWrapper<>();
-        userQueryWrapper.eq(SysUser::getUserId, userId);
-        SysUser user = userMapper.selectOne(userQueryWrapper);
-
-        if (user == null) {
-            throw new BusinessException(ResponseCode.PARAM_ERROR, "用户不存在");
-        }
-
-        Long actualUserId = user.getId();
+        // userId 为数据库主键 id（由 SecurityContext 提供）
         // action 接口允许操作软删除的计划（撤销历史记录等场景），不走逻辑删除过滤
-        MedicationPlan plan = medicationPlanMapper.selectByIdIgnoreDeleted(planId, actualUserId);
+        MedicationPlan plan = medicationPlanMapper.selectByIdIgnoreDeleted(planId, userId);
         if (plan == null) {
             throw new BusinessException(ResponseCode.PARAM_ERROR, "用药计划不存在");
         }
 
         switch (action.toLowerCase()) {
             case "confirm":
-                return executeConfirmAction(planId, actualUserId, plan);
+                return executeConfirmAction(planId, userId, plan);
             case "skip":
-                executeSkipAction(planId, actualUserId, plan);
+                executeSkipAction(planId, userId, plan);
                 return new ConfirmMedicationResponseDTO();
             case "undo":
-                executeUndoAction(planId, actualUserId, plan);
+                executeUndoAction(planId, userId, plan);
                 return new ConfirmMedicationResponseDTO();
             default:
                 throw new BusinessException(ResponseCode.PARAM_ERROR, "不支持的操作类型: " + action);

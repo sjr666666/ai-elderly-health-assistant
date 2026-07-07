@@ -154,7 +154,7 @@ public class OcrServiceImpl implements OcrService {
 
             // 根据雪花算法 user_id 查询实际的自增主键 id
             LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
-            queryWrapper.eq(SysUser::getUserId, userId);
+            queryWrapper.eq(SysUser::getId, userId);
             SysUser user = userMapper.selectOne(queryWrapper);
 
             if (user == null) {
@@ -273,7 +273,7 @@ public class OcrServiceImpl implements OcrService {
 
         // 根据雪花算法 user_id 查询实际的自增主键 id
         LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(SysUser::getUserId, userId);
+        queryWrapper.eq(SysUser::getId, userId);
         SysUser user = userMapper.selectOne(queryWrapper);
 
         if (user == null) {
