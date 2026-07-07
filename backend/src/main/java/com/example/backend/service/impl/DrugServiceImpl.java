@@ -298,6 +298,10 @@ public class DrugServiceImpl implements DrugService {
                     aiResponse == null ? "(null)" : aiResponse.getGenericName());
             if (aiResponse != null && aiResponse.getGenericName() != null && !aiResponse.getGenericName().isEmpty()) {
                 logger.info("成功从DeepSeek AI获取药品信息 - {}", aiResponse.getGenericName());
+                
+                // ✅ 自动保存到数据库，下次查询可直接从数据库获取
+                saveDrugToDatabase(aiResponse);
+                
                 return fillEmptyFields(aiResponse);
             }
             logger.info("DeepSeek AI未返回有效药品信息，回退到友好 fallback");
@@ -307,6 +311,62 @@ public class DrugServiceImpl implements DrugService {
 
         // 第三级：数据库没有、AI 也没有 → 返回基于 drugName 的友好 fallback 响应
         return buildFallbackDrugDetail(drugName);
+    }
+
+    /**
+     * 将 AI 返回的药品信息保存到数据库
+     */
+    private void saveDrugToDatabase(DrugDetailResponse drugDetail) {
+        if (drugDetail == null || drugDetail.getGenericName() == null) {
+            return;
+        }
+        try {
+            // 先检查是否已存在（避免重复插入）
+            DrugBase existing = queryDrugFromDatabase(drugDetail.getGenericName());
+            if (existing != null) {
+                logger.info("药品已存在于数据库，跳过保存 - drugName: {}", drugDetail.getGenericName());
+                return;
+            }
+
+            // 构建 description 字段
+            StringBuilder description = new StringBuilder();
+            if (drugDetail.getIngredient() != null && !drugDetail.getIngredient().isEmpty()) {
+                description.append("成分：").append(drugDetail.getIngredient()).append("。");
+            }
+            if (drugDetail.getIndications() != null && !drugDetail.getIndications().isEmpty()) {
+                description.append("适应症：").append(drugDetail.getIndications()).append("。");
+            }
+            if (drugDetail.getUsage() != null && !drugDetail.getUsage().isEmpty()) {
+                description.append("用法用量：").append(drugDetail.getUsage()).append("。");
+            }
+            if (drugDetail.getPrecautions() != null && !drugDetail.getPrecautions().isEmpty()) {
+                description.append("注意事项：").append(drugDetail.getPrecautions()).append("。");
+            }
+            if (drugDetail.getAdverseReactions() != null && !drugDetail.getAdverseReactions().isEmpty()) {
+                description.append("不良反应：").append(drugDetail.getAdverseReactions()).append("。");
+            }
+
+            DrugBase drugBase = DrugBase.builder()
+                    .genericName(drugDetail.getGenericName())
+                    .tradeName(drugDetail.getTradeName())
+                    .commonName(null)
+                    .specification(drugDetail.getSpecification())
+                    .manufacturer(drugDetail.getManufacturer())
+                    .category(drugDetail.getCategory())
+                    .description(description.length() > 0 ? description.toString() : null)
+                    .build();
+
+            int insertCount = drugBaseMapper.insert(drugBase);
+            if (insertCount > 0) {
+                logger.info("✅ AI药品信息已成功保存到数据库 - drugName: {}, id: {}", 
+                    drugDetail.getGenericName(), drugBase.getId());
+            } else {
+                logger.warn("❌ 保存药品到数据库失败 - drugName: {}", drugDetail.getGenericName());
+            }
+        } catch (Exception e) {
+            logger.error("❌ 保存药品到数据库异常 - drugName: {}, error: {}", 
+                drugDetail.getGenericName(), e.getMessage(), e);
+        }
     }
 
     /**
@@ -342,6 +402,11 @@ public class DrugServiceImpl implements DrugService {
         String description = drug.getDescription();
         boolean descriptionOk = description != null && !description.trim().isEmpty();
 
+        logger.info("开始解析药品详情 - drugName: {}, description长度: {}", drugName, description != null ? description.length() : 0);
+        if (descriptionOk) {
+            logger.info("description前100字符: {}", description.substring(0, Math.min(100, description.length())));
+        }
+
         String ingredient = parseFieldOrFallback(description, "成分",
                 "该药品具体成分信息请以药品说明书或医生处方为准");
         String indications = parseFieldOrFallback(description, "适应症",
@@ -352,6 +417,11 @@ public class DrugServiceImpl implements DrugService {
                 "用药前请仔细阅读药品说明书，如有过敏史、孕妇、哺乳期妇女、肝肾功能不全者请咨询医生或药师");
         String adverseReactions = parseFieldOrFallback(description, "不良反应",
                 "如有皮疹、恶心、头晕等不适请及时停药并咨询医生或药师");
+
+        logger.info("解析结果 - ingredient: {}, indications: {}, usage: {}", 
+            ingredient != null ? ingredient.substring(0, Math.min(20, ingredient.length())) : "null",
+            indications != null ? indications.substring(0, Math.min(20, indications.length())) : "null",
+            usage != null ? usage.substring(0, Math.min(20, usage.length())) : "null");
 
         return DrugDetailResponse.builder()
                 .id(drug.getId())

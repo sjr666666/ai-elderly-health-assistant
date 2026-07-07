@@ -650,7 +650,7 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
             requestBody.put("temperature", 0.2);
-            requestBody.put("max_tokens", 2000);
+            requestBody.put("max_tokens", 4000); // 增加到4000以避免JSON被截断
 
             // 构建系统提示词
             String systemPrompt = buildConflictSystemPrompt(request.isDetailed(), request.isIncludeAlternatives());
@@ -746,13 +746,13 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         prompt.append("      \"drugB\": \"药品B名称或其他物质名称\",\n");
         prompt.append("      \"conflictType\": \"DRUG_DRUG|DRUG_FOOD|DRUG_BEVERAGE|DRUG_SUPPLEMENT|DRUG_ALLERGY|DRUG_DISEASE|DRUG_PREGNANCY|DRUG_LACTATION|DRUG_KIDNEY|DRUG_LIVER|DRUG_SMOKING|DRUG_AGE|DRUG_WEIGHT\",\n");
         prompt.append("      \"severity\": \"SEVERE|MODERATE|MILD\",\n");
-        prompt.append("      \"conflictMechanism\": \"专业的冲突原理描述\",\n");
-        prompt.append("      \"conflictExplanation\": \"用通俗易懂的语言解释冲突\",\n");
-        prompt.append("      \"riskWarning\": \"风险提示\",\n");
+        prompt.append("      \"conflictMechanism\": \"简短描述冲突原理（不超过50字）\",\n");
+        prompt.append("      \"conflictExplanation\": \"通俗易懂的解释（不超过80字）\",\n");
+        prompt.append("      \"riskWarning\": \"风险提示（不超过30字）\",\n");
         prompt.append("      \"alternatives\": [\"替代方案1\", \"替代方案2\"]\n");
         prompt.append("    }\n");
         prompt.append("  ],\n");
-        prompt.append("  \"generalAdvice\": \"总体用药建议\"\n");
+        prompt.append("  \"generalAdvice\": \"总体用药建议（不超过50字）\"\n");
         prompt.append("}\n\n");
         prompt.append("冲突严重程度说明：\n");
         prompt.append("- SEVERE（重度）：禁止同时使用，可能导致严重不良反应或危及生命\n");
@@ -782,7 +782,8 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         }
 
         prompt.append("如果没有检测到冲突，conflicts数组应为空数组[]。\n");
-        prompt.append("输出必须是严格的JSON格式，不能包含任何其他文本。");
+        prompt.append("输出必须是严格的JSON格式，不能包含任何其他文本。\n");
+        prompt.append("重要：所有字段内容必须简洁明了，严格遵守字数限制，避免冗长描述。");
 
         return prompt.toString();
     }
@@ -898,7 +899,9 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                         String jsonContent = content.asText().trim();
                         
                         try {
-                            JsonNode resultJson = objectMapper.readTree(jsonContent);
+                            // 尝试修复可能被截断的JSON
+                            String fixedJson = fixTruncatedJson(jsonContent);
+                            JsonNode resultJson = objectMapper.readTree(fixedJson);
                             
                             List<DrugConflictResult> conflicts = new ArrayList<>();
                             JsonNode conflictsNode = resultJson.get("conflicts");
@@ -918,7 +921,9 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                             return buildResponse(request, conflicts, generalAdvice);
                         } catch (Exception e) {
                             logger.warn("解析冲突检测JSON失败: {}", e.getMessage());
-                            return null;
+                            logger.warn("原始JSON内容（前500字符）: {}", jsonContent.substring(0, Math.min(500, jsonContent.length())));
+                            // 如果JSON解析失败，尝试从已解析的部分提取冲突信息
+                            return parsePartialConflicts(jsonContent, request);
                         }
                     }
                 }
@@ -1066,6 +1071,138 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             return null;
         }
         return weightKg.divide(heightM.multiply(heightM), 2, java.math.RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 修复可能被截断的JSON字符串
+     * @param jsonContent 原始JSON内容
+     * @return 修复后的JSON内容
+     */
+    private String fixTruncatedJson(String jsonContent) {
+        if (jsonContent == null || jsonContent.isEmpty()) {
+            return jsonContent;
+        }
+        
+        StringBuilder fixed = new StringBuilder(jsonContent.trim());
+        
+        // 如果JSON不完整，尝试补充闭合括号
+        int openBraces = 0;
+        int openBrackets = 0;
+        boolean inString = false;
+        boolean escapeNext = false;
+        
+        for (int i = 0; i < fixed.length(); i++) {
+            char c = fixed.charAt(i);
+            
+            if (escapeNext) {
+                escapeNext = false;
+                continue;
+            }
+            
+            if (c == '\\') {
+                escapeNext = true;
+                continue;
+            }
+            
+            if (c == '"' && !escapeNext) {
+                inString = !inString;
+            } else if (!inString) {
+                if (c == '{') openBraces++;
+                else if (c == '}') openBraces--;
+                else if (c == '[') openBrackets++;
+                else if (c == ']') openBrackets--;
+            }
+        }
+        
+        // 如果在字符串中，补充闭合引号和逗号
+        if (inString) {
+            fixed.append('"');
+            // 检查是否是在值的位置被截断，添加逗号分隔下一个字段
+            if (fixed.length() > 1 && fixed.charAt(fixed.length() - 2) != ':') {
+                fixed.append(',');
+            }
+        }
+        
+        // 补充缺失的闭合括号
+        while (openBrackets > 0) {
+            fixed.append(']');
+            openBrackets--;
+        }
+        
+        while (openBraces > 0) {
+            fixed.append('}');
+            openBraces--;
+        }
+        
+        logger.info("尝试修复截断的JSON: 原始长度={}, 修复后长度={}", jsonContent.length(), fixed.length());
+        return fixed.toString();
+    }
+
+    /**
+     * 从部分JSON中提取冲突信息（当完整解析失败时）
+     * @param jsonContent 可能不完整的JSON内容
+     * @param request 请求对象
+     * @return 部分解析的响应
+     */
+    private DrugConflictResponse parsePartialConflicts(String jsonContent, DrugConflictRequest request) {
+        logger.info("尝试从部分JSON中提取冲突信息");
+        
+        List<DrugConflictResult> conflicts = new ArrayList<>();
+        
+        try {
+            // 尝试提取conflicts数组
+            int conflictsStart = jsonContent.indexOf("\"conflicts\"");
+            if (conflictsStart >= 0) {
+                // 找到conflicts数组的开始位置
+                int arrayStart = jsonContent.indexOf('[', conflictsStart);
+                if (arrayStart >= 0) {
+                    // 尝试找到第一个完整的冲突对象
+                    int objStart = jsonContent.indexOf('{', arrayStart);
+                    int objEnd = jsonContent.lastIndexOf('}', Math.min(arrayStart + 5000, jsonContent.length()));
+                    
+                    if (objStart >= 0 && objEnd > objStart) {
+                        // 尝试逐个解析冲突对象
+                        String partialArray = jsonContent.substring(arrayStart, objEnd + 1);
+                        
+                        // 使用正则表达式提取每个冲突对象
+                        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                            "\\{[^{}]*(?:\\{[^{}]*\\}[^{}]*)*\\}",
+                            java.util.regex.Pattern.DOTALL
+                        );
+                        java.util.regex.Matcher matcher = pattern.matcher(partialArray);
+                        
+                        while (matcher.find()) {
+                            String conflictJson = matcher.group();
+                            try {
+                                JsonNode conflictNode = objectMapper.readTree(conflictJson);
+                                DrugConflictResult result = parseConflictItem(conflictNode);
+                                if (result != null && result.getDrugA() != null && result.getDrugB() != null) {
+                                    conflicts.add(result);
+                                    logger.info("成功解析部分冲突: {} - {}", result.getDrugA(), result.getDrugB());
+                                }
+                            } catch (Exception e) {
+                                // 忽略单个冲突解析失败
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("部分解析失败: {}", e.getMessage());
+        }
+        
+        if (!conflicts.isEmpty()) {
+            logger.info("成功从部分JSON中提取 {} 个冲突", conflicts.size());
+            return buildResponse(request, conflicts, "检测到药品冲突，但AI响应不完整，建议咨询医生或药师。");
+        }
+        
+        // 如果无法解析任何冲突，返回空结果
+        return createEmptyResponse(
+            request.getDrugNames(),
+            request.getSupplements(),
+            request.getBeverages(),
+            request.getFoods()
+        );
     }
 
     /**
