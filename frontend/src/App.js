@@ -1287,9 +1287,19 @@ function App() {
           if (userData.role && userData.role !== 'family') {
             setUser(userData);
             setIsLoggedIn(true);
+
+            // 加载老人端数据
+            if (userData.id) {
+              loadMedicineBoxList(userData.userId);
+              loadShortageWarnings(userData.userId);
+              loadCalendarPlans(userData.userId);
+              loadEmergencyContacts(userData.id);
+              fetchDailyLesson(userData.id);
+            }
           }
         } catch (e) {
           console.error('解析老人端用户数据失败:', e);
+          localStorage.removeItem('user');
         }
       }
     }
