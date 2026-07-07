@@ -1,6 +1,7 @@
 package com.example.backend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.backend.exception.BusinessException;
 import com.example.backend.mapper.*;
 import com.example.backend.model.dto.ElderMedicationPlanDTO;
 import com.example.backend.model.dto.ElderMedicationPlanItemDTO;
@@ -235,13 +236,13 @@ public class GuardianServiceImpl implements GuardianService {
                     .eq(SysUser::getRole, "elder");
             SysUser elder = userMapper.selectOne(userQuery);
             if (elder == null) {
-                throw new RuntimeException("未找到该老人用户：" + request.getElderUsername());
+                throw new BusinessException("未找到该老人用户：" + request.getElderUsername());
             }
             elderId = elder.getId();
         }
 
         if (elderId == null) {
-            throw new RuntimeException("请提供elderId或elderUsername");
+            throw new BusinessException("请提供elderId或elderUsername");
         }
 
         // 检查是否已存在active关联
@@ -250,7 +251,7 @@ public class GuardianServiceImpl implements GuardianService {
                 .eq(GuardianElderRelation::getElderId, elderId)
                 .eq(GuardianElderRelation::getStatus, "active");
         if (guardianElderRelationMapper.selectCount(existQuery) > 0) {
-            throw new RuntimeException("监护关系已存在");
+            throw new BusinessException("监护关系已存在");
         }
 
         // 检查是否存在inactive关联（解绑过的），如果有则恢复
@@ -294,7 +295,7 @@ public class GuardianServiceImpl implements GuardianService {
         GuardianElderRelation relation = guardianElderRelationMapper.selectOne(query);
 
         if (relation == null) {
-            throw new RuntimeException("未找到有效的监护关系");
+            throw new BusinessException("未找到有效的监护关系");
         }
 
         relation.setStatus("inactive");

@@ -9,6 +9,7 @@ import com.example.backend.service.MissedDoseMonitorService;
 import com.example.backend.service.SmsNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,182 +28,108 @@ public class GuardianController {
     @GetMapping("/dashboard")
     public ResponseResult<GuardianDashboardDTO> getDashboard(@RequestParam Long guardianId) {
         log.info("获取监护人仪表盘数据 - guardianId: {}", guardianId);
-        try {
-            return ResponseResult.success(guardianService.getDashboard(guardianId));
-        } catch (Exception e) {
-            log.error("获取仪表盘数据失败 - guardianId: {}", guardianId, e);
-            return ResponseResult.fail("获取仪表盘数据失败：" + e.getMessage());
-        }
+        return ResponseResult.success(guardianService.getDashboard(guardianId));
     }
 
     @GetMapping("/elders")
     public ResponseResult<List<ElderSummaryDTO>> getElderList(@RequestParam Long guardianId) {
         log.info("获取关联老人列表 - guardianId: {}", guardianId);
-        try {
-            return ResponseResult.success(guardianService.getElderList(guardianId));
-        } catch (Exception e) {
-            log.error("获取老人列表失败 - guardianId: {}", guardianId, e);
-            return ResponseResult.fail("获取老人列表失败：" + e.getMessage());
-        }
+        return ResponseResult.success(guardianService.getElderList(guardianId));
     }
 
     @GetMapping("/by-elder")
     public ResponseResult<List<GuardianSummaryDTO>> getGuardianList(@RequestParam Long elderId) {
         log.info("老人查询已绑定家属列表 - elderId: {}", elderId);
-        try {
-            return ResponseResult.success(guardianService.getGuardianList(elderId));
-        } catch (Exception e) {
-            log.error("获取家属列表失败 - elderId: {}", elderId, e);
-            return ResponseResult.fail("获取家属列表失败：" + e.getMessage());
-        }
+        return ResponseResult.success(guardianService.getGuardianList(elderId));
     }
 
     @GetMapping("/elders/{elderId}")
     public ResponseResult<ElderSummaryDTO> getElderDetail(@RequestParam Long guardianId, @PathVariable Long elderId) {
         log.info("获取老人详细信息 - guardianId: {}, elderId: {}", guardianId, elderId);
-        try {
-            if (!guardianService.hasPermission(guardianId, elderId)) {
-                return ResponseResult.fail("无权访问该老人数据");
-            }
-            return ResponseResult.success(guardianService.getElderDetail(guardianId, elderId));
-        } catch (Exception e) {
-            log.error("获取老人详细信息失败 - guardianId: {}, elderId: {}", guardianId, elderId, e);
-            return ResponseResult.fail("获取老人详细信息失败：" + e.getMessage());
+        if (!guardianService.hasPermission(guardianId, elderId)) {
+            throw new com.example.backend.exception.BusinessException("无权访问该老人数据");
         }
+        return ResponseResult.success(guardianService.getElderDetail(guardianId, elderId));
     }
 
     @PostMapping("/bind")
     public ResponseResult<GuardianElderRelation> bindRelation(@RequestBody GuardianRelationRequest request) {
         log.info("绑定监护关系 - guardianId: {}, elderId: {}", request.getGuardianId(), request.getElderId());
-        try {
-            return ResponseResult.success(guardianService.bindRelation(request));
-        } catch (Exception e) {
-            log.error("绑定监护关系失败 - guardianId: {}, elderId: {}", request.getGuardianId(), request.getElderId(), e);
-            return ResponseResult.fail("绑定监护关系失败：" + e.getMessage());
-        }
+        return ResponseResult.success(guardianService.bindRelation(request));
     }
 
     @DeleteMapping("/unbind")
     public ResponseResult<Void> unbindRelation(@RequestParam Long guardianId, @RequestParam Long elderId) {
         log.info("解绑监护关系 - guardianId: {}, elderId: {}", guardianId, elderId);
-        try {
-            guardianService.unbindRelation(guardianId, elderId);
-            return ResponseResult.success("解绑成功", null);
-        } catch (Exception e) {
-            log.error("解绑监护关系失败 - guardianId: {}, elderId: {}", guardianId, elderId, e);
-            return ResponseResult.fail("解绑监护关系失败：" + e.getMessage());
-        }
+        guardianService.unbindRelation(guardianId, elderId);
+        return ResponseResult.success("解绑成功", null);
     }
 
     @GetMapping("/elders/{elderId}/events")
     public ResponseResult<List<EmergencyEventDTO>> getElderEvents(@RequestParam Long guardianId, @PathVariable Long elderId, @RequestParam(defaultValue = "10") Integer limit) {
         log.info("获取老人紧急事件列表 - guardianId: {}, elderId: {}, limit: {}", guardianId, elderId, limit);
-        try {
-            if (!guardianService.hasPermission(guardianId, elderId)) {
-                return ResponseResult.fail("无权访问该老人数据");
-            }
-            return ResponseResult.success(emergencyEventService.getEventsByElderId(elderId, limit));
-        } catch (Exception e) {
-            log.error("获取紧急事件列表失败 - guardianId: {}, elderId: {}", guardianId, elderId, e);
-            return ResponseResult.fail("获取紧急事件列表失败：" + e.getMessage());
+        if (!guardianService.hasPermission(guardianId, elderId)) {
+            throw new com.example.backend.exception.BusinessException("无权访问该老人数据");
         }
+        return ResponseResult.success(emergencyEventService.getEventsByElderId(elderId, limit));
     }
 
     @PutMapping("/events/{eventId}/resolve")
     public ResponseResult<Void> resolveEvent(@PathVariable Long eventId, @RequestParam Long resolvedBy) {
         log.info("处理紧急事件 - eventId: {}, resolvedBy: {}", eventId, resolvedBy);
-        try {
-            emergencyEventService.resolveEvent(eventId, resolvedBy);
-            return ResponseResult.success("事件已处理", null);
-        } catch (Exception e) {
-            log.error("处理紧急事件失败 - eventId: {}", eventId, e);
-            return ResponseResult.fail("处理紧急事件失败：" + e.getMessage());
-        }
+        emergencyEventService.resolveEvent(eventId, resolvedBy);
+        return ResponseResult.success("事件已处理", null);
     }
 
     @GetMapping("/notifications")
     public ResponseResult<List<SmsNotificationDTO>> getNotifications(@RequestParam Long guardianId, @RequestParam(defaultValue = "20") Integer limit) {
         log.info("获取短信通知记录 - guardianId: {}, limit: {}", guardianId, limit);
-        try {
-            return ResponseResult.success(smsNotificationService.getNotificationHistory(guardianId, limit));
-        } catch (Exception e) {
-            log.error("获取短信通知记录失败 - guardianId: {}", guardianId, e);
-            return ResponseResult.fail("获取短信通知记录失败：" + e.getMessage());
-        }
+        return ResponseResult.success(smsNotificationService.getNotificationHistory(guardianId, limit));
     }
 
     @GetMapping("/notifications/unread-count")
     public ResponseResult<Integer> getUnreadCount(@RequestParam Long guardianId) {
         log.info("获取未读通知数量 - guardianId: {}", guardianId);
-        try {
-            return ResponseResult.success(smsNotificationService.getUnreadCount(guardianId));
-        } catch (Exception e) {
-            log.error("获取未读通知数量失败 - guardianId: {}", guardianId, e);
-            return ResponseResult.fail("获取未读通知数量失败：" + e.getMessage());
-        }
+        return ResponseResult.success(smsNotificationService.getUnreadCount(guardianId));
     }
 
     @PutMapping("/notifications/read-all")
     public ResponseResult<Void> markAllAsRead(@RequestParam Long guardianId) {
         log.info("标记所有通知为已读 - guardianId: {}", guardianId);
-        try {
-            smsNotificationService.markAllAsRead(guardianId);
-            return ResponseResult.success("标记成功", null);
-        } catch (Exception e) {
-            log.error("标记已读失败 - guardianId: {}", guardianId, e);
-            return ResponseResult.fail("标记已读失败：" + e.getMessage());
-        }
+        smsNotificationService.markAllAsRead(guardianId);
+        return ResponseResult.success("标记成功", null);
     }
 
     @DeleteMapping("/notifications/read")
     public ResponseResult<String> deleteReadNotifications(@RequestParam Long guardianId) {
         log.info("清除已读通知 - guardianId: {}", guardianId);
-        try {
-            int count = smsNotificationService.deleteReadNotifications(guardianId);
-            return ResponseResult.success("已清除" + count + "条已读通知");
-        } catch (Exception e) {
-            log.error("清除已读通知失败 - guardianId: {}", guardianId, e);
-            return ResponseResult.fail("清除失败：" + e.getMessage());
-        }
+        int count = smsNotificationService.deleteReadNotifications(guardianId);
+        return ResponseResult.success("已清除" + count + "条已读通知");
     }
 
     @GetMapping("/elders/{elderId}/expiring-drugs")
     public ResponseResult<List<ExpiringDrugDTO>> getExpiringDrugs(@RequestParam Long guardianId, @PathVariable Long elderId) {
         log.info("获取老人临期药品 - guardianId: {}, elderId: {}", guardianId, elderId);
-        try {
-            if (!guardianService.hasPermission(guardianId, elderId)) {
-                return ResponseResult.fail("无权访问该老人数据");
-            }
-            return ResponseResult.success(guardianService.getExpiringDrugs(elderId));
-        } catch (Exception e) {
-            log.error("获取临期药品失败 - guardianId: {}, elderId: {}", guardianId, elderId, e);
-            return ResponseResult.fail("获取临期药品失败：" + e.getMessage());
+        if (!guardianService.hasPermission(guardianId, elderId)) {
+            throw new com.example.backend.exception.BusinessException("无权访问该老人数据");
         }
+        return ResponseResult.success(guardianService.getExpiringDrugs(elderId));
     }
 
     @GetMapping("/elders/{elderId}/medication-plan")
     public ResponseResult<ElderMedicationPlanDTO> getMedicationPlan(@RequestParam Long guardianId, @PathVariable Long elderId) {
         log.info("获取老人今日用药计划 - guardianId: {}, elderId: {}", guardianId, elderId);
-        try {
-            if (!guardianService.hasPermission(guardianId, elderId)) {
-                return ResponseResult.fail("无权访问该老人数据");
-            }
-            return ResponseResult.success(guardianService.getMedicationPlan(elderId));
-        } catch (Exception e) {
-            log.error("获取用药计划失败 - guardianId: {}, elderId: {}", guardianId, elderId, e);
-            return ResponseResult.fail("获取用药计划失败：" + e.getMessage());
+        if (!guardianService.hasPermission(guardianId, elderId)) {
+            throw new com.example.backend.exception.BusinessException("无权访问该老人数据");
         }
+        return ResponseResult.success(guardianService.getMedicationPlan(elderId));
     }
 
     @PostMapping("/test/trigger-missed-check")
+    @Profile("dev")
     public ResponseResult<Void> triggerMissedCheck() {
         log.info("手动触发漏服检查");
-        try {
-            missedDoseMonitorService.checkMissedDoses();
-            return ResponseResult.success("漏服检查已触发", null);
-        } catch (Exception e) {
-            log.error("触发漏服检查失败", e);
-            return ResponseResult.fail("触发漏服检查失败：" + e.getMessage());
-        }
+        missedDoseMonitorService.checkMissedDoses();
+        return ResponseResult.success("漏服检查已触发", null);
     }
 }

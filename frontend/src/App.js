@@ -1251,9 +1251,34 @@ function App() {
     setIsDragging(true);
   };
 
-  // 应用初始化时清除 localStorage 中的登录状态，确保每次进入应用都跳转到登录页
+  // 应用初始化时从 localStorage 恢复登录状态
   useEffect(() => {
-    localStorage.removeItem('user');
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        setUser(userData);
+        setIsLoggedIn(true);
+        
+        // 家属角色直接跳转家属端
+        if (userData.role === 'family') {
+          return;
+        }
+        
+        // 加载老人端数据
+        if (userData.userId || userData.id) {
+          const userId = userData.userId || userData.id;
+          loadMedicineBoxList(userId);
+          loadShortageWarnings(userId);
+          loadCalendarPlans(userId);
+          loadEmergencyContacts(userData.id);
+          fetchDailyLesson(userData.id);
+        }
+      } catch (e) {
+        console.error('恢复登录状态失败:', e);
+        localStorage.removeItem('user');
+      }
+    }
   }, []);
 
   // WebSocket 连接管理 - 老人端实时通知
