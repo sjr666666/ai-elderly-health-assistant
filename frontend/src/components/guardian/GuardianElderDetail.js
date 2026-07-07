@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from '../Toast';
+import { guardianApi } from '../../utils/guardianApi';
 import './guardian.css';
 
-function GuardianElderDetail({ guardianId, elderId, onBack }) {
+function GuardianElderDetail({ elderId, onBack }) {
   const { showToast } = useToast();
   const [elder, setElder] = useState(null);
   const [events, setEvents] = useState([]);
@@ -13,7 +14,7 @@ function GuardianElderDetail({ guardianId, elderId, onBack }) {
   const [showUnbindConfirm, setShowUnbindConfirm] = useState(false);
   const [isUnbinding, setIsUnbinding] = useState(false);
 
-  useEffect(() => { if (elderId) loadAllData(); }, [elderId, guardianId]);
+  useEffect(() => { if (elderId) loadAllData(); }, [elderId]);
 
   const loadAllData = async () => {
     setIsLoading(true); setError('');
@@ -24,52 +25,55 @@ function GuardianElderDetail({ guardianId, elderId, onBack }) {
 
   const loadElderDetail = async () => {
     try {
-      const res = await fetch(`/api/v1/guardian/elders/${elderId}?guardianId=${guardianId}`);
-      const data = await res.json();
+      const data = await guardianApi.getElderDetail(elderId);
       if (data.code === 200) setElder(data.data);
     } catch {}
   };
 
   const loadEvents = async () => {
     try {
-      const res = await fetch(`/api/v1/guardian/elders/${elderId}/events?guardianId=${guardianId}&limit=10`);
-      const data = await res.json();
+      const data = await guardianApi.getElderEvents(elderId);
       if (data.code === 200) setEvents(data.data || []);
     } catch {}
   };
 
   const loadExpiringDrugs = async () => {
     try {
-      const res = await fetch(`/api/v1/guardian/elders/${elderId}/expiring-drugs?guardianId=${guardianId}`);
-      const data = await res.json();
+      const data = await guardianApi.getExpiringDrugs(elderId);
       if (data.code === 200) setExpiringDrugs(data.data || []);
     } catch {}
   };
 
   const loadMedPlan = async () => {
     try {
-      const res = await fetch(`/api/v1/guardian/elders/${elderId}/medication-plan?guardianId=${guardianId}`);
-      const data = await res.json();
+      const data = await guardianApi.getMedicationPlan(elderId);
       if (data.code === 200) setMedPlan(data.data);
     } catch {}
   };
 
   const handleResolveEvent = async (eventId) => {
     try {
-      const res = await fetch(`/api/v1/guardian/events/${eventId}/resolve?resolvedBy=${guardianId}`, { method: 'PUT' });
-      const data = await res.json();
-      if (data.code === 200) setEvents(events.map(e => e.eventId === eventId ? { ...e, status: 'resolved' } : e));
-    } catch {}
+      const data = await guardianApi.resolveEvent(eventId);
+      if (data.code === 200) {
+        setEvents(prev => prev.map(e => e.eventId === eventId ? { ...e, status: 'resolved' } : e));
+        showToast('已标记为处理', 'success');
+      } else {
+        showToast(data.message || '操作失败', 'error');
+      }
+    } catch (e) { showToast(e.message || '网络连接失败', 'error'); }
   };
 
   const handleUnbind = async () => {
     setIsUnbinding(true);
     try {
-      const res = await fetch(`/api/v1/guardian/unbind?guardianId=${guardianId}&elderId=${elderId}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.code === 200) onBack(true);
-      else showToast(data.message || '解绑失败', 'error');
-    } catch { showToast('网络连接失败', 'error'); }
+      const data = await guardianApi.unbindElder(elderId);
+      if (data.code === 200) {
+        showToast('解绑成功', 'success');
+        onBack(true);
+      } else {
+        showToast(data.message || '解绑失败', 'error');
+      }
+    } catch (e) { showToast(e.message || '网络连接失败', 'error'); }
     finally { setIsUnbinding(false); setShowUnbindConfirm(false); }
   };
 
@@ -98,7 +102,7 @@ function GuardianElderDetail({ guardianId, elderId, onBack }) {
   const getStatusStyle = (status) => {
     switch (status) {
       case 'taken': case 'completed': return { bg: 'var(--success-light)', color: 'var(--success)', label: '已服用' };
-      case 'pending': return { bg: 'var(--primary-light)', color: 'var(--primary)', label: '待服用' };
+      case 'pending': return { bg: 'var(--warn-light)', color: 'var(--warn)', label: '待服用' };
       case 'missed': return { bg: 'var(--danger-light)', color: 'var(--danger)', label: '已漏服' };
       case 'skipped': return { bg: 'var(--warn-light)', color: 'var(--warn)', label: '已跳过' };
       default: return { bg: '#f5f5f5', color: '#999', label: status };

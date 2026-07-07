@@ -9,10 +9,16 @@ import com.example.backend.service.MissedDoseMonitorService;
 import com.example.backend.service.SmsNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * 家属端控制器 - 所有接口需要JWT认证
+ * guardianId从SecurityContext获取，不再接受前端传入
+ */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/guardian")
@@ -24,8 +30,20 @@ public class GuardianController {
     private final SmsNotificationService smsNotificationService;
     private final MissedDoseMonitorService missedDoseMonitorService;
 
+    /**
+     * 获取当前认证用户的ID
+     */
+    private Long getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("用户未认证");
+        }
+        return (Long) authentication.getPrincipal();
+    }
+
     @GetMapping("/dashboard")
-    public ResponseResult<GuardianDashboardDTO> getDashboard(@RequestParam Long guardianId) {
+    public ResponseResult<GuardianDashboardDTO> getDashboard() {
+        Long guardianId = getCurrentUserId();
         log.info("获取监护人仪表盘数据 - guardianId: {}", guardianId);
         try {
             return ResponseResult.success(guardianService.getDashboard(guardianId));
@@ -36,7 +54,8 @@ public class GuardianController {
     }
 
     @GetMapping("/elders")
-    public ResponseResult<List<ElderSummaryDTO>> getElderList(@RequestParam Long guardianId) {
+    public ResponseResult<List<ElderSummaryDTO>> getElderList() {
+        Long guardianId = getCurrentUserId();
         log.info("获取关联老人列表 - guardianId: {}", guardianId);
         try {
             return ResponseResult.success(guardianService.getElderList(guardianId));
@@ -58,7 +77,8 @@ public class GuardianController {
     }
 
     @GetMapping("/elders/{elderId}")
-    public ResponseResult<ElderSummaryDTO> getElderDetail(@RequestParam Long guardianId, @PathVariable Long elderId) {
+    public ResponseResult<ElderSummaryDTO> getElderDetail(@PathVariable Long elderId) {
+        Long guardianId = getCurrentUserId();
         log.info("获取老人详细信息 - guardianId: {}, elderId: {}", guardianId, elderId);
         try {
             if (!guardianService.hasPermission(guardianId, elderId)) {
@@ -73,17 +93,19 @@ public class GuardianController {
 
     @PostMapping("/bind")
     public ResponseResult<GuardianElderRelation> bindRelation(@RequestBody GuardianRelationRequest request) {
-        log.info("绑定监护关系 - guardianId: {}, elderId: {}", request.getGuardianId(), request.getElderId());
+        Long guardianId = getCurrentUserId();
+        log.info("绑定监护关系 - guardianId: {}, elderId: {}", guardianId, request.getElderId());
         try {
-            return ResponseResult.success(guardianService.bindRelation(request));
+            return ResponseResult.success(guardianService.bindRelation(guardianId, request));
         } catch (Exception e) {
-            log.error("绑定监护关系失败 - guardianId: {}, elderId: {}", request.getGuardianId(), request.getElderId(), e);
+            log.error("绑定监护关系失败 - guardianId: {}, elderId: {}", guardianId, request.getElderId(), e);
             return ResponseResult.fail("绑定监护关系失败：" + e.getMessage());
         }
     }
 
     @DeleteMapping("/unbind")
-    public ResponseResult<Void> unbindRelation(@RequestParam Long guardianId, @RequestParam Long elderId) {
+    public ResponseResult<Void> unbindRelation(@RequestParam Long elderId) {
+        Long guardianId = getCurrentUserId();
         log.info("解绑监护关系 - guardianId: {}, elderId: {}", guardianId, elderId);
         try {
             guardianService.unbindRelation(guardianId, elderId);
@@ -95,7 +117,8 @@ public class GuardianController {
     }
 
     @GetMapping("/elders/{elderId}/events")
-    public ResponseResult<List<EmergencyEventDTO>> getElderEvents(@RequestParam Long guardianId, @PathVariable Long elderId, @RequestParam(defaultValue = "10") Integer limit) {
+    public ResponseResult<List<EmergencyEventDTO>> getElderEvents(@PathVariable Long elderId, @RequestParam(defaultValue = "10") Integer limit) {
+        Long guardianId = getCurrentUserId();
         log.info("获取老人紧急事件列表 - guardianId: {}, elderId: {}, limit: {}", guardianId, elderId, limit);
         try {
             if (!guardianService.hasPermission(guardianId, elderId)) {
@@ -109,10 +132,23 @@ public class GuardianController {
     }
 
     @PutMapping("/events/{eventId}/resolve")
-    public ResponseResult<Void> resolveEvent(@PathVariable Long eventId, @RequestParam Long resolvedBy) {
-        log.info("处理紧急事件 - eventId: {}, resolvedBy: {}", eventId, resolvedBy);
+    public ResponseResult<Void> resolveEvent(@PathVariable Long eventId) {
+        Long guardianId = getCurrentUserId();
+        log.info("处理紧急事件 - eventId: {}, guardianId: {}", eventId, guardianId);
         try {
-            emergencyEventService.resolveEvent(eventId, resolvedBy);
+            // 获取事件信息
+            var event = emergencyEventService.getEventById(eventId);
+            if (event == null) {
+                return ResponseResult.fail("未找到紧急事件");
+            }
+
+            // 校验权限：只有关联家属才能处理事件
+            if (!guardianService.hasPermission(guardianId, event.getElderId())) {
+                log.warn("无权处理事件 - eventId: {}, guardianId: {}, elderId: {}", eventId, guardianId, event.getElderId());
+                return ResponseResult.fail(403, "无权处理该事件");
+            }
+
+            emergencyEventService.resolveEvent(eventId, guardianId);
             return ResponseResult.success("事件已处理", null);
         } catch (Exception e) {
             log.error("处理紧急事件失败 - eventId: {}", eventId, e);
@@ -121,7 +157,8 @@ public class GuardianController {
     }
 
     @GetMapping("/notifications")
-    public ResponseResult<List<SmsNotificationDTO>> getNotifications(@RequestParam Long guardianId, @RequestParam(defaultValue = "20") Integer limit) {
+    public ResponseResult<List<SmsNotificationDTO>> getNotifications(@RequestParam(defaultValue = "20") Integer limit) {
+        Long guardianId = getCurrentUserId();
         log.info("获取短信通知记录 - guardianId: {}, limit: {}", guardianId, limit);
         try {
             return ResponseResult.success(smsNotificationService.getNotificationHistory(guardianId, limit));
@@ -132,7 +169,8 @@ public class GuardianController {
     }
 
     @GetMapping("/notifications/unread-count")
-    public ResponseResult<Integer> getUnreadCount(@RequestParam Long guardianId) {
+    public ResponseResult<Integer> getUnreadCount() {
+        Long guardianId = getCurrentUserId();
         log.info("获取未读通知数量 - guardianId: {}", guardianId);
         try {
             return ResponseResult.success(smsNotificationService.getUnreadCount(guardianId));
@@ -143,7 +181,8 @@ public class GuardianController {
     }
 
     @PutMapping("/notifications/read-all")
-    public ResponseResult<Void> markAllAsRead(@RequestParam Long guardianId) {
+    public ResponseResult<Void> markAllAsRead() {
+        Long guardianId = getCurrentUserId();
         log.info("标记所有通知为已读 - guardianId: {}", guardianId);
         try {
             smsNotificationService.markAllAsRead(guardianId);
@@ -155,7 +194,8 @@ public class GuardianController {
     }
 
     @DeleteMapping("/notifications/read")
-    public ResponseResult<String> deleteReadNotifications(@RequestParam Long guardianId) {
+    public ResponseResult<String> deleteReadNotifications() {
+        Long guardianId = getCurrentUserId();
         log.info("清除已读通知 - guardianId: {}", guardianId);
         try {
             int count = smsNotificationService.deleteReadNotifications(guardianId);
@@ -167,7 +207,8 @@ public class GuardianController {
     }
 
     @GetMapping("/elders/{elderId}/expiring-drugs")
-    public ResponseResult<List<ExpiringDrugDTO>> getExpiringDrugs(@RequestParam Long guardianId, @PathVariable Long elderId) {
+    public ResponseResult<List<ExpiringDrugDTO>> getExpiringDrugs(@PathVariable Long elderId) {
+        Long guardianId = getCurrentUserId();
         log.info("获取老人临期药品 - guardianId: {}, elderId: {}", guardianId, elderId);
         try {
             if (!guardianService.hasPermission(guardianId, elderId)) {
@@ -181,7 +222,8 @@ public class GuardianController {
     }
 
     @GetMapping("/elders/{elderId}/medication-plan")
-    public ResponseResult<ElderMedicationPlanDTO> getMedicationPlan(@RequestParam Long guardianId, @PathVariable Long elderId) {
+    public ResponseResult<ElderMedicationPlanDTO> getMedicationPlan(@PathVariable Long elderId) {
+        Long guardianId = getCurrentUserId();
         log.info("获取老人今日用药计划 - guardianId: {}, elderId: {}", guardianId, elderId);
         try {
             if (!guardianService.hasPermission(guardianId, elderId)) {

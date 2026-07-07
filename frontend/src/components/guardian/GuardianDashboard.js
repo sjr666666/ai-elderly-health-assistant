@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { guardianApi } from '../../utils/guardianApi';
 import './guardian.css';
 
-function GuardianDashboard({ guardianId, onViewElder }) {
+function GuardianDashboard({ onViewElder }) {
   const [dashboard, setDashboard] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -11,16 +12,15 @@ function GuardianDashboard({ guardianId, onViewElder }) {
   const [isBinding, setIsBinding] = useState(false);
   const [bindError, setBindError] = useState('');
 
-  useEffect(() => { loadDashboard(); }, [guardianId]);
+  useEffect(() => { loadDashboard(); }, []);
 
   const loadDashboard = async () => {
     setIsLoading(true); setError('');
     try {
-      const res = await fetch(`/api/v1/guardian/dashboard?guardianId=${guardianId}`);
-      const data = await res.json();
+      const data = await guardianApi.getDashboard();
       if (data.code === 200) setDashboard(data.data);
       else setError(data.message || '加载失败');
-    } catch { setError('网络连接失败'); }
+    } catch (e) { setError(e.message || '网络连接失败'); }
     finally { setIsLoading(false); }
   };
 
@@ -29,15 +29,10 @@ function GuardianDashboard({ guardianId, onViewElder }) {
     if (!relationType) { setBindError('请选择与老人的关系'); return; }
     setIsBinding(true); setBindError('');
     try {
-      const res = await fetch('/api/v1/guardian/bind', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guardianId, elderUsername: elderUsername.trim(), relationType }),
-      });
-      const data = await res.json();
+      const data = await guardianApi.bindElder(elderUsername.trim(), relationType);
       if (data.code === 200) { setElderUsername(''); setRelationType(''); setShowBindForm(false); loadDashboard(); }
       else setBindError(data.message || '绑定失败');
-    } catch { setBindError('网络连接失败'); }
+    } catch (e) { setBindError(e.message || '网络连接失败'); }
     finally { setIsBinding(false); }
   };
 
@@ -50,7 +45,7 @@ function GuardianDashboard({ guardianId, onViewElder }) {
     if (missed > 0) return { text: `漏服${missed}次`, cls: 's-err' };
     if (pending === 0) return { text: '已完成', cls: 's-ok' };
     if (taken > 0) return { text: `已服${taken}/${total}`, cls: 's-warn' };
-    return { text: `待服用${pending}次`, cls: 's-err' };
+    return { text: `待服用${pending}次`, cls: 's-warn' };
   };
 
   if (isLoading) return <div className="g-loading"><div className="g-spinner"></div><p>加载中...</p></div>;

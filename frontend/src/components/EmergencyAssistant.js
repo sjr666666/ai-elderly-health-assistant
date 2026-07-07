@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import ContactModal from './ContactModal';
 import ConfirmDialog from './ConfirmDialog';
+import { getToken } from '../utils/elderApi';
 
 /**
  * 检测是否为移动端设备
@@ -25,8 +26,14 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
   const [randomPresets, setRandomPresets] = useState([]);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [showDesktopTip, setShowDesktopTip] = useState(false); // 桌面端不支持拨号提示
+  const [isListening, setIsListening] = useState(false); // 语音输入监听状态
+  const [voiceSupported] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  });
 
   const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   // 紧急情况分类标签
   const categories = [
@@ -162,8 +169,10 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
       try {
         await fetch('/api/emergency/trigger', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ elderId }),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${getToken()}`,
+          },
         });
       } catch (e) {
         console.error('触发紧急模式通知失败:', e);
@@ -212,6 +221,7 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'Authorization': `Bearer ${getToken()}`,
             },
             body: JSON.stringify({
               question,
@@ -307,6 +317,40 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
   const clearMessages = () => {
     setMessages([]);
     setError('');
+  };
+
+  // 切换语音输入
+  const toggleVoiceInput = () => {
+    if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'zh-CN';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setIsListening(true);
+
+    recognition.onresult = (event) => {
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      setInputValue(transcript);
+    };
+
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
   // 处理一键呼叫家人
@@ -639,7 +683,7 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
       {/* 输入区域 */}
       <div className="input-container">
         <textarea
-          className="question-input"
+          className={`question-input ${isListening ? 'voice-active' : ''}`}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => {
@@ -648,10 +692,24 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
               sendMessage();
             }
           }}
-          placeholder="请描述您遇到的紧急情况..."
+          placeholder={isListening ? '正在聆听，请说出您的问题...' : '请描述您遇到的紧急情况...'}
           disabled={isLoading}
         />
         <div className="input-actions">
+          {voiceSupported && (
+            <button
+              className={`voice-input-btn ${isListening ? 'listening' : ''}`}
+              onClick={toggleVoiceInput}
+              disabled={isLoading}
+              title={isListening ? '停止语音输入' : '语音输入'}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="22" />
+              </svg>
+            </button>
+          )}
           <button
             className={`send-btn ${isLoading ? 'loading' : ''}`}
             onClick={sendMessage}

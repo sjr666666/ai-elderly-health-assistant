@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useToast } from './Toast';
+import { getToken } from '../utils/elderApi';
 
 function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
   const { showToast } = useToast();
@@ -190,6 +191,7 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${getToken()}`,
           },
           body: JSON.stringify({
             id: contact.id,

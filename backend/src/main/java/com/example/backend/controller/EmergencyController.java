@@ -19,6 +19,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -61,6 +63,17 @@ public class EmergencyController {
     }
 
     /**
+     * 获取当前认证用户的ID（数据库主键）
+     */
+    private Long getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("用户未认证");
+        }
+        return (Long) authentication.getPrincipal();
+    }
+
+    /**
      * 请求体DTO
      */
     public static class EmergencyRequest {
@@ -90,17 +103,17 @@ public class EmergencyController {
      */
     @PostMapping("/ask")
     public ResponseResult<String> askEmergencyQuestion(@RequestBody EmergencyRequest request) {
-        
-        Long userId = request.getUserId();
+
+        Long userId = getCurrentUserId();
         String question = request.getQuestion();
         Boolean isEmergency = request.getIsEmergency();
         List<Map<String, String>> history = request.getHistory();
-        
-        logger.info("收到紧急咨询请求 - 用户ID: {}, 问题: {}, 紧急标识: {}, 历史记录数: {}", 
+
+        logger.info("收到紧急咨询请求 - 用户ID: {}, 问题: {}, 紧急标识: {}, 历史记录数: {}",
                 userId, question, isEmergency, history != null ? history.size() : 0);
 
         // 如果未指定是否紧急，自动判断
-        boolean emergencyFlag = isEmergency != null ? isEmergency 
+        boolean emergencyFlag = isEmergency != null ? isEmergency
                                                     : aiEmergencyService.isEmergencyQuestion(question);
 
         return aiEmergencyService.handleEmergencyQuestion(userId, question, emergencyFlag, history);
@@ -114,11 +127,8 @@ public class EmergencyController {
      * @return 操作结果
      */
     @PostMapping("/trigger")
-    public ResponseResult<Map<String, Object>> triggerEmergencyMode(@RequestBody Map<String, Long> request) {
-        Long elderId = request.get("elderId");
-        if (elderId == null) {
-            return ResponseResult.fail("缺少elderId参数");
-        }
+    public ResponseResult<Map<String, Object>> triggerEmergencyMode() {
+        Long elderId = getCurrentUserId();
 
         logger.info("老人触发紧急模式 - elderId: {}", elderId);
 
@@ -176,11 +186,11 @@ public class EmergencyController {
      */
     @GetMapping("/history")
     public ResponseResult<List<AiConversationLog>> getConversationHistory(
-            @RequestParam("userId") Long userId,
             @RequestParam(value = "limit", defaultValue = "20") Integer limit) {
-        
+
+        Long userId = getCurrentUserId();
         logger.info("查询对话历史 - 用户ID: {}, 限制: {}", userId, limit);
-        
+
         List<AiConversationLog> history = conversationLogService.getHistoryByUserId(userId, limit);
         return ResponseResult.success(history);
     }
@@ -188,15 +198,14 @@ public class EmergencyController {
     /**
      * 清空对话历史
      *
-     * @param userId 用户ID
      * @return 操作结果
      */
     @DeleteMapping("/history")
-    public ResponseResult<String> clearConversationHistory(
-            @RequestParam("userId") Long userId) {
-        
+    public ResponseResult<String> clearConversationHistory() {
+
+        Long userId = getCurrentUserId();
         logger.info("清空对话历史 - 用户ID: {}", userId);
-        
+
         boolean success = conversationLogService.clearHistoryByUserId(userId);
         if (success) {
             return ResponseResult.success("对话历史已清空");

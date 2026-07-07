@@ -12,6 +12,8 @@ import com.example.backend.service.OcrService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -34,11 +36,22 @@ public class OcrController {
         this.recognitionLogMapper = recognitionLogMapper;
     }
 
+    /**
+     * 获取当前认证用户的ID（数据库主键）
+     */
+    private Long getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("用户未认证");
+        }
+        return (Long) authentication.getPrincipal();
+    }
+
     @PostMapping("/upload")
     public ResponseResult<OcrUploadResponse> uploadAndRecognize(
-            @RequestParam("file") MultipartFile file,
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+            @RequestParam("file") MultipartFile file) {
         try {
+            Long userId = getCurrentUserId();
             logger.info("收到图片上传请求 - fileName: {}, size: {}, userId: {}",
                     file.getOriginalFilename(), file.getSize(), userId);
 
@@ -56,10 +69,6 @@ public class OcrController {
                 return ResponseResult.fail("图片大小不能超过10MB");
             }
 
-            if (userId == null) {
-                userId = 1L;
-            }
-
             OcrUploadResponse response = ocrService.uploadAndRecognize(file, userId);
 
             return ResponseResult.success("图片已上传，识别中", response);
@@ -72,9 +81,9 @@ public class OcrController {
 
     @PostMapping("/batch-upload")
     public ResponseResult<BatchRecognizeResponse> batchUploadAndRecognize(
-            @RequestParam("files") MultipartFile[] files,
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+            @RequestParam("files") MultipartFile[] files) {
         try {
+            Long userId = getCurrentUserId();
             logger.info("收到批量图片上传请求 - fileCount: {}, userId: {}", files.length, userId);
 
             if (files == null || files.length == 0) {
@@ -93,10 +102,6 @@ public class OcrController {
                 if (file.getSize() > maxSize) {
                     return ResponseResult.fail("单张图片大小不能超过10MB");
                 }
-            }
-
-            if (userId == null) {
-                userId = 1L;
             }
 
             BatchRecognizeResponse response = ocrService.batchUploadAndRecognize(files, userId);
@@ -147,12 +152,9 @@ public class OcrController {
 
     @GetMapping("/history")
     public ResponseResult<List<DrugRecognitionLog>> getRecognitionHistory(
-            @RequestHeader(value = "X-User-Id", required = false) Long userId,
             @RequestParam(value = "limit", defaultValue = "20") Integer limit) {
         try {
-            if (userId == null) {
-                return ResponseResult.fail("用户ID不能为空");
-            }
+            Long userId = getCurrentUserId();
 
             QueryWrapper<DrugRecognitionLog> queryWrapper = new QueryWrapper<>();
             queryWrapper.eq("user_id", userId)

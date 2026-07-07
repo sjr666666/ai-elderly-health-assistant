@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getToken } from '../utils/elderApi';
 
 function MyGuardiansModal({ onClose, userId }) {
   const [loading, setLoading] = useState(true);
@@ -14,7 +15,9 @@ function MyGuardiansModal({ onClose, userId }) {
 
     const loadGuardians = async () => {
       try {
-        const response = await fetch(`/api/v1/guardian/by-elder?elderId=${userId}`);
+        const response = await fetch(`/api/v1/guardian/by-elder?elderId=${userId}`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` },
+        });
         const data = await response.json();
         if (response.ok && data.code === 200) {
           setGuardianList(data.data || []);

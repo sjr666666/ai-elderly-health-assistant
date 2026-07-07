@@ -1,21 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useToast } from './Toast';
+import { getToken } from '../utils/elderApi';
 
 /**
  * 老人端通知面板组件
  * 右侧滑出面板，展示通知列表
+ * elderId 从 JWT token 中获取，不需要前端传入
  */
-const ElderNotificationPanel = ({ elderId, isOpen, onClose, onUnreadCountChange, onContactAdded }) => {
+const ElderNotificationPanel = ({ isOpen, onClose, onUnreadCountChange, onContactAdded }) => {
   const { showToast } = useToast();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  const authHeaders = {
+    'Authorization': `Bearer ${getToken()}`,
+    'Content-Type': 'application/json',
+  };
+
   // 加载通知列表
   const loadNotifications = useCallback(async () => {
-    if (!elderId) return;
     try {
-      const res = await fetch(`/api/v1/elder/notifications?elderId=${elderId}&limit=20`);
+      const res = await fetch(`/api/v1/elder/notifications?limit=20`, { headers: authHeaders });
       const data = await res.json();
       if (data.code === 200) {
         setNotifications(data.data || []);
@@ -23,13 +29,12 @@ const ElderNotificationPanel = ({ elderId, isOpen, onClose, onUnreadCountChange,
     } catch (e) {
       console.error('加载通知失败', e);
     }
-  }, [elderId]);
+  }, []);
 
   // 加载未读数
   const fetchUnreadCount = useCallback(async () => {
-    if (!elderId) return;
     try {
-      const res = await fetch(`/api/v1/elder/notifications/unread-count?elderId=${elderId}`);
+      const res = await fetch(`/api/v1/elder/notifications/unread-count`, { headers: authHeaders });
       const data = await res.json();
       if (data.code === 200) {
         setUnreadCount(data.data || 0);
@@ -38,16 +43,16 @@ const ElderNotificationPanel = ({ elderId, isOpen, onClose, onUnreadCountChange,
     } catch (e) {
       console.error('获取未读通知数失败:', e);
     }
-  }, [elderId, onUnreadCountChange]);
+  }, [onUnreadCountChange]);
 
   // 面板打开时加载数据并标记已读
   useEffect(() => {
-    if (isOpen && elderId) {
+    if (isOpen) {
       loadNotifications();
       // 延迟标记已读，让用户先看到未读状态
       const timer = setTimeout(async () => {
         try {
-          await fetch(`/api/v1/elder/notifications/read-all?elderId=${elderId}`, { method: 'PUT' });
+          await fetch(`/api/v1/elder/notifications/read-all`, { method: 'PUT', headers: authHeaders });
           fetchUnreadCount();
         } catch (e) {
           console.error('标记已读失败:', e);
@@ -55,21 +60,21 @@ const ElderNotificationPanel = ({ elderId, isOpen, onClose, onUnreadCountChange,
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, elderId, loadNotifications, fetchUnreadCount]);
+  }, [isOpen, loadNotifications, fetchUnreadCount]);
 
   // 定时轮询未读数
   useEffect(() => {
-    if (!elderId) return;
     fetchUnreadCount();
     const timer = setInterval(fetchUnreadCount, 5000);
     return () => clearInterval(timer);
-  }, [elderId, fetchUnreadCount]);
+  }, [fetchUnreadCount]);
 
   // 添加紧急联系人
   const handleAddContact = async (notificationId) => {
     try {
       const res = await fetch(`/api/v1/elder/notifications/${notificationId}/add-contact`, {
         method: 'POST',
+        headers: authHeaders,
       });
       const data = await res.json();
       if (data.code === 200) {
@@ -91,7 +96,7 @@ const ElderNotificationPanel = ({ elderId, isOpen, onClose, onUnreadCountChange,
   // 忽略通知
   const handleDismiss = async (notificationId) => {
     try {
-      await fetch(`/api/v1/elder/notifications/${notificationId}/read`, { method: 'PUT' });
+      await fetch(`/api/v1/elder/notifications/${notificationId}/read`, { method: 'PUT', headers: authHeaders });
       setNotifications(prev =>
         prev.map(n => n.id === notificationId ? { ...n, isHandled: 1, isRead: 1 } : n)
       );
@@ -105,6 +110,7 @@ const ElderNotificationPanel = ({ elderId, isOpen, onClose, onUnreadCountChange,
     try {
       const res = await fetch(`/api/v1/elder/notifications/${notificationId}/update-phone`, {
         method: 'POST',
+        headers: authHeaders,
       });
       const data = await res.json();
       if (data.code === 200) {
@@ -124,7 +130,7 @@ const ElderNotificationPanel = ({ elderId, isOpen, onClose, onUnreadCountChange,
   // 一键已读
   const handleMarkAllRead = async () => {
     try {
-      await fetch(`/api/v1/elder/notifications/read-all?elderId=${elderId}`, { method: 'PUT' });
+      await fetch(`/api/v1/elder/notifications/read-all`, { method: 'PUT', headers: authHeaders });
       setNotifications(prev => prev.map(n => ({ ...n, isRead: 1 })));
       fetchUnreadCount();
       showToast('已全部标记为已读', 'success');
@@ -136,7 +142,7 @@ const ElderNotificationPanel = ({ elderId, isOpen, onClose, onUnreadCountChange,
   // 清除已读通知
   const handleClearRead = async () => {
     try {
-      const res = await fetch(`/api/v1/elder/notifications/read?elderId=${elderId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/v1/elder/notifications/read`, { method: 'DELETE', headers: authHeaders });
       const data = await res.json();
       if (data.code === 200) {
         setNotifications(prev => prev.filter(n => n.isRead === 0));

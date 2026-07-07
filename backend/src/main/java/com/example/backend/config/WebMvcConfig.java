@@ -27,7 +27,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/emergency/**")
                 .addPathPatterns("/api/ai/**");
 
-        // 注册活跃时间拦截器，对老人端关键接口生效
+        // 注册活跃时间拦截器，对老人端和家属端关键接口生效
         registry.addInterceptor(activeTimeInterceptor)
                 .addPathPatterns("/api/v1/plan/**")
                 .addPathPatterns("/api/v1/box/**")
@@ -36,6 +36,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/v1/drug/recognize/**")
                 .addPathPatterns("/api/ai/**")
                 .addPathPatterns("/api/v1/drug/**")
-                .addPathPatterns("/api/conflict/**");
+                .addPathPatterns("/api/conflict/**")
+                .addPathPatterns("/api/v1/guardian/**");
     }
 }

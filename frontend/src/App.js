@@ -19,14 +19,19 @@ import MedicationReminderModal from './components/MedicationReminderModal';
 import DrugListView from './components/DrugListView';
 import DailyLessonCard from './components/DailyLessonCard';
 import GuardianApp from './components/guardian/GuardianApp';
+import GuardianLogin from './components/guardian/GuardianLogin';
 import ElderNotificationPanel from './components/ElderNotificationPanel';
 import WeeklyReport from './components/WeeklyReport';
 import { useToast } from './components/Toast';
+import FloatingMicButton from './components/FloatingMicButton';
+import { clearAuth, isAuthenticated, saveElderUser, getToken } from './utils/elderApi';
+import { isAuthenticated as isGuardianAuthenticated, getGuardianUser } from './utils/guardianApi';
 
 function App() {
   const { showToast } = useToast();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [loginMode, setLoginMode] = useState('elder'); // 'elder' | 'guardian'
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
@@ -188,13 +193,34 @@ function App() {
     setShowRegister(false);
   };
 
+  // 带认证的fetch helper - 自动添加JWT token到请求头
+  const authFetch = async (url, options = {}) => {
+    const token = getToken();
+    const headers = {
+      ...options.headers,
+      'Content-Type': 'application/json;charset=UTF-8',
+      'Accept': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(url, { ...options, headers });
+    const data = await response.json();
+    // 处理401认证失败
+    if (response.status === 401 || data.code === 401 || data.message?.includes('Access Denied')) {
+      clearAuth();
+      window.dispatchEvent(new CustomEvent('elder-auth-expired'));
+      throw new Error('认证已过期');
+    }
+    return { response, data };
+  };
+
   // 从数据库加载药箱列表
   const loadMedicineBoxList = async (userId) => {
     if (!userId) return;
     
     try {
-      const response = await fetch(`/api/v1/box/list?userId=${userId}`);
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/box/list`);
       
       console.log('=== 药箱列表响应 ===');
       console.log('状态码:', response.status);
@@ -235,8 +261,7 @@ function App() {
   const loadShortageWarnings = async (userId) => {
     if (!userId) return;
     try {
-      const response = await fetch(`/api/v1/box/shortage-warnings?userId=${userId}`);
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/box/shortage-warnings`);
       if (response.ok && data.code === 200) {
         setShortageWarnings(data.data || []);
       } else {
@@ -253,8 +278,7 @@ function App() {
     if (!userId) return;
     setDailyLessonLoading(true);
     try {
-      const response = await fetch(`/api/v1/daily-lesson/today?userId=${userId}`);
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/daily-lesson/today?userId=${userId}`);
       if (response.ok && data.code === 200) {
         setDailyLesson(data.data);
       } else {
@@ -271,8 +295,7 @@ function App() {
   const handleDailyLessonRefresh = async () => {
     if (!user?.id) return;
     try {
-      const response = await fetch(`/api/v1/daily-lesson/regenerate?userId=${user.id}`, { method: 'POST' });
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/daily-lesson/regenerate?userId=${user.id}`, { method: 'POST' });
       if (response.ok && data.code === 200) {
         setDailyLesson(data.data);
       } else {
@@ -286,16 +309,15 @@ function App() {
   // 从数据库加载紧急联系人列表
   const loadEmergencyContacts = async (elderId) => {
     if (!elderId) return;
-    
+
     try {
-      const response = await fetch(`/api/emergency/v1/contacts?elderId=${elderId}`);
-      const data = await response.json();
-      
+      const { response, data } = await authFetch(`/api/emergency/v1/contacts?elderId=${elderId}`);
+
       console.log('=== 紧急联系人列表响应 ===');
       console.log('状态码:', response.status);
       console.log('响应数据:', data);
       console.log('==================');
-      
+
       if (response.ok && data.code === 200) {
         setEmergencyContacts(data.data);
       } else {
@@ -370,8 +392,7 @@ function App() {
     setIsLoadingCalendar(true);
     
     try {
-      const response = await fetch(`/api/v1/plan/generate-today?userId=${effectiveUserId}`);
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/plan/generate-today?userId=${effectiveUserId}`);
       
       console.log('=== 用药计划响应 ===');
       console.log('状态码:', response.status);
@@ -460,7 +481,7 @@ function App() {
 
   // 从后端加载一周用药记录（包括已删除但在查询范围内的记录）
   const loadWeeklyMedication = async () => {
-    if (!user || !user.userId) {
+    if (!user) {
       console.warn('用户未登录，无法加载用药记录');
       setWeeklyMedicationData(null);
       return;
@@ -469,8 +490,7 @@ function App() {
     setIsLoadingCalendar(true);
 
     try {
-      const response = await fetch(`/api/v1/plan/weekly?userId=${user.userId}`);
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/plan/weekly`);
 
       console.log('=== 一周用药记录响应 ===');
       console.log('状态码:', response.status);
@@ -596,19 +616,13 @@ function App() {
     }
 
     try {
-      const response = await fetch('/api/v1/plan/add-from-box', {
+      const { response, data } = await authFetch('/api/v1/plan/add-from-box', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
-          userId: user.userId,
           boxItemId: selectedDrugForPlan.boxItemId,
           timeSlots: selectedTimeSlots
         })
       });
-
-      const data = await response.json();
 
       console.log('=== 添加到用药计划响应 ===');
       console.log('状态码:', response.status);
@@ -645,11 +659,11 @@ function App() {
     });
     setIsLoggedIn(true);
 
-    // 保存登录状态到 localStorage
-    localStorage.setItem('user', JSON.stringify({
+    // 保存登录状态到 localStorage（使用elderApi工具函数）
+    saveElderUser({
       username: loginData.username,
       ...loginData
-    }));
+    });
 
     // 家属角色直接跳转家属端，不加载老人端数据
     if (loginData.role === 'family') {
@@ -715,10 +729,9 @@ function App() {
   const handleDeleteContact = async (contactId) => {
     if (user && user.id) {
       try {
-        const response = await fetch(`/api/emergency/v1/contacts/${contactId}`, {
+        const { response, data: result } = await authFetch(`/api/emergency/v1/contacts/${contactId}`, {
           method: 'DELETE'
         });
-        const result = await response.json();
         
         if (result.code === 200) {
           await loadEmergencyContacts(user.id);
@@ -786,8 +799,7 @@ function App() {
     if (!pendingDeleteDrug) return;
     
     try {
-      const response = await fetch(`/api/v1/box/${pendingDeleteDrug.boxItemId}?userId=${user.userId}`, { method: 'DELETE' });
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/box/${pendingDeleteDrug.boxItemId}`, { method: 'DELETE' });
       
       console.log('=== 删除药品响应 ===');
       console.log('状态码:', response.status);
@@ -1014,8 +1026,8 @@ function App() {
     setShowProfileModal(false);
     setActiveTab('home');
     
-    // 清除 localStorage 中的登录状态
-    localStorage.removeItem('user');
+    // 清除登录状态和JWT token
+    clearAuth();
   };
 
   // 打开过期药品弹窗
@@ -1046,8 +1058,7 @@ function App() {
     
     try {
       console.log('=== 检查已过期且未丢弃的药品 ===');
-      const response = await fetch(`/api/v1/box/expired/today?userId=${userId}`);
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/box/expired/today`);
       
       console.log('响应数据:', data);
       console.log('================================');
@@ -1098,7 +1109,7 @@ function App() {
 
     try {
       // 调用后端API更新status为stopped
-      const response = await fetch(`/api/v1/box/${selectedDrug.boxItemId}?userId=${currentUserId}`, {
+      const { response, data } = await authFetch(`/api/v1/box/${selectedDrug.boxItemId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
@@ -1108,8 +1119,6 @@ function App() {
         })
       });
 
-      const data = await response.json();
-      
       if (response.ok && data.code === 200) {
         showToast('已标记为丢弃，药品已移除', 'success');
         // 关闭详情弹窗
@@ -1152,7 +1161,7 @@ function App() {
 
     try {
       // 调用后端API更新status为stopped
-      const response = await fetch(`/api/v1/box/${drug.boxItemId}?userId=${currentUserId}`, {
+      const { response, data } = await authFetch(`/api/v1/box/${drug.boxItemId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
@@ -1162,8 +1171,6 @@ function App() {
         })
       });
 
-      const data = await response.json();
-      
       if (response.ok && data.code === 200) {
         showToast('已标记为丢弃，药品已移除', 'success');
         // 重新加载药箱列表
@@ -1251,9 +1258,42 @@ function App() {
     setIsDragging(true);
   };
 
-  // 应用初始化时清除 localStorage 中的登录状态，确保每次进入应用都跳转到登录页
+  // 监听认证过期事件，自动跳转到登录页
   useEffect(() => {
-    localStorage.removeItem('user');
+    const handleAuthExpired = () => {
+      setIsLoggedIn(false);
+      setUser(null);
+      showToast('认证已过期，请重新登录', 'error');
+    };
+    window.addEventListener('elder-auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('elder-auth-expired', handleAuthExpired);
+  }, [showToast]);
+
+  // 页面加载时恢复登录状态：家属端 token 优先，否则检查老人端 token
+  useEffect(() => {
+    if (isGuardianAuthenticated()) {
+      const guardianUser = getGuardianUser();
+      if (guardianUser && guardianUser.role === 'family') {
+        setLoginMode('guardian');
+        setIsLoggedIn(true);
+        return;
+      }
+    }
+    if (isAuthenticated()) {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          if (userData.role && userData.role !== 'family') {
+            setUser(userData);
+            setIsLoggedIn(true);
+          }
+        } catch (e) {
+          console.error('解析老人端用户数据失败:', e);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // WebSocket 连接管理 - 老人端实时通知
@@ -1540,11 +1580,9 @@ function App() {
 
       // 将前端语速(0.6-1)映射到百度TTS语速(3-5)
       const baiduRate = rate === 0.6 ? 3 : 5;
-      const response = await fetch(`/api/ai/tts?text=${encodeURIComponent(cleanText)}&speechRate=${baiduRate}`);
+      const { response, data: result } = await authFetch(`/api/ai/tts?text=${encodeURIComponent(cleanText)}&speechRate=${baiduRate}`);
 
       if (response.ok) {
-        const result = await response.json();
-
         if (result.code === 200 && result.data) {
           // 播放百度返回的音频
           if (audioRef.current) {
@@ -1632,9 +1670,8 @@ function App() {
     try {
       setIsFollowUpSpeaking(true);
       const baiduRate = rate === 0.6 ? 3 : 5;
-      const response = await fetch(`/api/ai/tts?text=${encodeURIComponent(cleanText)}&speechRate=${baiduRate}`);
+      const { response, data: result } = await authFetch(`/api/ai/tts?text=${encodeURIComponent(cleanText)}&speechRate=${baiduRate}`);
       if (response.ok) {
-        const result = await response.json();
         if (result.code === 200 && result.data) {
           if (followUpAudioRef.current) {
             followUpAudioRef.current.src = result.data;
@@ -2358,7 +2395,7 @@ function App() {
 
       const response = await fetch('/api/v1/drug/recognize/batch-upload', {
         method: 'POST',
-        headers: { 'X-User-Id': user?.userId || '1' },
+        headers: { 'Authorization': `Bearer ${getToken()}` },
         body: formData
       });
 
@@ -2437,7 +2474,7 @@ function App() {
 
       for (const item of selectedItems) {
         try {
-          const response = await fetch(`/api/v1/box?userId=${user?.userId}`, {
+          const { response } = await authFetch(`/api/v1/box`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2565,7 +2602,7 @@ function App() {
       const response = await fetch('/api/v1/drug/recognize/upload', {
         method: 'POST',
         headers: {
-          'X-User-Id': user?.userId || '1'
+          'Authorization': `Bearer ${getToken()}`
           // 注意：不要设置Content-Type，浏览器会自动设置multipart/form-data及boundary
         },
         body: formData
@@ -2602,8 +2639,7 @@ function App() {
 
     const poll = async () => {
       try {
-        const response = await fetch(`/api/v1/drug/recognize/result/${taskId}`);
-        const data = await response.json();
+        const { data } = await authFetch(`/api/v1/drug/recognize/result/${taskId}`);
 
         console.log('查询结果:', data);
 
@@ -2679,8 +2715,7 @@ function App() {
 
     try {
       // 先查询药品基础库，获取药品ID和详细信息
-      const searchResponse = await fetch(`/api/v1/drug/list?keyword=${encodeURIComponent(drug.name)}`);
-      const searchData = await searchResponse.json();
+      const { data: searchData } = await authFetch(`/api/v1/drug/list?keyword=${encodeURIComponent(drug.name)}`);
       
       let drugId = null;
       let drugDetail = null;
@@ -2721,15 +2756,10 @@ function App() {
     showToast('正在添加药品...', 'info');
     
     try {
-      const addResponse = await fetch(`/api/v1/box?userId=${user.userId}`, {
+      const { response: addResponse, data: addData } = await authFetch(`/api/v1/box`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(drugData)
       });
-
-      const addData = await addResponse.json();
 
       if (addResponse.ok && addData.code === 200) {
         // 添加成功后重新加载药箱列表
@@ -2796,7 +2826,7 @@ function App() {
         console.log(`正在添加第 ${i + 1}/${batchConfirmedDrugs.length} 个药品:`, drug);
         
         try {
-          const response = await fetch(`/api/v1/box?userId=${user?.userId}`, {
+          const { response } = await authFetch(`/api/v1/box`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2853,36 +2883,33 @@ function App() {
           showToast('正在进行冲突检测...', 'info');
           
           // 重要：重新获取最新的药箱列表，确保包含刚添加的所有药品
-          const latestDrugList = await fetch(`/api/v1/box/list?userId=${user?.userId}`)
-            .then(res => res.json())
-            .then(data => {
-              if (data.code === 200) {
-                return data.data.map(item => ({
-                  boxItemId: item.boxItemId,
-                  drugId: item.drugId,
-                  name: item.drugName,
-                  genericName: item.genericName,
-                  tradeName: item.tradeName,
-                  commonName: item.commonName,
-                  spec: item.specification,
-                  dosage: item.dosage,
-                  frequency: item.frequency,
-                  startDate: item.startDate,
-                  endDate: item.endDate,
-                  expiryDate: item.expiryDate,
-                  totalQuantity: item.totalQuantity,
-                  remaining: item.remainingQuantity || item.totalQuantity,
-                  note: item.note,
-                  status: item.status,
-                  createdAt: item.createdAt
-                }));
-              }
-              return [];
-            })
-            .catch(err => {
-              console.error('获取最新药箱列表失败:', err);
-              return drugList; // 如果失败，使用当前的 drugList
-            });
+          let latestDrugList = drugList;
+          try {
+            const { response, data } = await authFetch(`/api/v1/box/list`);
+            if (response.ok && data.code === 200) {
+              latestDrugList = data.data.map(item => ({
+                boxItemId: item.boxItemId,
+                drugId: item.drugId,
+                name: item.drugName,
+                genericName: item.genericName,
+                tradeName: item.tradeName,
+                commonName: item.commonName,
+                spec: item.specification,
+                dosage: item.dosage,
+                frequency: item.frequency,
+                startDate: item.startDate,
+                endDate: item.endDate,
+                expiryDate: item.expiryDate,
+                totalQuantity: item.totalQuantity,
+                remaining: item.remainingQuantity || item.totalQuantity,
+                note: item.note,
+                status: item.status,
+                createdAt: item.createdAt
+              }));
+            }
+          } catch (err) {
+            console.error('获取最新药箱列表失败:', err);
+          }
           
           console.log('最新药箱列表:', latestDrugList);
           
@@ -2936,7 +2963,7 @@ function App() {
         console.log(`正在添加第 ${i + 1}/${drugList.length} 个药品:`, drug);
         
         try {
-          const response = await fetch(`/api/v1/box?userId=${user?.userId}`, {
+          const { response } = await authFetch(`/api/v1/box`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2988,9 +3015,8 @@ function App() {
           showToast('正在进行冲突检测...', 'info');
           
           // 重要：重新获取最新的药箱列表，确保包含刚添加的所有药品
-          const latestDrugList = await fetch(`/api/v1/box/list?userId=${user?.userId}`)
-            .then(res => res.json())
-            .then(data => {
+          const latestDrugList = await authFetch(`/api/v1/box/list`)
+            .then(({ data }) => {
               if (data.code === 200) {
                 return data.data.map(item => ({
                   boxItemId: item.boxItemId,
@@ -3101,7 +3127,7 @@ function App() {
     // 等后端真正接受这次操作，再用后端数据做一次校验，避免本地乐观更新和后端脱节
     if (targetPlanId && user?.userId) {
       try {
-        await executeMedicationActionWithAPI(targetPlanId, user.userId, 'confirm', targetDosage);
+        await executeMedicationActionWithAPI(targetPlanId, 'confirm', targetDosage);
       } catch (err) {
         // executeMedicationActionWithAPI 内部已经 toast 报错；继续 reload 让 UI 与后端对齐
         console.error('确认服药 API 调用异常:', err);
@@ -3130,23 +3156,12 @@ function App() {
   };
 
   // 调用后端统一幂等用药操作接口
-  const executeMedicationActionWithAPI = async (planId, userId, action, dosage = '') => {
-    if (!userId) {
-      return { success: false, error: '用户未登录' };
-    }
+  const executeMedicationActionWithAPI = async (planId, action, dosage = '') => {
     try {
-      const response = await fetch(`/api/v1/plan/${planId}/action`, {
+      const { response, data: result } = await authFetch(`/api/v1/plan/${planId}/action`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          userId,
-          action
-        })
+        body: JSON.stringify({ action })
       });
-
-      const result = await response.json();
 
       if (!response.ok || result.code !== 200) {
         const errorMsg = result.message || '操作失败';
@@ -3194,7 +3209,7 @@ function App() {
     }
     // 乐观更新：confirm 之后一定是 taken
     patchWeeklyItemStatus(date, item.planId, 'taken');
-    const result = await executeMedicationActionWithAPI(item.planId, user.userId, 'confirm');
+    const result = await executeMedicationActionWithAPI(item.planId, 'confirm');
     if (result.success) {
       // 刷新药箱列表和缺药预警
       loadMedicineBoxList(user.userId);
@@ -3216,7 +3231,7 @@ function App() {
       showToast('请先登录', 'warning');
       return;
     }
-    const result = await executeMedicationActionWithAPI(item.planId, user.userId, 'undo');
+    const result = await executeMedicationActionWithAPI(item.planId, 'undo');
     if (result.success) {
       // 重拉当周数据，让后端的真实状态覆盖本地
       loadWeeklyMedication();
@@ -3295,7 +3310,7 @@ function App() {
     // 等后端真正接受这次撤销操作
     if (targetPlanId && user?.userId) {
       try {
-        await executeMedicationActionWithAPI(targetPlanId, user.userId, 'undo', targetDosage);
+        await executeMedicationActionWithAPI(targetPlanId, 'undo', targetDosage);
       } catch (err) {
         console.error('撤销服药 API 调用异常:', err);
       }
@@ -3616,7 +3631,7 @@ function App() {
             setIsLoadingHistory(true);
             try {
               const response = await fetch('/api/v1/drug/recognize/history?limit=20', {
-                headers: { 'X-User-Id': String(user?.userId || '1') }
+                headers: { 'Authorization': `Bearer ${getToken()}` }
               });
               const data = await response.json();
               if (data.code === 200 && data.data) {
@@ -3712,8 +3727,7 @@ function App() {
                     <button
                       onClick={async () => {
                         try {
-                          const r = await fetch(`/api/v1/drug/detail?drugName=${encodeURIComponent(historyDetailLog.matchedDrugName)}`);
-                          const data = await r.json();
+                          const { data } = await authFetch(`/api/v1/drug/detail?drugName=${encodeURIComponent(historyDetailLog.matchedDrugName)}`);
                           if (data.code === 200 && data.data) {
                             setRecognizedDrugs([data.data]);
                             setBatchSelectedForAdd(new Set([data.data.id]));
@@ -3762,8 +3776,7 @@ function App() {
                         let imageUrl = null;
                         if (log.ocrRecordId) {
                           try {
-                            const r = await fetch(`/api/v1/drug/recognize/result/${log.ocrRecordId}`);
-                            const d = await r.json();
+                            const { data: d } = await authFetch(`/api/v1/drug/recognize/result/${log.ocrRecordId}`);
                             if (d.code === 200 && d.data && d.data.imageUrl) {
                               imageUrl = d.data.imageUrl;
                             }
@@ -5745,7 +5758,7 @@ function App() {
       {/* AI周报摘要 - 仅在周视图显示 */}
       {calendarViewMode === 'week' && showWeeklyReport && (
         <div style={{ marginTop: '32px', borderTop: '2px solid #e8f4fd', paddingTop: '24px' }}>
-          <WeeklyReport userId={user?.userId} compact />
+          <WeeklyReport compact />
           {/* 截图按钮 - 参考冲突检测模块 */}
           <div style={{ 
             display: 'flex', 
@@ -5801,8 +5814,7 @@ function App() {
               onClick={async () => {
                 // 获取AI总结文本并复制
                 try {
-                  const response = await fetch(`/api/weekly-report/latest?userId=${user?.userId}`);
-                  const data = await response.json();
+                  const { data } = await authFetch(`/api/weekly-report/latest`);
                   
                   if (data.code === 200 && data.data?.fullReportText) {
                     await navigator.clipboard.writeText(data.data.fullReportText);
@@ -6236,8 +6248,7 @@ function App() {
     
     try {
       setIsSearching(true);
-      const response = await fetch(`/api/v1/box/search?userId=${user.userId}&keyword=${encodeURIComponent(keyword)}&status=active`);
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/box/search?keyword=${encodeURIComponent(keyword)}&status=active`);
       
       console.log('=== 搜索药箱响应 ===');
       console.log('状态码:', response.status);
@@ -6305,7 +6316,26 @@ function App() {
       {showRegister ? (
         <Register onRegister={handleRegister} />
       ) : !isLoggedIn ? (
-        <Login onLogin={handleLogin} onShowRegister={() => setShowRegister(true)} />
+        loginMode === 'guardian' ? (
+          <GuardianLogin
+            onLogin={() => setIsLoggedIn(true)}
+            onSwitchToElder={() => setLoginMode('elder')}
+          />
+        ) : (
+          <Login
+            onLogin={handleLogin}
+            onShowRegister={() => setShowRegister(true)}
+            onSwitchToGuardian={() => setLoginMode('guardian')}
+          />
+        )
+      ) : loginMode === 'guardian' ? (
+        <GuardianApp
+          onLogout={() => {
+            setUser(null);
+            setIsLoggedIn(false);
+            setLoginMode('elder');
+          }}
+        />
       ) : user?.role === 'family' ? (
         <GuardianApp user={user} onLogout={() => { setUser(null); setIsLoggedIn(false); localStorage.removeItem('user'); }} />
       ) : (
@@ -6357,11 +6387,36 @@ function App() {
       {/* 老人端通知面板 */}
       {user?.role !== 'family' && user?.id && (
         <ElderNotificationPanel
-          elderId={user.id}
           isOpen={showNotificationPanel}
           onClose={() => setShowNotificationPanel(false)}
           onUnreadCountChange={setNotificationUnreadCount}
           onContactAdded={() => loadEmergencyContacts(user.id)}
+        />
+      )}
+
+      {/* 语音交互入口 - 浮动麦克风按钮 */}
+      {user?.role !== 'family' && isLoggedIn && (
+        <FloatingMicButton
+          onTranscript={(text) => {
+            // 语音指令解析
+            const cmd = text.trim().toLowerCase();
+            const commands = [
+              { keywords: ['首页', '主页', '回家', '回到首页'], tab: 'home', label: '首页' },
+              { keywords: ['识别', '拍照', '扫描', '上传', '识别药品'], tab: 'upload', label: '识别药品' },
+              { keywords: ['说明', '用药说明', '说明书', '药品说明'], tab: 'explanation', label: '用药说明' },
+              { keywords: ['冲突', '冲突检测', '药物冲突', '检测冲突'], tab: 'conflict', label: '冲突检测' },
+              { keywords: ['日历', '用药日历', '日程', '计划'], tab: 'calendar', label: '用药日历' },
+              { keywords: ['药箱', '管理', '我的药箱', '药品管理', '药箱管理'], tab: 'drugs', label: '药箱管理' },
+              { keywords: ['紧急', '急救', '求助', '救命', '紧急助手'], tab: 'emergency', label: '紧急助手' },
+            ];
+            const match = commands.find(c => c.keywords.some(k => cmd.includes(k)));
+            if (match) {
+              setActiveTab(match.tab);
+              showToast(`已跳转到：${match.label}`, 'success');
+            } else {
+              showToast(`未识别指令："${text}"，请尝试说：冲突检测、紧急助手、识别药品等`, 'info');
+            }
+          }}
         />
       )}
 

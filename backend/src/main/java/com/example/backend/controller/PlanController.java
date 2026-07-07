@@ -11,6 +11,8 @@ import com.example.backend.service.ProgressiveReminderService;
 import com.example.backend.common.ResponseResult;
 import com.example.backend.task.ScheduledTask;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -23,7 +25,16 @@ public class PlanController {
     private final ScheduledTask scheduledTask;
     private final ProgressiveReminderService progressiveReminderService;
 
-    // 原有接口保留不变
+    /**
+     * 获取当前认证用户的ID（数据库主键）
+     */
+    private Long getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("用户未认证");
+        }
+        return (Long) authentication.getPrincipal();
+    }
 
     /**
      * 7.1 获取今日用药计划
@@ -62,7 +73,8 @@ public class PlanController {
      * 7.5 根据家庭药箱自动生成今日用药计划
      */
     @GetMapping("/generate-today")
-    public ResponseResult<TodayPlanResponseDTO> generateDailyPlanFromMedicineBox(@RequestParam Long userId) {
+    public ResponseResult<TodayPlanResponseDTO> generateDailyPlanFromMedicineBox() {
+        Long userId = getCurrentUserId();
         return ResponseResult.success(planService.generateDailyPlanFromMedicineBox(userId));
     }
 
@@ -71,7 +83,8 @@ public class PlanController {
      */
     @PostMapping("/add-from-box")
     public ResponseResult<Void> addBoxItemToPlan(@RequestBody AddToPlanRequest request) {
-        planService.addBoxItemToMedicationPlan(request.getUserId(), request.getBoxItemId(), request.getTimeSlots());
+        Long userId = getCurrentUserId();
+        planService.addBoxItemToMedicationPlan(userId, request.getBoxItemId(), request.getTimeSlots());
         return ResponseResult.success("已添加到用药日历", null);
     }
 
@@ -79,7 +92,8 @@ public class PlanController {
      * 7.7 清空用户的所有用药计划（仅用于测试）
      */
     @DeleteMapping("/clear-all")
-    public ResponseResult<Void> clearAllPlans(@RequestParam(required = false) Long userId) {
+    public ResponseResult<Void> clearAllPlans() {
+        Long userId = getCurrentUserId();
         planService.clearAllPlans(userId);
         return ResponseResult.success("已清空所有用药计划", null);
     }
@@ -88,7 +102,8 @@ public class PlanController {
      * 7.8 获取一周内的用药记录（包括已删除但在查询范围内的记录）
      */
     @GetMapping("/weekly")
-    public ResponseResult<WeeklyMedicationResponseDTO> getWeeklyMedicationRecords(@RequestParam(required = false) Long userId) {
+    public ResponseResult<WeeklyMedicationResponseDTO> getWeeklyMedicationRecords() {
+        Long userId = getCurrentUserId();
         return ResponseResult.success(planService.getWeeklyMedicationRecords(userId));
     }
 
@@ -100,10 +115,11 @@ public class PlanController {
     public ResponseResult<ConfirmMedicationResponseDTO> executeMedicationAction(
             @PathVariable Long planId,
             @RequestBody MedicationActionRequest request) {
-        if (request.getUserId() == null || request.getAction() == null || request.getAction().isEmpty()) {
-            return ResponseResult.fail("参数错误：userId 和 action 不能为空");
+        Long userId = getCurrentUserId();
+        if (request.getAction() == null || request.getAction().isEmpty()) {
+            return ResponseResult.fail("参数错误：action 不能为空");
         }
-        return ResponseResult.success(planService.executeMedicationAction(planId, request.getUserId(), request.getAction()));
+        return ResponseResult.success(planService.executeMedicationAction(planId, userId, request.getAction()));
     }
 
     /**

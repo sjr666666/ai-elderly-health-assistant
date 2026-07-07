@@ -34,4 +34,12 @@ public interface EmergencyEventService {
      * @return 创建后的紧急事件
      */
     EmergencyEvent createEvent(EmergencyEvent event);
+
+    /**
+     * 根据ID获取紧急事件
+     *
+     * @param eventId 事件ID
+     * @return 紧急事件实体
+     */
+    EmergencyEvent getEventById(Long eventId);
 }

@@ -1,6 +1,7 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.common.util.SnowflakeIdGenerator;
+import com.example.backend.config.JwtUtils;
 import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.dto.UserLoginRequest;
 import com.example.backend.model.dto.UserLoginResponse;
@@ -14,32 +15,25 @@ import com.example.backend.service.ElderNotificationService;
 import com.example.backend.mapper.GuardianElderRelationMapper;
 import com.example.backend.model.entity.GuardianElderRelation;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
     private static final Logger logger = LoggerFactory.getLogger(UserServiceImpl.class);
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final JwtUtils jwtUtils;
     private final ElderNotificationService elderNotificationService;
     private final GuardianElderRelationMapper guardianElderRelationMapper;
-
-    @Autowired
-    public UserServiceImpl(UserMapper userMapper, PasswordEncoder passwordEncoder,
-                           ElderNotificationService elderNotificationService, GuardianElderRelationMapper guardianElderRelationMapper) {
-        this.userMapper = userMapper;
-        this.passwordEncoder = passwordEncoder;
-        this.elderNotificationService = elderNotificationService;
-        this.guardianElderRelationMapper = guardianElderRelationMapper;
-    }
 
     @Override
     public UserRegisterResponse register(UserRegisterRequest request) {
@@ -100,6 +94,10 @@ public class UserServiceImpl implements UserService {
             return null;
         }
 
+        // 生成JWT令牌
+        String token = jwtUtils.generateToken(user.getId(), user.getUsername(), user.getRole());
+        logger.info("用户登录成功 - userId: {}, username: {}, role: {}", user.getId(), user.getUsername(), user.getRole());
+
         return UserLoginResponse.builder()
                 .id(user.getId())  // 添加数据库主键ID
                 .userId(String.valueOf(user.getUserId()))  // 转换为 String
@@ -118,14 +116,14 @@ public class UserServiceImpl implements UserService {
                 .isSmoking(user.getIsSmoking())
                 .isDrinking(user.getIsDrinking())
                 .role(user.getRole())
+                .token(token)  // 返回JWT令牌
                 .build();
     }
 
     @Override
     public UserProfileResponse getUserProfile(Long userId) {
-        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(SysUser::getUserId, userId);
-        SysUser user = userMapper.selectOne(queryWrapper);
+        // userId 为数据库主键 id（由 SecurityContext 提供）
+        SysUser user = userMapper.selectById(userId);
         if (user == null) {
             throw new RuntimeException("用户不存在");
         }
@@ -162,9 +160,8 @@ public class UserServiceImpl implements UserService {
                 request.getIsPregnant(), request.getIsBreastfeeding(),
                 request.getIsSmoking(), request.getIsDrinking());
 
-        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(SysUser::getUserId, userId);
-        SysUser user = userMapper.selectOne(queryWrapper);
+        // userId 为数据库主键 id（由 SecurityContext 提供）
+        SysUser user = userMapper.selectById(userId);
         if (user == null) {
             logger.error("用户不存在 - userId: {}", userId);
             throw new RuntimeException("用户不存在");
@@ -238,9 +235,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void changePassword(Long userId, String oldPassword, String newPassword) {
-        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(SysUser::getUserId, userId);
-        SysUser user = userMapper.selectOne(queryWrapper);
+        // userId 为数据库主键 id（由 SecurityContext 提供）
+        SysUser user = userMapper.selectById(userId);
         if (user == null) {
             throw new RuntimeException("用户不存在");
         }

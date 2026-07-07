@@ -89,4 +89,9 @@ public class EmergencyEventServiceImpl implements EmergencyEventService {
         log.info("紧急事件创建成功 - id: {}", event.getId());
         return event;
     }
+
+    @Override
+    public EmergencyEvent getEventById(Long eventId) {
+        return emergencyEventMapper.selectById(eventId);
+    }
 }

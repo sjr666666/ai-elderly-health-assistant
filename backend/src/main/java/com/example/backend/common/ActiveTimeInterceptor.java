@@ -1,10 +1,11 @@
 package com.example.backend.common;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.entity.SysUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -14,9 +15,10 @@ import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 老人端活跃时间拦截器
- * 拦截老人端的关键请求，自动更新 last_active_time 字段
+ * 用户活跃时间拦截器
+ * 拦截关键请求，自动更新 last_active_time 字段
  * 5分钟内同一用户不重复更新，避免频繁写库
+ * 从 SecurityContext 获取用户ID（数据库主键）
  */
 @Slf4j
 @Component
@@ -33,54 +35,49 @@ public class ActiveTimeInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        Long userId = extractUserId(request);
+        Long userId = getCurrentUserId();
         if (userId == null) {
             return true;
         }
 
         // 检查是否需要更新（限频）
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime lastUpdate = lastUpdateTimeMap.get(userId);
-        if (lastUpdate != null && java.time.Duration.between(lastUpdate, now).toMinutes() < UPDATE_INTERVAL_MINUTES) {
-            return true;
-        }
 
-        // 查询用户并更新活跃时间（前端传的userId是user_id字段，不是自增主键id）
         try {
-            LambdaQueryWrapper<SysUser> query = new LambdaQueryWrapper<>();
-            query.eq(SysUser::getUserId, userId);
-            SysUser user = userMapper.selectOne(query);
-            if (user != null && "elder".equals(user.getRole())) {
-                user.setLastActiveTime(now);
-                userMapper.updateById(user);
-                lastUpdateTimeMap.put(userId, now);
-                log.debug("更新老人活跃时间 - userId: {}", userId);
+            SysUser user = userMapper.selectById(userId);
+            if (user == null) {
+                return true;
             }
+
+            Long limitKey = user.getId();
+            LocalDateTime lastUpdate = lastUpdateTimeMap.get(limitKey);
+            if (lastUpdate != null && java.time.Duration.between(lastUpdate, now).toMinutes() < UPDATE_INTERVAL_MINUTES) {
+                return true;
+            }
+
+            user.setLastActiveTime(now);
+            userMapper.updateById(user);
+            lastUpdateTimeMap.put(limitKey, now);
+            log.debug("更新用户活跃时间 - id: {}, userId: {}, role: {}", user.getId(), user.getUserId(), user.getRole());
         } catch (Exception e) {
-            log.warn("更新活跃时间失败 - userId: {}, error: {}", userId, e.getMessage());
+            log.warn("更新活跃时间失败 - error: {}", e.getMessage());
         }
 
         return true;
     }
 
     /**
-     * 从请求中提取用户ID
-     * 优先从请求头获取，其次从请求参数获取
+     * 从 SecurityContext 获取当前认证用户的ID（数据库主键）
      */
-    private Long extractUserId(HttpServletRequest request) {
-        // 从请求头获取
-        String userIdStr = request.getHeader("X-User-Id");
-        if (userIdStr == null || userIdStr.isEmpty()) {
-            // 从请求参数获取
-            userIdStr = request.getParameter("userId");
-        }
-        if (userIdStr == null || userIdStr.isEmpty()) {
+    private Long getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
             return null;
         }
-        try {
-            return Long.parseLong(userIdStr);
-        } catch (NumberFormatException e) {
-            return null;
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof Long) {
+            return (Long) principal;
         }
+        return null;
     }
 }

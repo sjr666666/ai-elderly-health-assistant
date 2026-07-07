@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
 import { useToast } from './Toast';
+import { getToken } from '../utils/elderApi';
 import './WeeklyReport.css';
 
 /**
  * AI用药周报展示组件
  * @param {Object} props - 组件属性
- * @param {number} props.userId - 用户ID
  * @param {boolean} props.compact - 是否使用紧凑模式（用于嵌入其他页面）
  */
-const WeeklyReport = ({ userId, compact = false }) => {
+const WeeklyReport = ({ compact = false }) => {
   const { showToast } = useToast();
   const [report, setReport] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -18,17 +18,17 @@ const WeeklyReport = ({ userId, compact = false }) => {
 
   // 加载最新周报
   useEffect(() => {
-    if (userId) {
-      loadLatestReport();
-    }
-  }, [userId]);
+    loadLatestReport();
+  }, []);
 
   const loadLatestReport = async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
-      const response = await fetch(`/api/weekly-report/latest?userId=${userId}`);
+      const response = await fetch(`/api/weekly-report/latest`, {
+        headers: { 'Authorization': `Bearer ${getToken()}` },
+      });
       const data = await response.json();
       
       if (data.code === 200 && data.data) {
