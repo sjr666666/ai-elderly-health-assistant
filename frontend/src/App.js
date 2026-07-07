@@ -847,12 +847,10 @@ function App() {
       
       // 只检测新药与药箱中其他药品的冲突
       const drugNames = [newDrugName, ...otherDrugs.map(drug => drug.name)];
-      const response = await fetch('/api/conflict/check', {
+      const { data } = await authFetch('/api/conflict/check', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(drugNames)
       });
-      const data = await response.json();
       if (data.code === 200 && data.data) {
         // 过滤出只与新药相关的冲突
         const newDrugConflicts = data.data.conflicts?.filter(
@@ -1766,17 +1764,14 @@ function App() {
         adverseReactions: selectedDrug.adverseReactions || ''
       };
 
-      const response = await fetch('/api/ai/follow-up-question', {
+      const { data } = await authFetch('/api/ai/follow-up-question', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           drugDetail,
           question: userMessage.content,
           conversationHistory: newMessages.slice(-12).map(m => ({ role: m.role, content: m.content }))
         })
       });
-
-      const data = await response.json();
       if (data.code === 200 && data.data) {
         setFollowUpMessages(prev => [...prev, { role: 'assistant', content: data.data }]);
       } else {
@@ -1839,12 +1834,10 @@ function App() {
         setAutoCheckResult(null);
         try {
           const drugNames = drugList.map(d => d.name);
-          const response = await fetch('/api/conflict/quick-check-local', {
+          const { data } = await authFetch('/api/conflict/quick-check-local', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(drugNames)
           });
-          const data = await response.json();
           if (data.code === 200 && data.data) {
             setAutoCheckResult(data.data);
           }
@@ -1916,15 +1909,10 @@ function App() {
       console.log('=== 尝试调用后端 AI 服务 ===');
       
       // 第一层：尝试调用后端 AI 服务
-      const response = await fetch('/api/ai/elderly-guide', {
+      const { data } = await authFetch('/api/ai/elderly-guide', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(drugDetail)
       });
-
-      const data = await response.json();
       
       if (data.code === 200 && data.data) {
         // 将<br/>标签替换为换行符，方便阅读
@@ -1995,11 +1983,8 @@ function App() {
 
       console.log('正在调用 DeepSeek API...');
       
-      const response = await fetch('/api/deepseek/chat', {
+      const { data } = await authFetch('/api/deepseek/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
           model: 'deepseek-chat',
@@ -2007,8 +1992,6 @@ function App() {
           max_tokens: 800
         })
       });
-
-      const data = await response.json();
       
       if (data.choices && data.choices[0]) {
         const aiResponse = data.choices[0].message.content;
@@ -4326,9 +4309,8 @@ function App() {
       setIsFetchingDrug(true);
     }
     
-    fetch(`/api/v1/drug/detail?drugName=${encodeURIComponent(drugName)}`)
-      .then(res => res.json())
-      .then(data => {
+    authFetch(`/api/v1/drug/detail?drugName=${encodeURIComponent(drugName)}`)
+      .then(({ data }) => {
         if (data.code === 200 && data.data) {
           const drugDetail = data.data;
           // 合并基础信息和详细信息，确保字段完整性
@@ -4939,15 +4921,10 @@ function App() {
         console.log('=== 开始冲突检测 ===');
         console.log('药品列表:', drugNames);
 
-        const response = await fetch('/api/conflict/check', {
+        const { data } = await authFetch('/api/conflict/check', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
           body: JSON.stringify(drugNames)
         });
-
-        const data = await response.json();
         console.log('冲突检测响应:', data);
 
         if (data.code === 200 && data.data) {
@@ -5111,13 +5088,10 @@ function App() {
 
         console.log('=== 综合冲突检测 ===', requestBody);
 
-        const response = await fetch('/api/conflict/analyze', {
+        const { data } = await authFetch('/api/conflict/analyze', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestBody)
         });
-
-        const data = await response.json();
         console.log('综合冲突检测响应:', data);
 
         if (data.code === 200 && data.data) {
