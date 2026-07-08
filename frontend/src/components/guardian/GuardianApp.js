@@ -4,16 +4,12 @@ import GuardianDashboard from './GuardianDashboard';
 import GuardianElderDetail from './GuardianElderDetail';
 import GuardianNotification from './GuardianNotification';
 import GuardianProfile from './GuardianProfile';
-import { getGuardianUser, clearAuth, isAuthenticated, guardianApi } from '../../utils/guardianApi';
+import { clearAuth, isAuthenticated, guardianApi } from '../../utils/guardianApi';
 import './guardian.css';
 
 function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
-  // 家属端独立认证：优先使用 propUser（兼容旧调用），否则惰性初始化从 guardianApi 读取
-  const [localUser, setLocalUser] = useState(() => {
-    if (propUser) return null;
-    const savedUser = getGuardianUser();
-    return (savedUser && savedUser.role === 'family' && isAuthenticated()) ? savedUser : null;
-  });
+  // 用户信息通过props传入（React state管理），不再从localStorage读取
+  const [localUser, setLocalUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedElderId, setSelectedElderId] = useState(null);
   const [dashboardKey, setDashboardKey] = useState(0);
@@ -29,14 +25,9 @@ function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
   }, []);
 
   useEffect(() => {
-    // 家属端独立认证：propUser 为空时确保从 guardianApi 读取本地用户信息
-    if (!propUser && !localUser) {
-      const savedUser = getGuardianUser();
-      if (savedUser && savedUser.role === 'family' && isAuthenticated()) {
-        setLocalUser(savedUser);
-      } else if (!isAuthenticated()) {
-        clearAuth();
-      }
+    // 家属端认证检查：如果未认证则清除状态
+    if (!propUser && !localUser && !isAuthenticated()) {
+      clearAuth();
     }
   }, [propUser, localUser]);
 

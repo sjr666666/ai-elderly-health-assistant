@@ -93,7 +93,7 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                 if (logId != null) {
                     logService.updateUnmatched(logId, "识别文本为空");
                 }
-                return buildResult(null, null, null, "unmatched", "未能识别出文字");
+                return buildResult(null, null, null, OcrRecord.Status.UNMATCHED.getCode(), "未能识别出文字");
             }
 
             // 步骤2: 从OCR文本中提取核心药品名称（过滤说明书内容）
@@ -110,7 +110,7 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                 if (logId != null) {
                     logService.updateUnmatched(logId, "未能提取药品名称");
                 }
-                return buildResult(null, null, null, "unmatched", "未能识别出药品名称");
+                return buildResult(null, null, null, OcrRecord.Status.UNMATCHED.getCode(), "未能识别出药品名称");
             }
 
             logger.info("提取药品名称成功 - 提取结果: {}", extractedName);
@@ -135,7 +135,7 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                 if (logId != null) {
                     logService.updateUnmatched(logId, validationResult.getMessage());
                 }
-                return buildResult(null, null, null, "unmatched", validationResult.getMessage());
+                return buildResult(null, null, null, OcrRecord.Status.UNMATCHED.getCode(), validationResult.getMessage());
             }
 
             // 步骤4: 在数据库中查找匹配的药品
@@ -156,7 +156,7 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                 }
 
                 return buildResult(matchResult.getDrugId(), matchResult.getDrugName(),
-                        matchResult.getScore(), "matched", "药品识别成功");
+                        matchResult.getScore(), OcrRecord.Status.MATCHED.getCode(), "药品识别成功");
 
             } else {
                 // 未匹配到现有药品
@@ -178,13 +178,13 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                             newDrug.getId(), newDrug.getGenericName());
 
                     return buildResult(newDrug.getId(), newDrug.getGenericName(),
-                            new BigDecimal("1.0"), "matched", "新药品已自动添加到数据库");
+                            new BigDecimal("1.0"), OcrRecord.Status.MATCHED.getCode(), "新药品已自动添加到数据库");
                 } else {
                     // 自动入库失败或不满足条件
                     if (logId != null) {
                         logService.updateUnmatched(logId, "未能匹配到现有药品，且不符合自动入库条件");
                     }
-                    return buildResult(null, null, null, "unmatched", "未能识别出匹配的药品，请尝试手动输入");
+                    return buildResult(null, null, null, OcrRecord.Status.UNMATCHED.getCode(), "未能识别出匹配的药品，请尝试手动输入");
                 }
             }
 
@@ -197,7 +197,7 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                     logger.warn("更新异常日志失败 - error: {}", logEx.getMessage());
                 }
             }
-            return buildResult(null, null, null, "failed", "识别失败，请重试");
+            return buildResult(null, null, null, OcrRecord.Status.FAILED.getCode(), "识别失败，请重试");
         }
     }
 

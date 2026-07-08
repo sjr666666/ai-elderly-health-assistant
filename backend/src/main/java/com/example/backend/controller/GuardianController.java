@@ -193,6 +193,19 @@ public class GuardianController {
         }
     }
 
+    @PutMapping("/notifications/{id}/read")
+    public ResponseResult<Void> markOneAsRead(@PathVariable Long id) {
+        Long guardianId = getCurrentUserId();
+        log.info("标记单条通知为已读 - guardianId: {}, notificationId: {}", guardianId, id);
+        try {
+            smsNotificationService.markAsRead(guardianId, id);
+            return ResponseResult.success("标记成功", null);
+        } catch (Exception e) {
+            log.error("标记单条已读失败 - guardianId: {}, notificationId: {}", guardianId, id, e);
+            return ResponseResult.fail("标记已读失败：" + e.getMessage());
+        }
+    }
+
     @DeleteMapping("/notifications/read")
     public ResponseResult<String> deleteReadNotifications() {
         Long guardianId = getCurrentUserId();

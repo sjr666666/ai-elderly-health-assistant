@@ -85,7 +85,7 @@ function Login({ onLogin, onShowRegister, onSwitchToGuardian }) {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      minHeight: 'calc(var(--vh, 1vh) * 100)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',

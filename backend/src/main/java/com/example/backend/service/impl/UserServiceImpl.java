@@ -14,6 +14,8 @@ import com.example.backend.service.UserService;
 import com.example.backend.service.ElderNotificationService;
 import com.example.backend.mapper.GuardianElderRelationMapper;
 import com.example.backend.model.entity.GuardianElderRelation;
+import com.example.backend.model.enums.EventType;
+import com.example.backend.model.enums.RelationStatus;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -258,7 +260,7 @@ public class UserServiceImpl implements UserService {
         try {
             LambdaQueryWrapper<GuardianElderRelation> query = new LambdaQueryWrapper<>();
             query.eq(GuardianElderRelation::getGuardianId, guardian.getId())
-                    .eq(GuardianElderRelation::getStatus, "active");
+                    .eq(GuardianElderRelation::getStatus, RelationStatus.ACTIVE.getCode());
             List<GuardianElderRelation> bindings = guardianElderRelationMapper.selectList(query);
             for (GuardianElderRelation binding : bindings) {
                 String extraData = String.format(
@@ -269,7 +271,7 @@ public class UserServiceImpl implements UserService {
                         binding.getRelationType() != null ? binding.getRelationType() : "");
                 elderNotificationService.createNotification(
                         binding.getElderId(),
-                        "phone_update",
+                        EventType.PHONE_UPDATE.getCode(),
                         "联系电话变更",
                         guardian.getRealName() + "的联系电话已变更为" + newPhone + "，是否更新紧急联系人电话？",
                         extraData

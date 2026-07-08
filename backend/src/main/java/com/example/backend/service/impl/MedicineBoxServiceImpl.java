@@ -14,6 +14,7 @@ import com.example.backend.model.entity.DrugBase;
 import com.example.backend.model.entity.MedicationPlan;
 import com.example.backend.model.entity.SysUser;
 import com.example.backend.model.entity.UserMedicineBox;
+import com.example.backend.model.enums.Severity;
 import com.example.backend.service.MedicineBoxService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,7 +83,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
             // 检查AI药品重复
             LambdaQueryWrapper<UserMedicineBox> existWrapper = new LambdaQueryWrapper<>();
             existWrapper.eq(UserMedicineBox::getUserId, actualUserId);
-            existWrapper.eq(UserMedicineBox::getStatus, "active");
+            existWrapper.eq(UserMedicineBox::getStatus, UserMedicineBox.Status.ACTIVE.getCode());
             existWrapper.like(UserMedicineBox::getNote, "{AI药品:" + drugNameToCheck + "}");
             Long existCount = userMedicineBoxMapper.selectCount(existWrapper);
             if (existCount > 0) {
@@ -170,7 +171,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         
         // 默认状态为 active
         if (status == null || status.isEmpty()) {
-            status = "active";
+            status = UserMedicineBox.Status.ACTIVE.getCode();
         }
 
         List<MedicineBoxResponse> boxList = userMedicineBoxMapper.selectMedicineBoxList(actualUserId, status);
@@ -196,7 +197,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         
         // 默认状态为 active
         if (status == null || status.isEmpty()) {
-            status = "active";
+            status = UserMedicineBox.Status.ACTIVE.getCode();
         }
 
         List<MedicineBoxResponse> searchResults = userMedicineBoxMapper.searchMedicineBox(actualUserId, keyword, status);
@@ -670,13 +671,13 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         String warningLevel;
         String warningLevelDesc;
         if (remainingDays <= 0) {
-            warningLevel = "critical";
+            warningLevel = Severity.CRITICAL.getCode();
             warningLevelDesc = "药品已用尽";
         } else if (remainingDays <= 3) {
-            warningLevel = "urgent";
+            warningLevel = Severity.URGENT.getCode();
             warningLevelDesc = "药品即将用尽";
         } else {
-            warningLevel = "warning";
+            warningLevel = Severity.WARNING.getCode();
             warningLevelDesc = "药品余量不足";
         }
 

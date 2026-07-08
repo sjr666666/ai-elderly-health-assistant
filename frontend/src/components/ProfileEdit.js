@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useToast } from './Toast';
-import { getToken } from '../utils/elderApi';
+import { getToken, clearAuth } from '../utils/elderApi';
 
 // 器官功能状态选项
 const ORGAN_FUNCTION_OPTIONS = [
@@ -144,9 +144,9 @@ function ProfileEdit({ user, onSave, onClose }) {
           showToast('个人信息已更新！', 'success');
           onSave(payload);
         } else if (data.message && data.message.includes('用户不存在')) {
-          // localStorage 中的 userId 已被数据库清理（雪花 ID 失效）
+          // 用户不存在，清除认证状态
           showToast('登录已失效，请重新登录', 'error');
-          localStorage.removeItem('user');
+          clearAuth();
           setTimeout(() => window.location.reload(), 1200);
         } else {
           showToast(data.message || '更新失败，请重试', 'error');

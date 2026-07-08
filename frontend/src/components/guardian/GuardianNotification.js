@@ -11,6 +11,32 @@ function GuardianNotification({ onRead }) {
 
   useEffect(() => { loadNotifications(); }, []);
 
+  // 进入通知页时自动标记全部已读，角标清零
+  useEffect(() => {
+    const autoMarkAllRead = async () => {
+      try {
+        const data = await guardianApi.markAllAsRead();
+        if (data.code === 200) {
+          setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+          if (onRead) onRead();
+        }
+      } catch (e) { /* 静默失败，不影响用户体验 */ }
+    };
+    autoMarkAllRead();
+  }, []);
+
+  // 点击单条通知标记已读
+  const handleItemClick = async (n) => {
+    if (n.isRead) return;
+    try {
+      const data = await guardianApi.markOneAsRead(n.id);
+      if (data.code === 200) {
+        setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, isRead: true } : item));
+        if (onRead) onRead();
+      }
+    } catch (e) { /* 静默失败 */ }
+  };
+
   const markAsRead = async () => {
     try {
       const data = await guardianApi.markAllAsRead();
@@ -52,15 +78,6 @@ function GuardianNotification({ onRead }) {
     emergency_alert: '紧急报警', expiring_drug: '药品临期',
     expiring_drug_reminder: '药品临期', other: '其他',
   }[type] || type);
-
-  const translateMessage = (msg) => {
-    if (!msg) return msg;
-    return msg
-      .replace(/morning/g, '早晨')
-      .replace(/noon/g, '中午')
-      .replace(/evening/g, '傍晚')
-      .replace(/before_bed/g, '睡前');
-  };
 
   const formatTime = (timeStr) => {
     if (!timeStr) return '';
@@ -118,12 +135,12 @@ function GuardianNotification({ onRead }) {
           {notifications.map((n) => {
             const send = getSendStatus(n.sendStatus);
             return (
-              <div key={n.id} className="g-notif-item">
+              <div key={n.id} className={`g-notif-item ${n.isRead ? 'g-notif-item-read' : ''}`} onClick={() => handleItemClick(n)} style={{ cursor: 'pointer' }}>
                 <div className="g-notif-top">
                   <span className="g-notif-type">{getEventTypeLabel(n.eventType)}</span>
                   <span className={`g-notif-send ${send.cls}`}>{send.text}</span>
                 </div>
-                <p className="g-notif-msg">{translateMessage(n.message)}</p>
+                <p className="g-notif-msg">{n.message}</p>
                 <span className="g-notif-time">{formatTime(n.sentAt || n.createdAt)}</span>
               </div>
             );

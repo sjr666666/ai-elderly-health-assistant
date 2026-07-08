@@ -6,6 +6,8 @@ import com.example.backend.mapper.MedicationPlanMapper;
 import com.example.backend.mapper.SmsNotificationLogMapper;
 import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.entity.*;
+import com.example.backend.model.enums.EventType;
+import com.example.backend.model.enums.RelationStatus;
 import com.example.backend.service.MissedDoseMonitorService;
 import com.example.backend.service.SmsNotificationService;
 import lombok.RequiredArgsConstructor;
@@ -40,7 +42,7 @@ public class MissedDoseMonitorServiceImpl implements MissedDoseMonitorService {
         // 查询所有今日的待服用计划
         LambdaQueryWrapper<MedicationPlan> planQuery = new LambdaQueryWrapper<>();
         planQuery.eq(MedicationPlan::getPlanDate, today)
-                .eq(MedicationPlan::getStatus, "pending");
+                .eq(MedicationPlan::getStatus, MedicationPlan.Status.PENDING.getCode());
         List<MedicationPlan> pendingPlans = medicationPlanMapper.selectList(planQuery);
 
         int missedCount = 0;
@@ -48,7 +50,7 @@ public class MissedDoseMonitorServiceImpl implements MissedDoseMonitorService {
             // 判断是否超时：根据时段判断是否已过时
             if (isOverdue(plan)) {
                 // 标记为漏服
-                plan.setStatus("missed");
+                plan.setStatus(MedicationPlan.Status.MISSED.getCode());
                 medicationPlanMapper.updateById(plan);
 
                 // 通知家属
@@ -87,9 +89,9 @@ public class MissedDoseMonitorServiceImpl implements MissedDoseMonitorService {
      */
     private String getTimeSlotLabel(String timeSlot) {
         switch (timeSlot) {
-            case "morning": return "早晨";
+            case "morning": return "早上";
             case "noon": return "中午";
-            case "evening": return "傍晚";
+            case "evening": return "晚上";
             case "before_bed": return "睡前";
             default: return timeSlot;
         }
@@ -102,7 +104,7 @@ public class MissedDoseMonitorServiceImpl implements MissedDoseMonitorService {
         // 查询老人的监护人
         LambdaQueryWrapper<GuardianElderRelation> relationQuery = new LambdaQueryWrapper<>();
         relationQuery.eq(GuardianElderRelation::getElderId, plan.getUserId())
-                .eq(GuardianElderRelation::getStatus, "active");
+                .eq(GuardianElderRelation::getStatus, RelationStatus.ACTIVE.getCode());
         List<GuardianElderRelation> relations = guardianElderRelationMapper.selectList(relationQuery);
 
         // 查询老人姓名
@@ -120,7 +122,7 @@ public class MissedDoseMonitorServiceImpl implements MissedDoseMonitorService {
                 smsNotificationService.sendNotification(
                         relation.getGuardianId(),
                         plan.getUserId(),
-                        "missed_dose",
+                        EventType.MISSED_DOSE.getCode(),
                         message,
                         phone
                 );

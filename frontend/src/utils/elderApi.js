@@ -1,10 +1,10 @@
 /**
  * 老人端API请求工具 - 自动添加JWT token到请求头
  * 处理认证失败自动跳转登录页
+ * localStorage仅存储JWT token，用户信息通过API获取
  */
 
 const TOKEN_KEY = 'elderToken';
-const USER_KEY = 'user';
 
 // 获取token
 export function getToken() {
@@ -16,28 +16,9 @@ export function saveToken(token) {
   localStorage.setItem(TOKEN_KEY, token);
 }
 
-// 清除token和用户信息
+// 清除token
 export function clearAuth() {
   localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-}
-
-// 获取用户信息
-export function getElderUser() {
-  const userStr = localStorage.getItem(USER_KEY);
-  if (userStr) {
-    try {
-      return JSON.parse(userStr);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-// 保存用户信息
-export function saveElderUser(user) {
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
 // 检查是否已认证

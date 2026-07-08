@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { saveToken } from '../utils/elderApi';
 
 function Register({ onRegister }) {
   const [username, setUsername] = useState('');
@@ -111,13 +112,17 @@ function Register({ onRegister }) {
         const loginData = await loginResponse.json();
 
         if (loginResponse.ok && loginData.code === 200) {
-          // 登录成功，保存用户信息并跳转到首页
+          // 登录成功，保存JWT token（用户信息不存localStorage）
+          const loginResult = loginData.data;
+          if (loginResult.token) {
+            saveToken(loginResult.token);
+          }
           const userData = {
-            ...loginData.data,
+            ...loginResult,
             realName: realName.trim(),
             age: parseInt(age)
           };
-          localStorage.setItem('user', JSON.stringify(userData));
+          delete userData.token;
           onRegister(userData);
         } else {
           // 登录失败，但注册成功，提示用户手动登录
@@ -145,7 +150,7 @@ function Register({ onRegister }) {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      minHeight: 'calc(var(--vh, 1vh) * 100)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',

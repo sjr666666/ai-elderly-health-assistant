@@ -10,6 +10,9 @@ import com.example.backend.model.entity.EmergencyContact;
 import com.example.backend.model.entity.EmergencyEvent;
 import com.example.backend.model.entity.GuardianElderRelation;
 import com.example.backend.model.entity.SysUser;
+import com.example.backend.model.enums.EventType;
+import com.example.backend.model.enums.RelationStatus;
+import com.example.backend.model.enums.Severity;
 import com.example.backend.service.AiConversationLogService;
 import com.example.backend.service.EmergencyContactService;
 import com.example.backend.service.EmergencyEventService;
@@ -123,7 +126,6 @@ public class EmergencyController {
      * 触发紧急模式
      * 老人开启紧急模式时调用，创建紧急事件并通知所有关联家属
      *
-     * @param request 包含elderId的请求体
      * @return 操作结果
      */
     @PostMapping("/trigger")
@@ -139,8 +141,8 @@ public class EmergencyController {
         // 创建紧急事件
         EmergencyEvent event = new EmergencyEvent();
         event.setElderId(elderId);
-        event.setEventType("sos");
-        event.setSeverity("high");
+        event.setEventType(EventType.SOS.getCode());
+        event.setSeverity(Severity.HIGH.getCode());
         event.setDescription(elderName + "开启了紧急求助模式");
         event.setEventTime(LocalDateTime.now());
         event.setIsResolved(0);
@@ -151,7 +153,7 @@ public class EmergencyController {
         // 查询所有关联家属
         LambdaQueryWrapper<GuardianElderRelation> relationQuery = new LambdaQueryWrapper<>();
         relationQuery.eq(GuardianElderRelation::getElderId, elderId)
-                .eq(GuardianElderRelation::getStatus, "active");
+                .eq(GuardianElderRelation::getStatus, RelationStatus.ACTIVE.getCode());
         List<GuardianElderRelation> relations = guardianElderRelationMapper.selectList(relationQuery);
 
         // 通知每位家属
@@ -162,7 +164,7 @@ public class EmergencyController {
             try {
                 String message = String.format("【紧急求助】%s开启了紧急求助模式，请立即关注！", elderName);
                 smsNotificationService.sendNotification(
-                        relation.getGuardianId(), elderId, "emergency_alert", message, phone);
+                        relation.getGuardianId(), elderId, EventType.EMERGENCY_ALERT.getCode(), message, phone);
                 notifyCount++;
             } catch (Exception e) {
                 logger.error("通知家属失败 - guardianId: {}", relation.getGuardianId(), e);
@@ -180,7 +182,6 @@ public class EmergencyController {
     /**
      * 获取对话历史
      *
-     * @param userId 用户ID
      * @param limit  返回数量限制（可选，默认20）
      * @return 对话历史列表
      */
