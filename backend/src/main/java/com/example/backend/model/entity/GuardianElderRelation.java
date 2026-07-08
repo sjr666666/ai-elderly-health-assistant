@@ -1,6 +1,7 @@
 package com.example.backend.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.example.backend.model.enums.RelationStatus;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -41,7 +42,7 @@ public class GuardianElderRelation extends BaseEntity {
 
     /**
      * 状态
-     * active（有效）/ inactive（已解除）
+     * @see RelationStatus
      * 默认值：active
      */
     @TableField("status")

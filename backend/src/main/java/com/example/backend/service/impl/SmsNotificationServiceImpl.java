@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.backend.mapper.SmsNotificationLogMapper;
 import com.example.backend.model.dto.SmsNotificationDTO;
 import com.example.backend.model.entity.SmsNotificationLog;
+import com.example.backend.model.enums.SmsStatus;
 import com.example.backend.service.SmsNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,7 +65,7 @@ public class SmsNotificationServiceImpl implements SmsNotificationService {
         notificationLog.setSmsType(eventType);
         notificationLog.setContent(message);
         notificationLog.setPhone(phone);
-        notificationLog.setStatus("pending");
+        notificationLog.setStatus(SmsStatus.PENDING.getCode());
         notificationLog.setRetryCount(0);
         notificationLog.setIsRead(0);
 
@@ -73,7 +74,7 @@ public class SmsNotificationServiceImpl implements SmsNotificationService {
         log.info("短信通知已记录 - id: {}, 待发送至: {}", notificationLog.getId(), phone);
 
         // 模拟发送成功
-        notificationLog.setStatus("sent");
+        notificationLog.setStatus(SmsStatus.SENT.getCode());
         notificationLog.setSentAt(LocalDateTime.now());
         smsNotificationLogMapper.updateById(notificationLog);
 

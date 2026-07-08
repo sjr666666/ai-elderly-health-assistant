@@ -127,7 +127,9 @@ public class MedicationPlan extends BaseEntity {
         PENDING("pending", "待服用"),
         TAKEN("taken", "已服用"),
         MISSED("missed", "已错过"),
-        SKIPPED("skipped", "已跳过");
+        SKIPPED("skipped", "已跳过"),
+        COMPLETED("completed", "已完成"),
+        CANCELLED("cancelled", "已取消");
 
         private final String code;
         private final String description;

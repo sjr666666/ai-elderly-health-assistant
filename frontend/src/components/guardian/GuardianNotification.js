@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from '../Toast';
 import { guardianApi } from '../../utils/guardianApi';
+import { getEventTypeLabel, formatTime } from '../../utils/guardianHelpers';
 import './guardian.css';
 
 function GuardianNotification({ onRead }) {
@@ -46,13 +47,6 @@ function GuardianNotification({ onRead }) {
     finally { setIsLoading(false); }
   };
 
-  const getEventTypeLabel = (type) => ({
-    fall: '跌倒报警', sos: '紧急求助', abnormal: '异常行为',
-    medication_missed: '漏服药物', missed_dose: '漏服药物', missed_dose_alert: '漏服药物',
-    emergency_alert: '紧急报警', expiring_drug: '药品临期',
-    expiring_drug_reminder: '药品临期', other: '其他',
-  }[type] || type);
-
   const translateMessage = (msg) => {
     if (!msg) return msg;
     return msg
@@ -60,23 +54,6 @@ function GuardianNotification({ onRead }) {
       .replace(/noon/g, '中午')
       .replace(/evening/g, '傍晚')
       .replace(/before_bed/g, '睡前');
-  };
-
-  const formatTime = (timeStr) => {
-    if (!timeStr) return '';
-    const date = new Date(timeStr);
-    if (isNaN(date.getTime())) return timeStr;
-    const now = new Date();
-    const diff = Math.floor((now - date) / 1000);
-    if (diff < 60) return '刚刚';
-    if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
-    if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
-    if (diff < 172800) return '昨天 ' + date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
-    const m = date.getMonth() + 1;
-    const d = date.getDate();
-    const h = date.getHours().toString().padStart(2, '0');
-    const min = date.getMinutes().toString().padStart(2, '0');
-    return m + '月' + d + '日 ' + h + ':' + min;
   };
 
   const getSendStatus = (status) => {

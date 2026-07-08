@@ -2,6 +2,7 @@ package com.example.backend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.backend.common.BusinessException;
+import com.example.backend.common.ResponseCode;
 import com.example.backend.mapper.*;
 import com.example.backend.model.dto.ElderMedicationPlanDTO;
 import com.example.backend.model.dto.ElderMedicationPlanItemDTO;
@@ -11,6 +12,7 @@ import com.example.backend.model.dto.GuardianDashboardDTO;
 import com.example.backend.model.dto.GuardianRelationRequest;
 import com.example.backend.model.dto.GuardianSummaryDTO;
 import com.example.backend.model.entity.*;
+import com.example.backend.model.enums.RelationStatus;
 import com.example.backend.service.ElderNotificationService;
 import com.example.backend.service.GuardianService;
 import com.example.backend.service.SmsNotificationService;
@@ -70,7 +72,7 @@ public class GuardianServiceImpl implements GuardianService {
         // 1. 查询关联关系
         LambdaQueryWrapper<GuardianElderRelation> relationQuery = new LambdaQueryWrapper<>();
         relationQuery.eq(GuardianElderRelation::getGuardianId, guardianId)
-                .eq(GuardianElderRelation::getStatus, "active");
+                .eq(GuardianElderRelation::getStatus, RelationStatus.ACTIVE.getCode());
         List<GuardianElderRelation> relations = guardianElderRelationMapper.selectList(relationQuery);
 
         if (relations.isEmpty()) {
@@ -107,7 +109,7 @@ public class GuardianServiceImpl implements GuardianService {
         // 5. 批量查询用药数量
         LambdaQueryWrapper<UserMedicineBox> boxQuery = new LambdaQueryWrapper<>();
         boxQuery.in(UserMedicineBox::getUserId, elderIds)
-                .eq(UserMedicineBox::getStatus, "active");
+                .eq(UserMedicineBox::getStatus, UserMedicineBox.Status.ACTIVE.getCode());
         List<UserMedicineBox> allBoxes = userMedicineBoxMapper.selectList(boxQuery);
         Map<Long, Long> medCountByElder = allBoxes.stream()
                 .collect(Collectors.groupingBy(UserMedicineBox::getUserId, Collectors.counting()));
@@ -127,10 +129,12 @@ public class GuardianServiceImpl implements GuardianService {
             List<MedicationPlan> plans = plansByElder.getOrDefault(elderId, new ArrayList<>());
             int pendingCount = 0, takenCount = 0, missedCount = 0;
             for (MedicationPlan plan : plans) {
-                switch (plan.getStatus()) {
-                    case "pending": pendingCount++; break;
-                    case "taken": takenCount++; break;
-                    case "missed": missedCount++; break;
+                MedicationPlan.Status planStatus = MedicationPlan.Status.fromCode(plan.getStatus());
+                switch (planStatus) {
+                    case PENDING: pendingCount++; break;
+                    case TAKEN: takenCount++; break;
+                    case MISSED: missedCount++; break;
+                    default: break;
                 }
             }
 
@@ -162,7 +166,7 @@ public class GuardianServiceImpl implements GuardianService {
         // 1. 查询所有 active 状态的家属绑定关系
         LambdaQueryWrapper<GuardianElderRelation> relationQuery = new LambdaQueryWrapper<>();
         relationQuery.eq(GuardianElderRelation::getElderId, elderId)
-                .eq(GuardianElderRelation::getStatus, "active");
+                .eq(GuardianElderRelation::getStatus, RelationStatus.ACTIVE.getCode());
         List<GuardianElderRelation> relations = guardianElderRelationMapper.selectList(relationQuery);
 
         if (relations.isEmpty()) {
@@ -218,7 +222,7 @@ public class GuardianServiceImpl implements GuardianService {
         LambdaQueryWrapper<GuardianElderRelation> query = new LambdaQueryWrapper<>();
         query.eq(GuardianElderRelation::getGuardianId, guardianId)
                 .eq(GuardianElderRelation::getElderId, elderId)
-                .eq(GuardianElderRelation::getStatus, "active");
+                .eq(GuardianElderRelation::getStatus, RelationStatus.ACTIVE.getCode());
         return guardianElderRelationMapper.selectCount(query) > 0;
     }
 
@@ -233,7 +237,7 @@ public class GuardianServiceImpl implements GuardianService {
         if (elderId == null && request.getElderUsername() != null) {
             LambdaQueryWrapper<SysUser> userQuery = new LambdaQueryWrapper<>();
             userQuery.eq(SysUser::getUsername, request.getElderUsername())
-                    .eq(SysUser::getRole, "elder");
+                    .eq(SysUser::getRole, SysUser.Role.ELDER.getCode());
             SysUser elder = userMapper.selectOne(userQuery);
             if (elder == null) {
                 throw new BusinessException("未找到该老人用户：" + request.getElderUsername());
@@ -248,17 +252,17 @@ public class GuardianServiceImpl implements GuardianService {
         // 验证elderId对应的用户角色是否为"elder"
         SysUser elderUser = userMapper.selectById(elderId);
         if (elderUser == null) {
-            throw new RuntimeException("未找到该用户：elderId=" + elderId);
+            throw new BusinessException(ResponseCode.NOT_FOUND, "未找到该用户：elderId=" + elderId);
         }
-        if (!"elder".equals(elderUser.getRole())) {
-            throw new RuntimeException("只能绑定老人角色的用户，该用户角色为：" + elderUser.getRole());
+        if (!SysUser.Role.ELDER.getCode().equals(elderUser.getRole())) {
+            throw new BusinessException(ResponseCode.PARAM_ERROR, "只能绑定老人角色的用户，该用户角色为：" + elderUser.getRole());
         }
 
         // 检查是否已存在active关联
         LambdaQueryWrapper<GuardianElderRelation> existQuery = new LambdaQueryWrapper<>();
         existQuery.eq(GuardianElderRelation::getGuardianId, guardianId)
                 .eq(GuardianElderRelation::getElderId, elderId)
-                .eq(GuardianElderRelation::getStatus, "active");
+                .eq(GuardianElderRelation::getStatus, RelationStatus.ACTIVE.getCode());
         if (guardianElderRelationMapper.selectCount(existQuery) > 0) {
             throw new BusinessException("监护关系已存在");
         }
@@ -267,10 +271,10 @@ public class GuardianServiceImpl implements GuardianService {
         LambdaQueryWrapper<GuardianElderRelation> inactiveQuery = new LambdaQueryWrapper<>();
         inactiveQuery.eq(GuardianElderRelation::getGuardianId, guardianId)
                 .eq(GuardianElderRelation::getElderId, elderId)
-                .eq(GuardianElderRelation::getStatus, "inactive");
+                .eq(GuardianElderRelation::getStatus, RelationStatus.INACTIVE.getCode());
         GuardianElderRelation inactiveRelation = guardianElderRelationMapper.selectOne(inactiveQuery);
         if (inactiveRelation != null) {
-            inactiveRelation.setStatus("active");
+            inactiveRelation.setStatus(RelationStatus.ACTIVE.getCode());
             inactiveRelation.setRelationType(request.getRelationType());
             guardianElderRelationMapper.updateById(inactiveRelation);
             log.info("监护关系恢复成功 - id: {}", inactiveRelation.getId());
@@ -283,7 +287,7 @@ public class GuardianServiceImpl implements GuardianService {
         relation.setGuardianId(guardianId);
         relation.setElderId(elderId);
         relation.setRelationType(request.getRelationType());
-        relation.setStatus("active");
+        relation.setStatus(RelationStatus.ACTIVE.getCode());
 
         guardianElderRelationMapper.insert(relation);
 
@@ -300,14 +304,14 @@ public class GuardianServiceImpl implements GuardianService {
         LambdaQueryWrapper<GuardianElderRelation> query = new LambdaQueryWrapper<>();
         query.eq(GuardianElderRelation::getGuardianId, guardianId)
                 .eq(GuardianElderRelation::getElderId, elderId)
-                .eq(GuardianElderRelation::getStatus, "active");
+                .eq(GuardianElderRelation::getStatus, RelationStatus.ACTIVE.getCode());
         GuardianElderRelation relation = guardianElderRelationMapper.selectOne(query);
 
         if (relation == null) {
             throw new BusinessException("未找到有效的监护关系");
         }
 
-        relation.setStatus("inactive");
+        relation.setStatus(RelationStatus.INACTIVE.getCode());
         guardianElderRelationMapper.updateById(relation);
 
         log.info("监护关系解绑成功 - guardianId: {}, elderId: {}", guardianId, elderId);
@@ -321,7 +325,7 @@ public class GuardianServiceImpl implements GuardianService {
 
         LambdaQueryWrapper<UserMedicineBox> query = new LambdaQueryWrapper<>();
         query.eq(UserMedicineBox::getUserId, elderId)
-                .eq(UserMedicineBox::getStatus, "active")
+                .eq(UserMedicineBox::getStatus, UserMedicineBox.Status.ACTIVE.getCode())
                 .le(UserMedicineBox::getExpiryDate, threshold)
                 .ge(UserMedicineBox::getExpiryDate, LocalDate.now());
         List<UserMedicineBox> boxes = userMedicineBoxMapper.selectList(query);
@@ -389,16 +393,18 @@ public class GuardianServiceImpl implements GuardianService {
         int takenCount = 0;
         int missedCount = 0;
         for (MedicationPlan plan : todayPlans) {
-            switch (plan.getStatus()) {
-                case "pending":
+            MedicationPlan.Status planStatus = MedicationPlan.Status.fromCode(plan.getStatus());
+            switch (planStatus) {
+                case PENDING:
                     pendingCount++;
                     break;
-                case "taken":
+                case TAKEN:
                     takenCount++;
                     break;
-                case "missed":
+                case MISSED:
                     missedCount++;
                     break;
+                default: break;
             }
         }
 
@@ -411,7 +417,7 @@ public class GuardianServiceImpl implements GuardianService {
         // 查询用药数量（药箱中active状态的药品数）
         LambdaQueryWrapper<UserMedicineBox> boxQuery = new LambdaQueryWrapper<>();
         boxQuery.eq(UserMedicineBox::getUserId, elderId)
-                .eq(UserMedicineBox::getStatus, "active");
+                .eq(UserMedicineBox::getStatus, UserMedicineBox.Status.ACTIVE.getCode());
         Long medicationCount = userMedicineBoxMapper.selectCount(boxQuery);
 
         // 最后活跃时间（优先使用 lastActiveTime，兜底使用 updatedAt）
@@ -455,11 +461,13 @@ public class GuardianServiceImpl implements GuardianService {
                 }
             }
 
-            switch (plan.getStatus()) {
-                case "taken": case "completed": takenCount++; break;
-                case "pending": pendingCount++; break;
-                case "missed": missedCount++; break;
-                case "skipped": skippedCount++; break;
+            MedicationPlan.Status planStatus = MedicationPlan.Status.fromCode(plan.getStatus());
+            switch (planStatus) {
+                case TAKEN: case COMPLETED: takenCount++; break;
+                case PENDING: pendingCount++; break;
+                case MISSED: missedCount++; break;
+                case SKIPPED: skippedCount++; break;
+                default: break;
             }
 
             items.add(ElderMedicationPlanItemDTO.builder()
@@ -491,24 +499,24 @@ public class GuardianServiceImpl implements GuardianService {
     }
 
     private String getTimeSlotLabel(String timeSlot) {
-        switch (timeSlot) {
-            case "morning": return "早晨";
-            case "noon": return "中午";
-            case "afternoon": return "下午";
-            case "evening": return "傍晚";
-            case "before_bed": return "睡前";
-            case "night": return "夜间";
+        MedicationPlan.TimeSlot slot = MedicationPlan.TimeSlot.fromCode(timeSlot);
+        switch (slot) {
+            case MORNING: return "早晨";
+            case NOON: return "中午";
+            case EVENING: return "傍晚";
+            case BEFORE_BED: return "睡前";
             default: return timeSlot;
         }
     }
 
     private String getStatusLabel(String status) {
-        switch (status) {
-            case "pending": return "待服用";
-            case "taken": return "已服用";
-            case "missed": return "已漏服";
-            case "skipped": return "已跳过";
-            case "completed": return "已完成";
+        MedicationPlan.Status planStatus = MedicationPlan.Status.fromCode(status);
+        switch (planStatus) {
+            case PENDING: return "待服用";
+            case TAKEN: return "已服用";
+            case MISSED: return "已漏服";
+            case SKIPPED: return "已跳过";
+            case COMPLETED: return "已完成";
             default: return status;
         }
     }

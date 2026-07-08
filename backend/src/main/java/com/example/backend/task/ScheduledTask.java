@@ -170,7 +170,7 @@ public class ScheduledTask {
                             }
                             
                             // 检查1：药物是否已停用
-                            if (!"active".equals(boxItem.getStatus())) {
+                            if (!UserMedicineBox.Status.ACTIVE.getCode().equals(boxItem.getStatus())) {
                                 logger.info("药物已停用，不加入今日计划 - boxItemId: {}, status: {}", 
                                         boxItem.getId(), boxItem.getStatus());
                                 skippedCount++;
@@ -210,7 +210,7 @@ public class ScheduledTask {
                         newPlan.setPlanDate(today);
                         newPlan.setTimeSlot(yesterdayPlan.getTimeSlot());
                         newPlan.setDosageAtTime(yesterdayPlan.getDosageAtTime());
-                        newPlan.setStatus("pending"); // 新计划状态为待服用
+                        newPlan.setStatus(MedicationPlan.Status.PENDING.getCode()); // 新计划状态为待服用
                         newPlan.setRemindBefore(yesterdayPlan.getRemindBefore());
                         
                         int result = medicationPlanMapper.insert(newPlan);

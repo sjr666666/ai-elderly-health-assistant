@@ -197,7 +197,7 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                     logger.warn("更新异常日志失败 - error: {}", logEx.getMessage());
                 }
             }
-            return buildResult(null, null, null, "failed", "识别失败，请重试");
+            return buildResult(null, null, null, OcrRecord.Status.FAILED.getCode(), "识别失败，请重试");
         }
     }
 

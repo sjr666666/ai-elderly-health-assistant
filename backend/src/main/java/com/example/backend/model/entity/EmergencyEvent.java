@@ -1,6 +1,8 @@
 package com.example.backend.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.example.backend.model.enums.EventType;
+import com.example.backend.model.enums.Severity;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -25,12 +27,14 @@ public class EmergencyEvent extends BaseEntity {
 
     /**
      * 事件类型
+     * @see EventType
      */
     @TableField("event_type")
     private String eventType;
 
     /**
-     * 严重程度：low/medium/high
+     * 严重程度
+     * @see Severity
      */
     @TableField("severity")
     private String severity;
