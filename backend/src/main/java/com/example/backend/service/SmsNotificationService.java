@@ -45,6 +45,14 @@ public interface SmsNotificationService {
     void markAllAsRead(Long guardianId);
 
     /**
+     * 标记单条通知为已读
+     *
+     * @param guardianId     监护人ID（归属校验）
+     * @param notificationId 通知ID
+     */
+    void markAsRead(Long guardianId, Long notificationId);
+
+    /**
      * 删除已读通知
      *
      * @param guardianId 监护人ID

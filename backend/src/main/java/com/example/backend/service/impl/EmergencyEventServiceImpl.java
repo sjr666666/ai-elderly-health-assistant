@@ -7,6 +7,7 @@ import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.dto.EmergencyEventDTO;
 import com.example.backend.model.entity.EmergencyEvent;
 import com.example.backend.model.entity.SysUser;
+import com.example.backend.model.enums.EventResolveStatus;
 import com.example.backend.service.EmergencyEventService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,7 +51,8 @@ public class EmergencyEventServiceImpl implements EmergencyEventService {
                     .severity(event.getSeverity())
                     .description(event.getDescription())
                     .eventTime(event.getEventTime())
-                    .status(event.getIsResolved() != null && event.getIsResolved() == 1 ? "resolved" : "pending")
+                    .status(event.getIsResolved() != null && event.getIsResolved() == 1
+                            ? EventResolveStatus.RESOLVED.getCode() : EventResolveStatus.PENDING.getCode())
                     .resolvedBy(event.getResolvedBy())
                     .resolvedAt(event.getResolvedAt())
                     .createdAt(event.getCreatedAt())

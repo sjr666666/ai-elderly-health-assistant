@@ -85,6 +85,7 @@ body {
   color: var(--text-dark);
   background: linear-gradient(145deg, var(--warm-apricot-light) 0%, var(--cream-white) 50%, var(--mint-green-light) 100%);
   min-height: 100vh;
+  min-height: 100dvh;
   background-attachment: fixed;
 }
 
@@ -3479,14 +3480,14 @@ body {
 }
 
 /* ============ PAGE TRANSITIONS ============ */
-.main-content > div {
-  animation: pageTransition 0.5s ease;
+.main-content > .tab-page {
+  animation: pageTransition 0.25s ease-out;
 }
 
 @keyframes pageTransition {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -6219,6 +6220,7 @@ body {
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
@@ -6340,6 +6342,7 @@ body {
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
@@ -6884,6 +6887,7 @@ body {
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.35);
   z-index: 9998;
   animation: notifOverlayIn 0.2s ease;
@@ -6901,6 +6905,7 @@ body {
   width: 380px;
   max-width: 90vw;
   height: 100vh;
+  height: 100dvh;
   background: var(--cream-white);
   z-index: 9999;
   transition: right 0.3s ease;

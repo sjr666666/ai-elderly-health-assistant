@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useToast } from './Toast';
+import { getToken } from '../utils/elderApi';
 
 /**
  * 批量操作确认弹窗组件
@@ -187,7 +188,7 @@ function DrugListView({
     try {
       const promises = Array.from(selectedDrugs).map(boxItemId => {
         const headers = {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         };
         if (isDelete) {
           return fetch(`/api/v1/box/${boxItemId}?userId=${userId}`, {

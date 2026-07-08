@@ -99,6 +99,22 @@ public class SmsNotificationServiceImpl implements SmsNotificationService {
     }
 
     @Override
+    public void markAsRead(Long guardianId, Long notificationId) {
+        log.info("标记单条通知为已读 - guardianId: {}, notificationId: {}", guardianId, notificationId);
+        // 归属校验：确保该通知属于当前用户
+        SmsNotificationLog notification = smsNotificationLogMapper.selectById(notificationId);
+        if (notification == null) {
+            throw new RuntimeException("通知不存在");
+        }
+        if (!notification.getGuardianId().equals(guardianId)) {
+            throw new RuntimeException("无权操作该通知");
+        }
+        // 标记已读
+        notification.setIsRead(1);
+        smsNotificationLogMapper.updateById(notification);
+    }
+
+    @Override
     public int deleteReadNotifications(Long guardianId) {
         LambdaQueryWrapper<SmsNotificationLog> query = new LambdaQueryWrapper<>();
         query.eq(SmsNotificationLog::getGuardianId, guardianId)

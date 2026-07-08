@@ -1,10 +1,10 @@
 /**
  * 家属端API请求工具 - 自动添加JWT token到请求头
  * 处理认证失败自动跳转登录页
+ * localStorage仅存储JWT token，用户信息通过API获取
  */
 
 const TOKEN_KEY = 'guardianToken'; // 家属端独立token，与老人端隔离
-const USER_KEY = 'guardianUser'; // 家属端独立用户信息
 
 // 获取token
 export function getToken() {
@@ -16,28 +16,9 @@ export function saveToken(token) {
   localStorage.setItem(TOKEN_KEY, token);
 }
 
-// 清除token和用户信息
+// 清除token
 export function clearAuth() {
   localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-}
-
-// 获取用户信息
-export function getGuardianUser() {
-  const userStr = localStorage.getItem(USER_KEY);
-  if (userStr) {
-    try {
-      return JSON.parse(userStr);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-// 保存用户信息
-export function saveGuardianUser(user) {
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
 // 检查是否已认证
@@ -124,6 +105,9 @@ export const guardianApi = {
 
   // 标记全部已读
   markAllAsRead: () => guardianFetch('/notifications/read-all', { method: 'PUT' }),
+
+  // 标记单条已读
+  markOneAsRead: (id) => guardianFetch(`/notifications/${id}/read`, { method: 'PUT' }),
 
   // 清除已读通知
   clearReadNotifications: () => guardianFetch('/notifications/read', { method: 'DELETE' }),

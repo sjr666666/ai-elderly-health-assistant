@@ -24,8 +24,8 @@ import ElderNotificationPanel from './components/ElderNotificationPanel';
 import WeeklyReport from './components/WeeklyReport';
 import { useToast } from './components/Toast';
 import FloatingMicButton from './components/FloatingMicButton';
-import { clearAuth, isAuthenticated, saveElderUser, getToken } from './utils/elderApi';
-import { isAuthenticated as isGuardianAuthenticated, getGuardianUser } from './utils/guardianApi';
+import { clearAuth, isAuthenticated, getToken } from './utils/elderApi';
+import { isAuthenticated as isGuardianAuthenticated, getToken as getGuardianToken } from './utils/guardianApi';
 
 function App() {
   const { showToast } = useToast();
@@ -659,11 +659,7 @@ function App() {
     });
     setIsLoggedIn(true);
 
-    // 保存登录状态到 localStorage（使用elderApi工具函数）
-    saveElderUser({
-      username: loginData.username,
-      ...loginData
-    });
+    // 用户信息仅保存在React state中，不存localStorage
 
     // 家属角色直接跳转家属端，不加载老人端数据
     if (loginData.role === 'family') {
@@ -697,20 +693,12 @@ function App() {
   };
 
   const handleProfileComplete = (profileData) => {
-    setUser(prev => {
-      const updated = { ...prev, ...profileData };
-      localStorage.setItem('user', JSON.stringify(updated));
-      return updated;
-    });
+    setUser(prev => ({ ...prev, ...profileData }));
     setShowProfileModal(false);
   };
 
   const handleProfileUpdate = (profileData) => {
-    setUser(prev => {
-      const updated = { ...prev, ...profileData };
-      localStorage.setItem('user', JSON.stringify(updated));
-      return updated;
-    });
+    setUser(prev => ({ ...prev, ...profileData }));
     setShowProfileEdit(false);
 
     // 显示成功提示弹窗
@@ -1087,18 +1075,8 @@ function App() {
       return;
     }
 
-    // 从 localStorage 获取用户ID，确保一定能拿到
-    const storedUser = localStorage.getItem('user');
-    let currentUserId = null;
-    
-    if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        currentUserId = userData.userId || userData.id;
-      } catch (e) {
-        console.error('解析用户数据失败:', e);
-      }
-    }
+    // 从 React state 获取用户ID
+    const currentUserId = user?.userId || user?.id;
 
     if (!currentUserId) {
       showToast('用户信息异常，请重新登录', 'error');
@@ -1139,18 +1117,8 @@ function App() {
       return;
     }
 
-    // 从 localStorage 获取用户ID
-    const storedUser = localStorage.getItem('user');
-    let currentUserId = null;
-    
-    if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        currentUserId = userData.userId || userData.id;
-      } catch (e) {
-        console.error('解析用户数据失败:', e);
-      }
-    }
+    // 从 React state 获取用户ID
+    const currentUserId = user?.userId || user?.id;
 
     if (!currentUserId) {
       showToast('用户信息异常，请重新登录', 'error');
@@ -1268,21 +1236,45 @@ function App() {
   }, [showToast]);
 
   // 页面加载时恢复登录状态：家属端 token 优先，否则检查老人端 token
+  // 用户信息通过API获取，不依赖localStorage
   useEffect(() => {
+    // 家属端恢复
     if (isGuardianAuthenticated()) {
-      const guardianUser = getGuardianUser();
-      if (guardianUser && guardianUser.role === 'family') {
-        setLoginMode('guardian');
-        setIsLoggedIn(true);
+      const guardianToken = getGuardianToken();
+      if (guardianToken) {
+        // 通过API获取家属用户信息
+        fetch('/api/v1/user/profile', {
+          headers: { 'Authorization': `Bearer ${guardianToken}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.code === 200 && data.data && data.data.role === 'family') {
+            setLoginMode('guardian');
+            setUser(data.data);
+            setIsLoggedIn(true);
+          } else {
+            // token无效，清除并跳登录
+            clearAuth();
+          }
+        })
+        .catch(() => {
+          clearAuth();
+        });
         return;
       }
     }
+
+    // 老人端恢复
     if (isAuthenticated()) {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        try {
-          const userData = JSON.parse(storedUser);
-          if (userData.role && userData.role !== 'family') {
+      const elderToken = getToken();
+      if (elderToken) {
+        fetch('/api/v1/user/profile', {
+          headers: { 'Authorization': `Bearer ${elderToken}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.code === 200 && data.data && data.data.role && data.data.role !== 'family') {
+            const userData = data.data;
             setUser(userData);
             setIsLoggedIn(true);
 
@@ -1294,11 +1286,14 @@ function App() {
               loadEmergencyContacts(userData.id);
               fetchDailyLesson(userData.id);
             }
+          } else {
+            // token无效或角色不对，清除并跳登录
+            clearAuth();
           }
-        } catch (e) {
-          console.error('解析老人端用户数据失败:', e);
-          localStorage.removeItem('user');
-        }
+        })
+        .catch(() => {
+          clearAuth();
+        });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -6321,7 +6316,7 @@ function App() {
           }}
         />
       ) : user?.role === 'family' ? (
-        <GuardianApp user={user} onLogout={() => { setUser(null); setIsLoggedIn(false); localStorage.removeItem('user'); }} />
+        <GuardianApp user={user} onLogout={() => { setUser(null); setIsLoggedIn(false); clearAuth(); }} />
       ) : (
         <div className="app-container">
           {renderHeader()}
@@ -6351,6 +6346,7 @@ function App() {
               </button>
             </div>
 
+            <div key={activeTab} className="tab-page">
             {activeTab === 'home' && renderHomeTab()}
             {activeTab === 'upload' && renderUploadTab()}
             {activeTab === 'recognition' && renderRecognitionTab()}
@@ -6363,6 +6359,7 @@ function App() {
                 <EmergencyAssistant emergencyContacts={emergencyContacts} elderId={user?.id} />
               </div>
             )}
+            </div>
           </div>
 
         </div>

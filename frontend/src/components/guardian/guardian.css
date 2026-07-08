@@ -1,5 +1,5 @@
 /* ============ 家属端移动端样式 ============ */
-* { box-sizing: border-box; margin: 0; padding: 0; }
+.g-app * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
   --primary: #3A7BC8;
@@ -25,6 +25,7 @@
   max-width: 480px;
   margin: 0 auto;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -1108,6 +1109,13 @@
   border-radius: var(--radius);
   padding: 12px;
   border-left: 3px solid var(--primary);
+  transition: opacity 0.2s, border-color 0.2s;
+}
+
+/* 已读通知视觉弱化 */
+.g-notif-item-read {
+  border-left-color: #DDD;
+  opacity: 0.6;
 }
 
 .g-notif-top {

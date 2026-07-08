@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { saveToken, saveGuardianUser } from '../../utils/guardianApi';
+import { saveToken } from '../../utils/guardianApi';
 import './guardian.css';
 
 function GuardianLogin({ onLogin, onSwitchToElder }) {
@@ -48,14 +48,12 @@ function GuardianLogin({ onLogin, onSwitchToElder }) {
           setIsLoading(false);
           return;
         }
-        // 保存独立的家属端 JWT token
+        // 保存JWT token（用户信息不存localStorage，通过API获取）
         if (userData.token) {
           saveToken(userData.token);
         }
-        // 保存用户信息（不含token）
         const userInfo = { ...userData };
         delete userInfo.token;
-        saveGuardianUser(userInfo);
         onLogin(userInfo);
       } else {
         setError(data.message || '用户名或密码错误');
