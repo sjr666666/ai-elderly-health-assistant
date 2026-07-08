@@ -1,6 +1,7 @@
 package com.example.backend.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.example.backend.model.enums.SmsStatus;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -49,7 +50,7 @@ public class SmsNotificationLog extends BaseEntity {
 
     /**
      * 发送状态
-     * pending/sent/failed
+     * @see SmsStatus
      */
     @TableField("status")
     private String status;
