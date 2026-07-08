@@ -64,7 +64,7 @@ public class MedicineController {
      */
     @GetMapping("/box/list")
     public ResponseResult<List<MedicineBoxResponse>> getMedicineBoxList(
-            @RequestParam(required = false, defaultValue = "active") String status) {
+            @RequestParam(required = false) String status) {
         try {
             Long userId = getCurrentUserId();
             List<MedicineBoxResponse> boxList = medicineBoxService.getMedicineBoxList(userId, status);
@@ -85,7 +85,7 @@ public class MedicineController {
     @GetMapping("/box/search")
     public ResponseResult<List<MedicineBoxResponse>> searchMedicineBox(
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false, defaultValue = "active") String status) {
+            @RequestParam(required = false) String status) {
         try {
             Long userId = getCurrentUserId();
             List<MedicineBoxResponse> searchResults = medicineBoxService.searchMedicineBox(userId, keyword, status);

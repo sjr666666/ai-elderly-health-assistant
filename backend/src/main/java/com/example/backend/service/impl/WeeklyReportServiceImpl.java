@@ -151,16 +151,17 @@ public class WeeklyReportServiceImpl implements WeeklyReportService {
                     ? planStatusMap.get(plan.getId()) 
                     : determinePlanStatus(plan, today);
             
-            switch (status.toLowerCase()) {
-                case "taken":
-                case "completed":
+            MedicationPlan.Status planStatus = MedicationPlan.Status.fromCode(status);
+            switch (planStatus) {
+                case TAKEN:
+                case COMPLETED:
                     takenCount++;
                     break;
-                case "missed":
+                case MISSED:
                     missedCount++;
                     break;
-                case "skipped":
-                case "cancelled":
+                case SKIPPED:
+                case CANCELLED:
                     skippedCount++;
                     break;
                 default:
@@ -191,16 +192,16 @@ public class WeeklyReportServiceImpl implements WeeklyReportService {
      */
     private String determinePlanStatus(MedicationPlan plan, LocalDate today) {
         if (plan.getPlanDate() == null) {
-            return "pending";
+            return MedicationPlan.Status.PENDING.getCode();
         }
         
         // 如果计划日期在今天之前，且没有用药记录，视为漏服
         if (plan.getPlanDate().isBefore(today)) {
-            return "missed";
+            return MedicationPlan.Status.MISSED.getCode();
         }
         
         // 如果是今天或未来的日期，且没有记录，视为待服用
-        return "pending";
+        return MedicationPlan.Status.PENDING.getCode();
     }
 
     /**
@@ -235,9 +236,9 @@ public class WeeklyReportServiceImpl implements WeeklyReportService {
                         ? planStatusMap.get(plan.getId()) 
                         : determinePlanStatus(plan, today);
                 
-                if ("taken".equalsIgnoreCase(status) || "completed".equalsIgnoreCase(status)) {
+                if (MedicationPlan.Status.TAKEN.getCode().equalsIgnoreCase(status) || MedicationPlan.Status.COMPLETED.getCode().equalsIgnoreCase(status)) {
                     takenCount++;
-                } else if ("missed".equalsIgnoreCase(status)) {
+                } else if (MedicationPlan.Status.MISSED.getCode().equalsIgnoreCase(status)) {
                     missedCount++;
                 }
 
@@ -277,7 +278,7 @@ public class WeeklyReportServiceImpl implements WeeklyReportService {
                     String status = planStatusMap.containsKey(plan.getId()) 
                             ? planStatusMap.get(plan.getId()) 
                             : determinePlanStatus(plan, today);
-                    return "missed".equalsIgnoreCase(status);
+                    return MedicationPlan.Status.MISSED.getCode().equalsIgnoreCase(status);
                 })
                 .map(plan -> drugMap.get(plan.getDrugId()))
                 .filter(Objects::nonNull)
@@ -302,7 +303,7 @@ public class WeeklyReportServiceImpl implements WeeklyReportService {
             double[] slotStats = stats.get(timeSlot);
             slotStats[0]++;
             
-            if ("taken".equalsIgnoreCase(status) || "completed".equalsIgnoreCase(status)) {
+            if (MedicationPlan.Status.TAKEN.getCode().equalsIgnoreCase(status) || MedicationPlan.Status.COMPLETED.getCode().equalsIgnoreCase(status)) {
                 slotStats[1]++;
             }
         }
