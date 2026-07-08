@@ -1,5 +1,6 @@
 package com.example.backend.model.dto;
 
+import com.example.backend.model.entity.UserMedicineBox;
 import lombok.Data;
 
 import javax.validation.constraints.NotBlank;
@@ -78,5 +79,5 @@ public class AddMedicineRequest {
     /**
      * 状态，默认 active
      */
-    private String status = "active";
+    private String status = UserMedicineBox.Status.ACTIVE.getCode();
 }

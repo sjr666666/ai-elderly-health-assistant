@@ -10,6 +10,9 @@ import com.example.backend.model.entity.EmergencyContact;
 import com.example.backend.model.entity.EmergencyEvent;
 import com.example.backend.model.entity.GuardianElderRelation;
 import com.example.backend.model.entity.SysUser;
+import com.example.backend.model.enums.EventType;
+import com.example.backend.model.enums.RelationStatus;
+import com.example.backend.model.enums.Severity;
 import com.example.backend.service.AiConversationLogService;
 import com.example.backend.service.EmergencyContactService;
 import com.example.backend.service.EmergencyEventService;
@@ -139,8 +142,8 @@ public class EmergencyController {
         // 创建紧急事件
         EmergencyEvent event = new EmergencyEvent();
         event.setElderId(elderId);
-        event.setEventType("sos");
-        event.setSeverity("high");
+        event.setEventType(EventType.SOS.getCode());
+        event.setSeverity(Severity.HIGH.getCode());
         event.setDescription(elderName + "开启了紧急求助模式");
         event.setEventTime(LocalDateTime.now());
         event.setIsResolved(0);
@@ -151,7 +154,7 @@ public class EmergencyController {
         // 查询所有关联家属
         LambdaQueryWrapper<GuardianElderRelation> relationQuery = new LambdaQueryWrapper<>();
         relationQuery.eq(GuardianElderRelation::getElderId, elderId)
-                .eq(GuardianElderRelation::getStatus, "active");
+                .eq(GuardianElderRelation::getStatus, RelationStatus.ACTIVE.getCode());
         List<GuardianElderRelation> relations = guardianElderRelationMapper.selectList(relationQuery);
 
         // 通知每位家属

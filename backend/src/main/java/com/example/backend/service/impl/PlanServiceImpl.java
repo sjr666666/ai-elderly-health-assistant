@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.example.backend.model.entity.*;
 import com.example.backend.mapper.*;
 import com.example.backend.model.dto.*;
+import com.example.backend.model.enums.ReminderStage;
 import com.example.backend.service.PlanService;
 import com.example.backend.common.BusinessException;
 import com.example.backend.common.ResponseCode;
@@ -42,6 +43,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
     }
 
     private String getTimeSlotLabel(String timeSlot) {
+        // 直接匹配字符串，兼容 afternoon 和 night 旧数据
         return switch (timeSlot) {
             case "morning" -> "早上";
             case "noon" -> "中午";
@@ -78,9 +80,9 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         reminderLogMapper.update(null, new LambdaUpdateWrapper<ReminderLog>()
                 .eq(ReminderLog::getUserId, userId)
                 .eq(ReminderLog::getPlanId, planId)
-                .eq(ReminderLog::getRemindType, "missed_alert")
-                .eq(ReminderLog::getStatus, "sent")
-                .set(ReminderLog::getStatus, "read")
+                .eq(ReminderLog::getRemindType, ReminderLog.RemindType.MISSED_ALERT.getCode())
+                .eq(ReminderLog::getStatus, ReminderLog.Status.SENT.getCode())
+                .set(ReminderLog::getStatus, ReminderLog.Status.READ.getCode())
                 .set(ReminderLog::getUpdatedAt, LocalDateTime.now()));
     }
 
@@ -121,7 +123,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             item.setTimeSlotLabel(getTimeSlotLabel(plan.getTimeSlot()));
             item.setRemindBefore(plan.getRemindBefore());
             item.setReminderStage(plan.getReminderStage());
-            item.setStatus(planStatusMap.getOrDefault(plan.getId(), "pending"));
+            item.setStatus(planStatusMap.getOrDefault(plan.getId(), MedicationPlan.Status.PENDING.getCode()));
             return item;
         }).collect(Collectors.toList());
 
@@ -141,12 +143,12 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         MedicationLog log = new MedicationLog();
         log.setPlanId(planId);
         log.setUserId(userId);
-        log.setStatus("taken");
+        log.setStatus(MedicationLog.Status.TAKEN.getCode());
         log.setConfirmedAt(LocalDateTime.now());
         // created_at和updated_at由MyMetaObjectHandler自动填充，无需手动设置
         medicationLogMapper.insert(log);
 
-        plan.setStatus("completed");
+        plan.setStatus(MedicationPlan.Status.COMPLETED.getCode());
         // updated_at由MyMetaObjectHandler自动填充
         updateById(plan);
 
@@ -172,12 +174,12 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         MedicationLog log = new MedicationLog();
         log.setPlanId(planId);
         log.setUserId(userId);
-        log.setStatus("skipped");
+        log.setStatus(MedicationLog.Status.SKIPPED.getCode());
         log.setConfirmedAt(LocalDateTime.now());
         // created_at和updated_at自动填充
         medicationLogMapper.insert(log);
 
-        plan.setStatus("cancelled");
+        plan.setStatus(MedicationPlan.Status.CANCELLED.getCode());
         // updated_at自动填充
         updateById(plan);
 
@@ -220,7 +222,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         // 2. 查询家庭药箱中当前用户需要服用的药品（状态为active，且在服用日期范围内）
         LambdaQueryWrapper<UserMedicineBox> boxQuery = new LambdaQueryWrapper<>();
         boxQuery.eq(UserMedicineBox::getUserId, userId)
-                .eq(UserMedicineBox::getStatus, "active")
+                .eq(UserMedicineBox::getStatus, UserMedicineBox.Status.ACTIVE.getCode())
                 .le(UserMedicineBox::getStartDate, today)
                 .and(w -> w.isNull(UserMedicineBox::getEndDate).or().ge(UserMedicineBox::getEndDate, today));
         List<UserMedicineBox> medicineBoxItems = userMedicineBoxMapper.selectList(boxQuery);
@@ -282,10 +284,10 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
                 if (existingPlanMap.containsKey(key)) {
                     MedicationPlan existingPlan = existingPlanMap.get(key);
                     item.setPlanId(existingPlan.getId());
-                    item.setStatus(planStatusMap.getOrDefault(existingPlan.getId(), "pending"));
+                    item.setStatus(planStatusMap.getOrDefault(existingPlan.getId(), MedicationPlan.Status.PENDING.getCode()));
                 } else {
                     item.setPlanId(null); // 新生成的计划，暂无ID
-                    item.setStatus("pending");
+                    item.setStatus(MedicationPlan.Status.PENDING.getCode());
                 }
 
                 item.setDrugId(boxItem.getDrugId());
@@ -295,7 +297,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
                 item.setTimeSlotLabel(getTimeSlotLabel(timeSlot));
                 item.setRemindBefore(15); // 默认提前15分钟提醒
                 item.setReminderStage(existingPlanMap.containsKey(key) ?
-                        (existingPlanMap.get(key).getReminderStage() != null ? existingPlanMap.get(key).getReminderStage() : "none") : "none");
+                        (existingPlanMap.get(key).getReminderStage() != null ? existingPlanMap.get(key).getReminderStage() : ReminderStage.NONE.getCode()) : ReminderStage.NONE.getCode());
 
                 // 设置药箱条目ID和剩余数量（用于更新库存）
                 item.setBoxItemId(boxItem.getId());
@@ -366,15 +368,17 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
     }
 
     /**
-     * 获取时间段的排序权重
+     * 获取时间段的排序权重（兼容 afternoon 和 night 旧数据）
      */
     private int getTimeSlotOrder(String timeSlot) {
         return switch (timeSlot) {
             case "morning" -> 1;
             case "noon" -> 2;
-            case "evening" -> 3;
-            case "before_bed" -> 4;
-            default -> 5;
+            case "afternoon" -> 3;
+            case "evening" -> 4;
+            case "before_bed" -> 5;
+            case "night" -> 6;
+            default -> 7;
         };
     }
 
@@ -426,7 +430,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             plan.setPlanDate(today);
             plan.setTimeSlot(timeSlot);
             plan.setDosageAtTime(boxItem.getDosage()); // 使用药箱中的用量
-            plan.setStatus("pending");
+            plan.setStatus(MedicationPlan.Status.PENDING.getCode());
             plan.setRemindBefore(15); // 默认提前15分钟提醒
 
             medicationPlanMapper.insert(plan);
@@ -594,7 +598,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         // 检查是否已记录过（幂等性）
         Long logCount = medicationLogMapper.selectCount(new LambdaQueryWrapper<MedicationLog>()
                 .eq(MedicationLog::getPlanId, planId)
-                .eq(MedicationLog::getStatus, "taken"));
+                .eq(MedicationLog::getStatus, MedicationLog.Status.TAKEN.getCode()));
         if (logCount > 0) {
             logger.info("该用药计划已确认过 - planId: {}", planId);
             // 幂等返回：已确认过
@@ -607,12 +611,12 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         MedicationLog log = new MedicationLog();
         log.setPlanId(planId);
         log.setUserId(userId);
-        log.setStatus("taken");
+        log.setStatus(MedicationLog.Status.TAKEN.getCode());
         log.setConfirmedAt(LocalDateTime.now());
         medicationLogMapper.insert(log);
 
         // 更新计划状态
-        plan.setStatus("completed");
+        plan.setStatus(MedicationPlan.Status.COMPLETED.getCode());
         updateById(plan);
 
         // 扣减库存（如果有 boxItemId）
@@ -643,12 +647,12 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         MedicationLog log = new MedicationLog();
         log.setPlanId(planId);
         log.setUserId(userId);
-        log.setStatus("skipped");
+        log.setStatus(MedicationLog.Status.SKIPPED.getCode());
         log.setConfirmedAt(LocalDateTime.now());
         medicationLogMapper.insert(log);
 
         // 更新计划状态
-        plan.setStatus("cancelled");
+        plan.setStatus(MedicationPlan.Status.CANCELLED.getCode());
         updateById(plan);
 
         // 注意：跳过不扣减库存
@@ -663,7 +667,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         // 查找并删除用药记录
         LambdaQueryWrapper<MedicationLog> logQuery = new LambdaQueryWrapper<MedicationLog>()
                 .eq(MedicationLog::getPlanId, planId)
-                .eq(MedicationLog::getStatus, "taken");
+                .eq(MedicationLog::getStatus, MedicationLog.Status.TAKEN.getCode());
         MedicationLog log = medicationLogMapper.selectOne(logQuery);
 
         if (log == null) {
@@ -675,7 +679,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         medicationLogMapper.deleteById(log.getId());
 
         // 恢复计划状态（不走 @TableLogic 过滤，软删除的计划也允许改）
-        medicationPlanMapper.updateStatusIgnoreDeleted(planId, "pending");
+        medicationPlanMapper.updateStatusIgnoreDeleted(planId, MedicationPlan.Status.PENDING.getCode());
 
         // 恢复库存（如果有 boxItemId）
         if (plan.getBoxItemId() != null) {

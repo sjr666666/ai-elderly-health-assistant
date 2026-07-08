@@ -345,14 +345,14 @@ public class OcrServiceImpl implements OcrService {
                     }
                 } else {
                     failedCount.incrementAndGet();
-                    item.setStatus("failed");
+                    item.setStatus(OcrRecord.Status.FAILED.getCode());
                     item.setMessage("处理超时");
                 }
 
             } catch (Exception e) {
                 logger.error("批量图片处理失败", e);
                 failedCount.incrementAndGet();
-                item.setStatus("failed");
+                item.setStatus(OcrRecord.Status.FAILED.getCode());
                 item.setMessage("处理失败: " + e.getMessage());
             }
 

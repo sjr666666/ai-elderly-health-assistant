@@ -6,6 +6,7 @@ import com.example.backend.mapper.MedicationPlanMapper;
 import com.example.backend.mapper.SmsNotificationLogMapper;
 import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.entity.*;
+import com.example.backend.model.enums.RelationStatus;
 import com.example.backend.service.MissedDoseMonitorService;
 import com.example.backend.service.SmsNotificationService;
 import lombok.RequiredArgsConstructor;
@@ -40,7 +41,7 @@ public class MissedDoseMonitorServiceImpl implements MissedDoseMonitorService {
         // 查询所有今日的待服用计划
         LambdaQueryWrapper<MedicationPlan> planQuery = new LambdaQueryWrapper<>();
         planQuery.eq(MedicationPlan::getPlanDate, today)
-                .eq(MedicationPlan::getStatus, "pending");
+                .eq(MedicationPlan::getStatus, MedicationPlan.Status.PENDING.getCode());
         List<MedicationPlan> pendingPlans = medicationPlanMapper.selectList(planQuery);
 
         int missedCount = 0;
@@ -48,7 +49,7 @@ public class MissedDoseMonitorServiceImpl implements MissedDoseMonitorService {
             // 判断是否超时：根据时段判断是否已过时
             if (isOverdue(plan)) {
                 // 标记为漏服
-                plan.setStatus("missed");
+                plan.setStatus(MedicationPlan.Status.MISSED.getCode());
                 medicationPlanMapper.updateById(plan);
 
                 // 通知家属
@@ -102,7 +103,7 @@ public class MissedDoseMonitorServiceImpl implements MissedDoseMonitorService {
         // 查询老人的监护人
         LambdaQueryWrapper<GuardianElderRelation> relationQuery = new LambdaQueryWrapper<>();
         relationQuery.eq(GuardianElderRelation::getElderId, plan.getUserId())
-                .eq(GuardianElderRelation::getStatus, "active");
+                .eq(GuardianElderRelation::getStatus, RelationStatus.ACTIVE.getCode());
         List<GuardianElderRelation> relations = guardianElderRelationMapper.selectList(relationQuery);
 
         // 查询老人姓名

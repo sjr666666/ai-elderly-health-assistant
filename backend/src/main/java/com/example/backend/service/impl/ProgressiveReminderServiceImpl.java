@@ -10,6 +10,8 @@ import com.example.backend.model.entity.DrugBase;
 import com.example.backend.model.entity.GuardianElderRelation;
 import com.example.backend.model.entity.MedicationPlan;
 import com.example.backend.model.entity.SysUser;
+import com.example.backend.model.enums.RelationStatus;
+import com.example.backend.model.enums.ReminderStage;
 import com.example.backend.service.ElderNotificationService;
 import com.example.backend.service.ProgressiveReminderService;
 import com.example.backend.service.SmsNotificationService;
@@ -50,7 +52,7 @@ public class ProgressiveReminderServiceImpl implements ProgressiveReminderServic
         // 查询今日所有 pending 状态的用药计划
         LambdaQueryWrapper<MedicationPlan> query = new LambdaQueryWrapper<>();
         query.eq(MedicationPlan::getPlanDate, today)
-                .eq(MedicationPlan::getStatus, "pending");
+                .eq(MedicationPlan::getStatus, MedicationPlan.Status.PENDING.getCode());
         List<MedicationPlan> pendingPlans = medicationPlanMapper.selectList(query);
 
         int preRemindCount = 0;
@@ -69,24 +71,24 @@ public class ProgressiveReminderServiceImpl implements ProgressiveReminderServic
 
             String newStage = currentStage;
 
-            if (currentStage == null || "none".equals(currentStage)) {
+            if (currentStage == null || ReminderStage.NONE.getCode().equals(currentStage)) {
                 // 阶段1：提前提醒
                 if (!now.isBefore(preRemindTime)) {
-                    newStage = "pre_remind";
+                    newStage = ReminderStage.PRE_REMIND.getCode();
                     preRemindCount++;
                 }
-            } else if ("pre_remind".equals(currentStage)) {
+            } else if (ReminderStage.PRE_REMIND.getCode().equals(currentStage)) {
                 // 阶段2：到时提醒
                 if (!now.isBefore(slotTime)) {
-                    newStage = "due_now";
+                    newStage = ReminderStage.DUE_NOW.getCode();
                     dueNowCount++;
                 }
-            } else if ("due_now".equals(currentStage) || "overdue".equals(currentStage)) {
+            } else if (ReminderStage.DUE_NOW.getCode().equals(currentStage) || ReminderStage.OVERDUE.getCode().equals(currentStage)) {
                 // 阶段3：超时10分钟，通知家属
                 // 说明：原 overdue 阶段已合并，到时提醒后直接在超时10分钟时通知家属，
                 // 避免用户关闭到时提醒后1分钟又被反复打扰；overdue 分支兼容历史数据。
                 if (!now.isBefore(familyNotifyTime)) {
-                    newStage = "notify_family";
+                    newStage = ReminderStage.NOTIFY_FAMILY.getCode();
                     familyNotifyCount++;
                 }
             }
@@ -96,16 +98,12 @@ public class ProgressiveReminderServiceImpl implements ProgressiveReminderServic
                 updatePlanStage(plan, newStage);
 
                 // 根据新阶段执行对应操作
-                switch (newStage) {
-                    case "pre_remind":
-                        sendPreRemindNotification(plan);
-                        break;
-                    case "due_now":
-                        sendDueNowNotification(plan);
-                        break;
-                    case "notify_family":
-                        notifyFamily(plan);
-                        break;
+                if (ReminderStage.PRE_REMIND.getCode().equals(newStage)) {
+                    sendPreRemindNotification(plan);
+                } else if (ReminderStage.DUE_NOW.getCode().equals(newStage)) {
+                    sendDueNowNotification(plan);
+                } else if (ReminderStage.NOTIFY_FAMILY.getCode().equals(newStage)) {
+                    notifyFamily(plan);
                 }
             }
         }
@@ -167,7 +165,7 @@ public class ProgressiveReminderServiceImpl implements ProgressiveReminderServic
     @Transactional(rollbackFor = Exception.class)
     public void notifyFamily(MedicationPlan plan) {
         // 标记为漏服
-        plan.setStatus("missed");
+        plan.setStatus(MedicationPlan.Status.MISSED.getCode());
         medicationPlanMapper.updateById(plan);
 
         String drugName = getDrugName(plan);
@@ -187,7 +185,7 @@ public class ProgressiveReminderServiceImpl implements ProgressiveReminderServic
         // 查询老人的监护人
         LambdaQueryWrapper<GuardianElderRelation> relationQuery = new LambdaQueryWrapper<>();
         relationQuery.eq(GuardianElderRelation::getElderId, plan.getUserId())
-                .eq(GuardianElderRelation::getStatus, "active");
+                .eq(GuardianElderRelation::getStatus, RelationStatus.ACTIVE.getCode());
         List<GuardianElderRelation> relations = guardianElderRelationMapper.selectList(relationQuery);
 
         // 查询老人姓名
