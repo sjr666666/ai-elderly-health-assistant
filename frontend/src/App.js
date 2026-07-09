@@ -151,6 +151,7 @@ function App() {
   // 老人端通知相关状态
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const [wsConnected, setWsConnected] = useState(false); // WebSocket连接状态
   const wsRef = useRef(null); // WebSocket引用
 
   const expiringDrugsResult = useMemo(() => {
@@ -1341,6 +1342,7 @@ function App() {
 
         ws.onopen = () => {
           console.log('WebSocket连接已建立 - elderId:', user.id);
+          setWsConnected(true);
         };
 
         ws.onmessage = (event) => {
@@ -1358,6 +1360,7 @@ function App() {
         ws.onclose = () => {
           console.log('WebSocket连接已关闭');
           wsRef.current = null;
+          setWsConnected(false);
           // 5秒后重连
           setTimeout(() => {
             if (user && user.role !== 'family' && user.id) {
@@ -1372,6 +1375,7 @@ function App() {
         };
       } catch (e) {
         console.warn('WebSocket连接失败，将使用轮询模式');
+        setWsConnected(false);
       }
     };
 
@@ -6404,6 +6408,7 @@ function App() {
           onClose={() => setShowNotificationPanel(false)}
           onUnreadCountChange={setNotificationUnreadCount}
           onContactAdded={() => loadEmergencyContacts(user.id)}
+          wsConnected={wsConnected}
         />
       )}
 

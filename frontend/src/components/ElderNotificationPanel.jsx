@@ -7,7 +7,7 @@ import { getToken } from '../utils/elderApi';
  * 右侧滑出面板，展示通知列表
  * elderId 从 JWT token 中获取，不需要前端传入
  */
-const ElderNotificationPanel = ({ isOpen, onClose, onUnreadCountChange, onContactAdded }) => {
+const ElderNotificationPanel = ({ isOpen, onClose, onUnreadCountChange, onContactAdded, wsConnected = false }) => {
   const { showToast } = useToast();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -62,12 +62,19 @@ const ElderNotificationPanel = ({ isOpen, onClose, onUnreadCountChange, onContac
     }
   }, [isOpen, loadNotifications, fetchUnreadCount]);
 
-  // 定时轮询未读数
+  // 定时轮询未读数（仅在 WebSocket 未连接时启用，避免重复查询数据库）
   useEffect(() => {
+    // 初始加载一次
     fetchUnreadCount();
-    const timer = setInterval(fetchUnreadCount, 5000);
+
+    // WebSocket 已连接时不需要轮询，由 WebSocket 推送更新
+    if (wsConnected) {
+      return;
+    }
+
+    const timer = setInterval(fetchUnreadCount, 30000); // WebSocket 断开时每30秒轮询一次
     return () => clearInterval(timer);
-  }, [fetchUnreadCount]);
+  }, [fetchUnreadCount, wsConnected]);
 
   // 添加紧急联系人
   const handleAddContact = async (notificationId) => {
