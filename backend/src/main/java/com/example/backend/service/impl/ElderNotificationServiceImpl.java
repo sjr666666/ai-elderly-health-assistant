@@ -2,6 +2,7 @@ package com.example.backend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.backend.mapper.ElderNotificationMapper;
 import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.dto.ElderNotificationDTO;
@@ -71,10 +72,10 @@ public class ElderNotificationServiceImpl implements ElderNotificationService {
         }
         LambdaQueryWrapper<ElderNotification> query = new LambdaQueryWrapper<>();
         query.eq(ElderNotification::getElderId, elderId)
-                .orderByDesc(ElderNotification::getCreatedAt)
-                .last("LIMIT " + limit);
-        List<ElderNotification> notifications = elderNotificationMapper.selectList(query);
-        return notifications.stream().map(this::toDTO).collect(Collectors.toList());
+                .orderByDesc(ElderNotification::getCreatedAt);
+        Page<ElderNotification> page = new Page<>(1, limit, false);
+        Page<ElderNotification> pageResult = elderNotificationMapper.selectPage(page, query);
+        return pageResult.getRecords().stream().map(this::toDTO).collect(Collectors.toList());
     }
 
     @Override

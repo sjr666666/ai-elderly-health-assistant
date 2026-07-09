@@ -2,6 +2,7 @@ package com.example.backend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.backend.common.util.PhoneEncryptUtil;
 import com.example.backend.mapper.SmsNotificationLogMapper;
 import com.example.backend.model.dto.SmsNotificationDTO;
@@ -36,9 +37,10 @@ public class SmsNotificationServiceImpl implements SmsNotificationService {
 
         LambdaQueryWrapper<SmsNotificationLog> query = new LambdaQueryWrapper<>();
         query.eq(SmsNotificationLog::getGuardianId, guardianId)
-                .orderByDesc(SmsNotificationLog::getCreatedAt)
-                .last("LIMIT " + limit);
-        List<SmsNotificationLog> logs = smsNotificationLogMapper.selectList(query);
+                .orderByDesc(SmsNotificationLog::getCreatedAt);
+        Page<SmsNotificationLog> page = new Page<>(1, limit, false);
+        Page<SmsNotificationLog> pageResult = smsNotificationLogMapper.selectPage(page, query);
+        List<SmsNotificationLog> logs = pageResult.getRecords();
 
         List<SmsNotificationDTO> result = new ArrayList<>();
         for (SmsNotificationLog logEntry : logs) {

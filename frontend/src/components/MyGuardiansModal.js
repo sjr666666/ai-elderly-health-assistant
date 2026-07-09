@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getToken } from '../utils/elderApi';
+import { formatRelativeTime } from '../utils/timeUtils';
 
 function MyGuardiansModal({ onClose, userId }) {
   const [loading, setLoading] = useState(true);
@@ -100,7 +101,7 @@ function MyGuardiansModal({ onClose, userId }) {
                     </div>
                     {guardian.lastActiveTime && (
                       <div className="guardian-active-time">
-                        最近活跃：{guardian.lastActiveTime}
+                        最近活跃：{formatRelativeTime(guardian.lastActiveTime)}
                       </div>
                     )}
                   </div>

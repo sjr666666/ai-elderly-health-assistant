@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 /**
  * 家属摘要信息DTO
  * 用于老人端查询已绑定自己的家属列表
@@ -47,7 +49,7 @@ public class GuardianSummaryDTO {
     private String relationType;
 
     /**
-     * 最近活跃时间（格式化字符串，如"5分钟前"）
+     * 最近活跃时间（ISO格式，由前端格式化）
      */
-    private String lastActiveTime;
+    private LocalDateTime lastActiveTime;
 }

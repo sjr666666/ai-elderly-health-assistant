@@ -1,6 +1,7 @@
 package com.example.backend.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.backend.common.ResponseResult;
 import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.entity.DrugRecognitionLog;
@@ -155,14 +156,15 @@ public class OcrController {
             @RequestParam(value = "limit", defaultValue = "20") Integer limit) {
         try {
             Long userId = getCurrentUserId();
+            int safeLimit = Math.min(limit, 50);
 
             QueryWrapper<DrugRecognitionLog> queryWrapper = new QueryWrapper<>();
             queryWrapper.eq("user_id", userId)
-                    .orderByDesc("created_at")
-                    .last("LIMIT " + Math.min(limit, 50));
+                    .orderByDesc("created_at");
 
-            List<DrugRecognitionLog> logs = recognitionLogMapper.selectList(queryWrapper);
-            return ResponseResult.success(logs);
+            Page<DrugRecognitionLog> page = new Page<>(1, safeLimit, false);
+            Page<DrugRecognitionLog> pageResult = recognitionLogMapper.selectPage(page, queryWrapper);
+            return ResponseResult.success(pageResult.getRecords());
 
         } catch (Exception e) {
             logger.error("查询识别历史失败", e);
