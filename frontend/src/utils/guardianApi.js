@@ -1,24 +1,24 @@
 /**
  * 家属端API请求工具 - 自动添加JWT token到请求头
  * 处理认证失败自动跳转登录页
- * localStorage仅存储JWT token，用户信息通过API获取
+ * sessionStorage仅存储JWT token，关闭标签页自动清除，更安全
  */
 
 const TOKEN_KEY = 'guardianToken'; // 家属端独立token，与老人端隔离
 
 // 获取token
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  return sessionStorage.getItem(TOKEN_KEY);
 }
 
-// 保存token
+// 保存token（使用sessionStorage，关闭标签页自动清除，更安全）
 export function saveToken(token) {
-  localStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(TOKEN_KEY, token);
 }
 
 // 清除token
 export function clearAuth() {
-  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
 }
 
 // 检查是否已认证

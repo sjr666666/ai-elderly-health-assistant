@@ -9,7 +9,7 @@ import './guardian.css';
 
 function GuardianApp({ user: propUser, onLogout: propOnLogout }) {
   // 用户信息通过props传入（React state管理），不再从localStorage读取
-  const [localUser, setLocalUser] = useState(null);
+  const [localUser, setLocalUser] = useState(propUser || null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedElderId, setSelectedElderId] = useState(null);
   const [dashboardKey, setDashboardKey] = useState(0);

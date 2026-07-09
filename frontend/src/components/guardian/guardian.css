@@ -18,6 +18,16 @@
   --success: #52C41A;
   --success-light: #F6FFED;
   --radius: 12px;
+  --border-light: #F5F5F5;
+  --bg-muted: #F0F0F0;
+  --bg-input: #FAFAFA;
+  --danger-border: #FFCDD2;
+  --success-border: #C8E6C9;
+  --warn-border: #FFE58F;
+  --warn-bg: #FFF3E0;
+  --warn-dark: #E8960A;
+  --read-border: #DDD;
+  --event-pending-border: #FDCCD3;
 }
 
 /* 全屏App容器 */
@@ -131,7 +141,7 @@
   padding: 0 4px;
   border-radius: 8px;
   background: var(--danger);
-  color: #fff;
+  color: white;
   font-size: 10px;
   font-weight: 600;
   text-align: center;
@@ -243,7 +253,7 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   outline: none;
-  background: #FAFAFA;
+  background: var(--bg-input);
   font-family: inherit;
   box-sizing: border-box;
   transition: all 0.2s ease;
@@ -258,7 +268,7 @@
 }
 
 .g-form-group input:disabled {
-  background: #F0F0F0;
+  background: var(--bg-muted);
   color: var(--text-hint);
 }
 
@@ -313,7 +323,7 @@
   font-size: 13px;
   margin-bottom: 16px;
   line-height: 1.5;
-  border: 1px solid #FFCDD2;
+  border: 1px solid var(--danger-border);
 }
 
 /* 登录按钮 */
@@ -353,22 +363,32 @@
   text-align: center;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid #F0F0F0;
+  border-top: 1px solid var(--border);
 }
 
 .g-login-switch button {
   background: none;
   border: none;
-  color: var(--text-hint);
-  font-size: 14px;
+  color: var(--primary);
+  font-size: 15px;
+  font-weight: 500;
   cursor: pointer;
   padding: 8px 16px;
   font-family: inherit;
-  transition: color 0.15s;
+  transition: all 0.2s ease;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.g-login-switch button:hover {
+  color: var(--primary-dark);
+  transform: scale(1.05);
+  text-decoration: none;
 }
 
 .g-login-switch button:active {
-  color: var(--primary);
+  color: var(--primary-dark);
+  transform: scale(0.98);
 }
 
 /* ============ 按钮 ============ */
@@ -470,12 +490,12 @@
 
 .g-empty-icon { font-size: 40px; margin-bottom: 10px; }
 .g-empty p { font-size: 15px; margin-bottom: 4px; }
-.g-empty-desc { font-size: 13px; color: #BBB; }
+.g-empty-desc { font-size: 13px; color: var(--text-hint); }
 
 .g-empty-sm {
   text-align: center;
   padding: 24px 16px;
-  color: #CCC;
+  color: var(--text-hint);
   font-size: 13px;
 }
 
@@ -626,7 +646,7 @@
 }
 
 .g-elder-rows {
-  border-top: 1px solid #F5F5F5;
+  border-top: 1px solid var(--border-light);
   padding-top: 8px;
 }
 
@@ -637,14 +657,14 @@
   padding: 3px 0;
 }
 
-.g-elder-label { font-size: 12px; color: #BBB; }
+.g-elder-label { font-size: 12px; color: var(--text-hint); }
 
 .g-elder-value { font-size: 12px; font-weight: 500; color: var(--text-sub); }
 
 .g-elder-footer {
   text-align: center;
   padding-top: 8px;
-  border-top: 1px solid #F5F5F5;
+  border-top: 1px solid var(--border-light);
   margin-top: 6px;
   color: var(--primary);
   font-weight: 500;
@@ -696,7 +716,7 @@
   color: var(--text);
   margin-bottom: 10px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #F5F5F5;
+  border-bottom: 1px solid var(--border-light);
 }
 
 /* ============ 今日用药计划 ============ */
@@ -709,7 +729,7 @@
 
 .g-med-progress-bar-wrap {
   height: 6px;
-  background: #EAEAEA;
+  background: var(--border);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -1028,8 +1048,8 @@
   border: 1px solid;
 }
 
-.g-event-pending { background: var(--danger-light); border-color: #FDCCD3; }
-.g-event-resolved { background: var(--success-light); border-color: #C8E6C9; }
+.g-event-pending { background: var(--danger-light); border-color: var(--event-pending-border); }
+.g-event-resolved { background: var(--success-light); border-color: var(--success-border); }
 
 .g-event-top {
   display: flex;
@@ -1048,14 +1068,14 @@
 }
 
 .g-event-body p { font-size: 12px; color: var(--text-sub); margin-bottom: 2px; }
-.g-event-time { font-size: 11px; color: #BBB; }
+.g-event-time { font-size: 11px; color: var(--text-hint); }
 
 /* ============ 临期药品 ============ */
 .g-drug-list { display: flex; flex-direction: column; gap: 8px; }
 
 .g-drug-item {
   background: var(--warn-light);
-  border: 1px solid #FFE58F;
+  border: 1px solid var(--warn-border);
   border-radius: 10px;
   padding: 10px 12px;
 }
@@ -1076,7 +1096,7 @@
   border-radius: 8px;
 }
 
-.g-tag-warn { background: #FFF3E0; color: #E8960A; }
+.g-tag-warn { background: var(--warn-bg); color: var(--warn-dark); }
 .g-tag-err { background: var(--danger-light); color: var(--danger); }
 
 .g-drug-body p { font-size: 12px; color: var(--text-sub); margin-bottom: 1px; }
@@ -1114,7 +1134,7 @@
 
 /* 已读通知视觉弱化 */
 .g-notif-item-read {
-  border-left-color: #DDD;
+  border-left-color: var(--read-border);
   opacity: 0.6;
 }
 
@@ -1135,4 +1155,4 @@
   line-height: 1.5;
 }
 
-.g-notif-time { font-size: 11px; color: #BBB; }
+.g-notif-time { font-size: 11px; color: var(--text-hint); }

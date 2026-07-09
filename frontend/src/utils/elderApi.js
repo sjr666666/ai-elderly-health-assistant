@@ -8,17 +8,17 @@ const TOKEN_KEY = 'elderToken';
 
 // 获取token
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  return sessionStorage.getItem(TOKEN_KEY);
 }
 
-// 保存token
+// 保存token（使用sessionStorage，关闭标签页自动清除，更安全）
 export function saveToken(token) {
-  localStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(TOKEN_KEY, token);
 }
 
 // 清除token
 export function clearAuth() {
-  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
 }
 
 // 检查是否已认证

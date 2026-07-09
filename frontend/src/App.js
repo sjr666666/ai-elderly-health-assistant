@@ -1237,6 +1237,8 @@ function App() {
 
   // 页面加载时恢复登录状态：家属端 token 优先，否则检查老人端 token
   // 用户信息通过API获取，不依赖localStorage
+  // 自动恢复登录逻辑已禁用 - 用户每次需要手动登录
+  /*
   useEffect(() => {
     // 家属端恢复
     if (isGuardianAuthenticated()) {
@@ -1249,7 +1251,8 @@ function App() {
         .then(res => res.json())
         .then(data => {
           if (data.code === 200 && data.data && data.data.role === 'family') {
-            setLoginMode('guardian');
+            // 不自动切换loginMode，保持当前状态（默认elder）
+            // setLoginMode('guardian');  // 注释掉自动切换逻辑
             setUser(data.data);
             setIsLoggedIn(true);
           } else {
@@ -1297,6 +1300,32 @@ function App() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  */
+
+  // Token过期事件监听 - 自动跳转到对应登录页
+  useEffect(() => {
+    const handleElderAuthExpired = () => {
+      console.log('老人端token已过期，跳转登录页');
+      setUser(null);
+      setIsLoggedIn(false);
+      setLoginMode('elder'); // 跳转到老人端登录
+    };
+
+    const handleGuardianAuthExpired = () => {
+      console.log('家属端token已过期，跳转登录页');
+      setUser(null);
+      setIsLoggedIn(false);
+      setLoginMode('guardian'); // 跳转到家属端登录
+    };
+
+    window.addEventListener('elder-auth-expired', handleElderAuthExpired);
+    window.addEventListener('guardian-auth-expired', handleGuardianAuthExpired);
+
+    return () => {
+      window.removeEventListener('elder-auth-expired', handleElderAuthExpired);
+      window.removeEventListener('guardian-auth-expired', handleGuardianAuthExpired);
+    };
   }, []);
 
   // WebSocket 连接管理 - 老人端实时通知
@@ -6297,7 +6326,10 @@ function App() {
       ) : !isLoggedIn ? (
         loginMode === 'guardian' ? (
           <GuardianLogin
-            onLogin={() => setIsLoggedIn(true)}
+            onLogin={(userData) => {
+              setUser(userData);
+              setIsLoggedIn(true);
+            }}
             onSwitchToElder={() => setLoginMode('elder')}
           />
         ) : (
@@ -6376,7 +6408,7 @@ function App() {
       )}
 
       {/* 语音交互入口 - 浮动麦克风按钮 */}
-      {user?.role !== 'family' && isLoggedIn && (
+      {isLoggedIn && user?.role !== 'family' && (
         <FloatingMicButton
           onTranscript={(text) => {
             // 语音指令解析
