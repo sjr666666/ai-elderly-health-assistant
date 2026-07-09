@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 /**
  * 老人摘要信息DTO
  */
@@ -60,7 +62,7 @@ public class ElderSummaryDTO {
     private Integer activeAlertCount;
 
     /**
-     * 最后活跃时间
+     * 最后活跃时间（ISO格式，由前端格式化）
      */
-    private String lastActiveTime;
+    private LocalDateTime lastActiveTime;
 }

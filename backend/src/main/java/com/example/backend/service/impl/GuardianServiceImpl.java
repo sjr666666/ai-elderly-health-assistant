@@ -116,7 +116,6 @@ public class GuardianServiceImpl implements GuardianService {
 
         // 6. 组装结果
         List<ElderSummaryDTO> elderList = new ArrayList<>();
-        LocalDateTime now = LocalDateTime.now();
 
         for (Long elderId : elderIds) {
             SysUser elder = elderMap.get(elderId);
@@ -139,8 +138,8 @@ public class GuardianServiceImpl implements GuardianService {
                 }
             }
 
-            // 计算最后活跃时间（优先使用 lastActiveTime，兜底使用 updatedAt）
-            String lastActiveTime = formatLastActiveTime(elder.getLastActiveTime(), elder.getUpdatedAt(), now);
+            // 最后活跃时间（优先使用 lastActiveTime，兜底使用 updatedAt）
+            LocalDateTime effectiveLastActiveTime = elder.getLastActiveTime() != null ? elder.getLastActiveTime() : elder.getUpdatedAt();
 
             elderList.add(ElderSummaryDTO.builder()
                     .elderId(elder.getId())
@@ -152,7 +151,7 @@ public class GuardianServiceImpl implements GuardianService {
                     .todayTakenCount(takenCount)
                     .todayMissedCount(missedCount)
                     .activeAlertCount(alertCountByElder.getOrDefault(elderId, 0L).intValue())
-                    .lastActiveTime(lastActiveTime)
+                    .lastActiveTime(effectiveLastActiveTime)
                     .build());
         }
 
@@ -186,7 +185,6 @@ public class GuardianServiceImpl implements GuardianService {
 
         // 3. 组装结果
         List<GuardianSummaryDTO> guardianList = new ArrayList<>();
-        LocalDateTime now = LocalDateTime.now();
 
         for (GuardianElderRelation relation : relations) {
             SysUser guardian = guardianMap.get(relation.getGuardianId());
@@ -195,7 +193,8 @@ public class GuardianServiceImpl implements GuardianService {
                 continue;
             }
 
-            String lastActiveTime = formatLastActiveTime(guardian.getLastActiveTime(), guardian.getUpdatedAt(), now);
+            // 最后活跃时间（优先使用 lastActiveTime，兜底使用 updatedAt）
+            LocalDateTime effectiveLastActiveTime = guardian.getLastActiveTime() != null ? guardian.getLastActiveTime() : guardian.getUpdatedAt();
 
             guardianList.add(GuardianSummaryDTO.builder()
                     .guardianId(guardian.getId())
@@ -204,7 +203,7 @@ public class GuardianServiceImpl implements GuardianService {
                     .age(guardian.getAge())
                     .gender(guardian.getGender())
                     .relationType(relation.getRelationType())
-                    .lastActiveTime(lastActiveTime)
+                    .lastActiveTime(effectiveLastActiveTime)
                     .build());
         }
 
@@ -417,7 +416,7 @@ public class GuardianServiceImpl implements GuardianService {
         Long medicationCount = userMedicineBoxMapper.selectCount(boxQuery);
 
         // 最后活跃时间（优先使用 lastActiveTime，兜底使用 updatedAt）
-        String lastActiveTime = formatLastActiveTime(elder.getLastActiveTime(), elder.getUpdatedAt(), LocalDateTime.now());
+        LocalDateTime effectiveLastActiveTime = elder.getLastActiveTime() != null ? elder.getLastActiveTime() : elder.getUpdatedAt();
 
         return ElderSummaryDTO.builder()
                 .elderId(elder.getId())
@@ -429,7 +428,7 @@ public class GuardianServiceImpl implements GuardianService {
                 .todayTakenCount(takenCount)
                 .todayMissedCount(missedCount)
                 .activeAlertCount(alertCount.intValue())
-                .lastActiveTime(lastActiveTime)
+                .lastActiveTime(effectiveLastActiveTime)
                 .build();
     }
 
@@ -519,29 +518,7 @@ public class GuardianServiceImpl implements GuardianService {
         }
     }
 
-    /**
-     * 格式化最后活跃时间
-     * 优先使用 lastActiveTime，兜底使用 updatedAt
-     */
-    private String formatLastActiveTime(LocalDateTime lastActiveTime, LocalDateTime updatedAt, LocalDateTime now) {
-        LocalDateTime activeTime = lastActiveTime != null ? lastActiveTime : updatedAt;
-        if (activeTime == null) {
-            return null;
-        }
-        long minutes = java.time.Duration.between(activeTime, now).toMinutes();
-        if (minutes < 0) {
-            minutes = 0;
-        }
-        if (minutes == 0) {
-            return "刚刚";
-        } else if (minutes < 60) {
-            return minutes + "分钟前";
-        } else if (minutes < 1440) {
-            return (minutes / 60) + "小时前";
-        } else {
-            return (minutes / 1440) + "天前";
-        }
-    }
+
 
     /**
      * 绑定成功后通知老人
