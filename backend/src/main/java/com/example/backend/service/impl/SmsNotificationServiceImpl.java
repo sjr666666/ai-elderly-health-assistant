@@ -2,6 +2,7 @@ package com.example.backend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.example.backend.common.util.PhoneEncryptUtil;
 import com.example.backend.mapper.SmsNotificationLogMapper;
 import com.example.backend.model.dto.SmsNotificationDTO;
 import com.example.backend.model.entity.SmsNotificationLog;
@@ -9,6 +10,7 @@ import com.example.backend.model.enums.SmsStatus;
 import com.example.backend.service.SmsNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -24,6 +26,9 @@ import java.util.List;
 public class SmsNotificationServiceImpl implements SmsNotificationService {
 
     private final SmsNotificationLogMapper smsNotificationLogMapper;
+
+    @Value("${phone.encrypt.key}")
+    private String phoneEncryptKey;
 
     @Override
     public List<SmsNotificationDTO> getNotificationHistory(Long guardianId, Integer limit) {
@@ -43,7 +48,7 @@ public class SmsNotificationServiceImpl implements SmsNotificationService {
                     .elderId(logEntry.getElderId())
                     .eventType(logEntry.getSmsType())
                     .message(logEntry.getContent())
-                    .phone(logEntry.getPhone())
+                    .phone(PhoneEncryptUtil.mask(PhoneEncryptUtil.decrypt(logEntry.getPhone(), phoneEncryptKey)))
                     .sendStatus(logEntry.getStatus())
                     .sentAt(logEntry.getSentAt())
                     .createdAt(logEntry.getCreatedAt())
@@ -64,14 +69,14 @@ public class SmsNotificationServiceImpl implements SmsNotificationService {
         notificationLog.setElderId(elderId);
         notificationLog.setSmsType(eventType);
         notificationLog.setContent(message);
-        notificationLog.setPhone(phone);
+        notificationLog.setPhone(PhoneEncryptUtil.encrypt(phone, phoneEncryptKey));
         notificationLog.setStatus(SmsStatus.PENDING.getCode());
         notificationLog.setRetryCount(0);
         notificationLog.setIsRead(0);
 
         smsNotificationLogMapper.insert(notificationLog);
 
-        log.info("短信通知已记录 - id: {}, 待发送至: {}", notificationLog.getId(), phone);
+        log.info("短信通知已记录 - id: {}, 待发送至(脱敏): {}", notificationLog.getId(), PhoneEncryptUtil.mask(phone));
 
         // 模拟发送成功
         notificationLog.setStatus(SmsStatus.SENT.getCode());

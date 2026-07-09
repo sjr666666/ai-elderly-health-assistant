@@ -25,6 +25,7 @@ function GuardianDashboard({ onViewElder }) {
   };
 
   const handleBind = async () => {
+    if (isBinding) return;
     if (!elderUsername.trim()) { setBindError('请输入老人用户名'); return; }
     if (!relationType) { setBindError('请选择与老人的关系'); return; }
     setIsBinding(true); setBindError('');

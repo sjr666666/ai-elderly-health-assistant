@@ -343,7 +343,16 @@ function Login({ onLogin, onShowRegister, onSwitchToGuardian }) {
               fontWeight: '500',
               cursor: 'pointer',
               marginLeft: '4px',
-              padding: 0
+              padding: 0,
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.color = '#2D6AB5';
+              e.target.style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.color = '#3A7BC8';
+              e.target.style.transform = 'scale(1)';
             }}
           >
             家属端登录 →
