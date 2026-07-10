@@ -47,7 +47,6 @@ public class EmergencyContactServiceImpl implements EmergencyContactService {
         LambdaQueryWrapper<EmergencyContact> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(EmergencyContact::getElderId, elderId);
         queryWrapper.orderByDesc(EmergencyContact::getIsPrimary);
-        queryWrapper.last("LIMIT 1");
 
         EmergencyContact contact = emergencyContactRepository.selectOne(queryWrapper);
 
