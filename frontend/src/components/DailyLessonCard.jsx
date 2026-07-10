@@ -13,18 +13,12 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 function DailyLessonCard({ lesson, loading, onRefresh, onGoProfile }) {
   const [refreshing, setRefreshing] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [overflowing, setOverflowing] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const contentRef = useRef(null);
 
-  // 检测内容是否超出3行
-  useEffect(() => {
-    if (contentRef.current) {
-      const el = contentRef.current;
-      // 折叠状态下比较 scrollHeight 和 clientHeight
-      setOverflowing(el.scrollHeight > el.clientHeight + 2);
-    }
-  }, [lesson?.content]);
+  // 根据内容段落数判断是否需要折叠（3个及以上段落默认折叠）
+  const contentLines = lesson?.content ? lesson.content.split('\n').filter(l => l.trim()).length : 0;
+  const overflowing = contentLines >= 3;
 
   // 组件卸载时停止播报
   useEffect(() => {
@@ -171,9 +165,21 @@ function DailyLessonCard({ lesson, loading, onRefresh, onGoProfile }) {
             className={`daily-lesson-content ${expanded ? 'daily-lesson-content--expanded' : 'daily-lesson-content--collapsed'}`}
             ref={contentRef}
           >
-            {lesson.content && lesson.content.split('\n').map((line, i) => (
-              <p key={i}>{line}</p>
-            ))}
+            {lesson.content && lesson.content.split('\n')
+              .filter(line => line.trim()) // 过滤空行
+              .map((line, i) => {
+                // 检测【xxx】格式的标题行
+                const titleMatch = line.match(/^【(.+?)】(.*)$/);
+                if (titleMatch) {
+                  return (
+                    <div key={i} className="daily-lesson-section">
+                      <span className="daily-lesson-section-title">【{titleMatch[1]}】</span>
+                      <span className="daily-lesson-section-text">{titleMatch[2]}</span>
+                    </div>
+                  );
+                }
+                return <p key={i}>{line}</p>;
+              })}
           </div>
           {overflowing && (
             <button className="daily-lesson-expand-btn" onClick={toggleExpand}>
