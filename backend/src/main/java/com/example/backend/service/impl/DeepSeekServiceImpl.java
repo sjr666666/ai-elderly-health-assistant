@@ -3020,19 +3020,24 @@ public class DeepSeekServiceImpl implements DeepSeekService {
      * 解析每日科普的JSON响应
      */
     private java.util.Map<String, String> parseLessonJson(String jsonContent) {
-        try {
-            // 清理markdown代码块包裹
-            String cleaned = jsonContent.trim();
-            if (cleaned.startsWith("```json")) {
-                cleaned = cleaned.substring(7);
-            } else if (cleaned.startsWith("```")) {
-                cleaned = cleaned.substring(3);
-            }
-            if (cleaned.endsWith("```")) {
-                cleaned = cleaned.substring(0, cleaned.length() - 3);
-            }
-            cleaned = cleaned.trim();
+        if (jsonContent == null || jsonContent.isEmpty()) {
+            return null;
+        }
 
+        // 清理markdown代码块包裹
+        String cleaned = jsonContent.trim();
+        if (cleaned.startsWith("```json")) {
+            cleaned = cleaned.substring(7);
+        } else if (cleaned.startsWith("```")) {
+            cleaned = cleaned.substring(3);
+        }
+        if (cleaned.endsWith("```")) {
+            cleaned = cleaned.substring(0, cleaned.length() - 3);
+        }
+        cleaned = cleaned.trim();
+
+        // 方法1：尝试标准JSON解析
+        try {
             JsonNode root = objectMapper.readTree(cleaned);
             String title = getJsonString(root, "title");
             String content = getJsonString(root, "content");
@@ -3043,7 +3048,39 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                 return result;
             }
         } catch (Exception e) {
-            logger.warn("解析每日科普JSON失败: {}", e.getMessage());
+            logger.warn("标准JSON解析失败，使用正则兜底: {}", e.getMessage());
+        }
+
+        // 方法2：正则兜底（应对AI返回的JSON中含有未转义引号的情况）
+        try {
+            String title = extractJsonField(cleaned, "title");
+            String content = extractJsonField(cleaned, "content");
+            if (title != null && content != null && title.length() >= 2 && content.length() >= 20) {
+                logger.info("使用正则方式成功解析每日科普");
+                Map<String, String> result = new HashMap<>();
+                result.put("title", title.trim());
+                result.put("content", content.trim());
+                return result;
+            }
+        } catch (Exception e) {
+            logger.warn("正则解析每日科普JSON失败: {}", e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * 使用正则提取JSON字段值（兜底方案）
+     */
+    private String extractJsonField(String json, String fieldName) {
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                "\"" + java.util.regex.Pattern.quote(fieldName) + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"",
+                java.util.regex.Pattern.DOTALL
+        );
+        java.util.regex.Matcher matcher = pattern.matcher(json);
+        if (matcher.find()) {
+            String value = matcher.group(1);
+            return value.replace("\\\"", "\"").replace("\\n", "\n").replace("\\\\", "\\");
         }
         return null;
     }

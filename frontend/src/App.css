@@ -554,11 +554,33 @@ body {
   opacity: 0.95;
 }
 
+/* 科普内容分段样式 */
+.daily-lesson-section {
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.daily-lesson-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 2px;
+}
+
+.daily-lesson-section-text {
+  font-size: 15px;
+  line-height: 1.8;
+  opacity: 0.9;
+}
+
 .daily-lesson-content--collapsed {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+  max-height: 110px;
   overflow: hidden;
+  position: relative;
+  -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
 }
 
 .daily-lesson-content--expanded {
