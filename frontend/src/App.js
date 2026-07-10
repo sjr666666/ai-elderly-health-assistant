@@ -26,6 +26,7 @@ import { useToast } from './components/Toast';
 import FloatingMicButton from './components/FloatingMicButton';
 import { clearAuth, isAuthenticated, getToken } from './utils/elderApi';
 import { isAuthenticated as isGuardianAuthenticated, getToken as getGuardianToken } from './utils/guardianApi';
+import { formatDateTime } from './utils/timeUtils';
 
 function App() {
   const { showToast } = useToast();
@@ -3740,7 +3741,7 @@ function App() {
                   )}
                   {/* 匹配信息 */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#9ca3af', marginBottom: '12px' }}>
-                    <span>{historyDetailLog.createdAt ? new Date(historyDetailLog.createdAt).toLocaleString('zh-CN') : ''}</span>
+                    <span>{historyDetailLog.createdAt ? formatDateTime(historyDetailLog.createdAt) : ''}</span>
                     {historyDetailLog.matchScore && <span>匹配度: {(historyDetailLog.matchScore * 100).toFixed(0)}%</span>}
                   </div>
                   {/* 操作按钮 */}
@@ -3821,7 +3822,7 @@ function App() {
                       )}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '11px', color: '#d1d5db' }}>
-                          {log.createdAt ? new Date(log.createdAt).toLocaleString('zh-CN') : ''}
+                          {log.createdAt ? formatDateTime(log.createdAt) : ''}
                         </span>
                         {log.matchScore && (
                           <span style={{ fontSize: '11px', color: '#6b7280' }}>
@@ -5028,7 +5029,7 @@ function App() {
         
         const textContent = [
           ` 用药冲突检测报告`,
-          `检测时间: ${new Date(conflictReport.checkTime).toLocaleString('zh-CN')}`,
+          `检测时间: ${formatDateTime(conflictReport.checkTime)}`,
           `检测药品数: ${conflictReport.drugsChecked?.length || 0} 种`,
           '',
           `🔴 严重: ${conflictReport.statistics.severeCount} | 🟡 中度: ${conflictReport.statistics.moderateCount} |  轻微: ${conflictReport.statistics.mildCount}`,
@@ -7127,7 +7128,7 @@ function App() {
             <div className="modal-body">
               <div style={{ marginBottom: '20px' }}>
                 <p style={{ fontSize: '14px', color: '#666' }}>
-                  检测时间: {new Date(conflictReport.checkTime).toLocaleString('zh-CN')}
+                  检测时间: {formatDateTime(conflictReport.checkTime)}
                 </p>
                 <p style={{ fontSize: '14px', color: '#666' }}>
                   检测药品数: {conflictReport.drugsChecked?.length || 0} 种
@@ -8055,7 +8056,7 @@ function App() {
           {/* 基本信息 */}
           <div style={{ marginBottom: '24px' }}>
             <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '6px' }}>
-              检测时间: {new Date(conflictReport.checkTime).toLocaleString('zh-CN')}
+              检测时间: {formatDateTime(conflictReport.checkTime)}
             </p>
             <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '0' }}>
               检测药品数: {conflictReport.drugsChecked?.length || 0} 种

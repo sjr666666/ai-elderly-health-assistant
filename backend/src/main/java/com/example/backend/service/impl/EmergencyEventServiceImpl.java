@@ -2,6 +2,7 @@ package com.example.backend.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.backend.mapper.EmergencyEventMapper;
 import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.dto.EmergencyEventDTO;
@@ -37,9 +38,10 @@ public class EmergencyEventServiceImpl implements EmergencyEventService {
 
         LambdaQueryWrapper<EmergencyEvent> query = new LambdaQueryWrapper<>();
         query.eq(EmergencyEvent::getElderId, elderId)
-                .orderByDesc(EmergencyEvent::getCreatedAt)
-                .last("LIMIT " + limit);
-        List<EmergencyEvent> events = emergencyEventMapper.selectList(query);
+                .orderByDesc(EmergencyEvent::getCreatedAt);
+        Page<EmergencyEvent> page = new Page<>(1, limit, false);
+        Page<EmergencyEvent> pageResult = emergencyEventMapper.selectPage(page, query);
+        List<EmergencyEvent> events = pageResult.getRecords();
 
         List<EmergencyEventDTO> result = new ArrayList<>();
         for (EmergencyEvent event : events) {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from '../Toast';
 import { guardianApi } from '../../utils/guardianApi';
+import { formatRelativeTime } from '../../utils/timeUtils';
 import './guardian.css';
 
 function GuardianNotification({ onRead }) {
@@ -79,22 +80,8 @@ function GuardianNotification({ onRead }) {
     expiring_drug_reminder: '药品临期', other: '其他',
   }[type] || type);
 
-  const formatTime = (timeStr) => {
-    if (!timeStr) return '';
-    const date = new Date(timeStr);
-    if (isNaN(date.getTime())) return timeStr;
-    const now = new Date();
-    const diff = Math.floor((now - date) / 1000);
-    if (diff < 60) return '刚刚';
-    if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
-    if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
-    if (diff < 172800) return '昨天 ' + date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
-    const m = date.getMonth() + 1;
-    const d = date.getDate();
-    const h = date.getHours().toString().padStart(2, '0');
-    const min = date.getMinutes().toString().padStart(2, '0');
-    return m + '月' + d + '日 ' + h + ':' + min;
-  };
+  // 时间格式化（使用统一工具函数，确保跨浏览器一致）
+  const formatTime = (timeStr) => formatRelativeTime(timeStr);
 
   const getSendStatus = (status) => {
     switch (status) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { guardianApi } from '../../utils/guardianApi';
+import { formatRelativeTime } from '../../utils/timeUtils';
 import './guardian.css';
 
 function GuardianDashboard({ onViewElder }) {
@@ -156,7 +157,7 @@ function GuardianDashboard({ onViewElder }) {
                   </div>
                   <div className="g-elder-row">
                     <span className="g-elder-label">最后活跃</span>
-                    <span className="g-elder-value" style={{color:'#BBB'}}>{elder.lastActiveTime || '暂无'}</span>
+                    <span className="g-elder-value" style={{color:'#BBB'}}>{elder.lastActiveTime ? formatRelativeTime(elder.lastActiveTime) : '暂无'}</span>
                   </div>
                 </div>
                 <div className="g-elder-footer">查看详情 &rsaquo;</div>
