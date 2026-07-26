@@ -2,6 +2,8 @@ package com.example.backend.model.dto;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 @Data
 public class TodayPlanItemDTO {
     private Long planId;
@@ -27,7 +29,7 @@ public class TodayPlanItemDTO {
     /**
      * 当前剩余数量
      */
-    private Integer remainingQuantity;
+    private BigDecimal remainingQuantity;
 
     /**
      * 药箱中的药品名称（商品名/俗名）

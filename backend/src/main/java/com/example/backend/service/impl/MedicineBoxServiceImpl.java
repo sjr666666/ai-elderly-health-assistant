@@ -21,6 +21,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -470,9 +472,9 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
      */
     private MedicineShortageWarningDTO calculateShortageWarning(UserMedicineBox box) {
         // 数据完整性校验
-        if (box.getRemainingQuantity() == null || box.getRemainingQuantity() <= 0) {
+        if (box.getRemainingQuantity() == null || box.getRemainingQuantity().signum() <= 0) {
             // 剩余为0或为空，直接返回已用尽预警
-            return buildWarningDTO(box, 0.0, 0);
+            return buildWarningDTO(box, BigDecimal.ZERO, 0);
         }
 
         if (box.getDosage() == null || box.getDosage().isEmpty() ||
@@ -484,24 +486,26 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         }
 
         // 解析每次用量（从字符串中提取数字）
-        double dosagePerTime = parseDosage(box.getDosage());
-        if (dosagePerTime <= 0) {
+        BigDecimal dosagePerTime = parseDosage(box.getDosage());
+        if (dosagePerTime.signum() <= 0) {
             logger.warn("无法解析每次用量 - boxId: {}, dosage: {}", box.getId(), box.getDosage());
             return null;
         }
 
         // 解析每日服用次数
-        double timesPerDay = parseFrequency(box.getFrequency());
-        if (timesPerDay <= 0) {
+        BigDecimal timesPerDay = BigDecimal.valueOf(parseFrequency(box.getFrequency()));
+        if (timesPerDay.signum() <= 0) {
             logger.warn("无法解析服用频率 - boxId: {}, frequency: {}", box.getId(), box.getFrequency());
             return null;
         }
 
         // 计算每日消耗量
-        double dailyConsumption = dosagePerTime * timesPerDay;
+        BigDecimal dailyConsumption = dosagePerTime.multiply(timesPerDay);
 
         // 计算剩余天数
-        int remainingDays = (int) Math.floor(box.getRemainingQuantity() / dailyConsumption);
+        int remainingDays = box.getRemainingQuantity()
+                .divide(dailyConsumption, 0, RoundingMode.FLOOR)
+                .intValue();
 
         return buildWarningDTO(box, dailyConsumption, remainingDays);
     }
@@ -510,22 +514,22 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
      * 解析每次用量字符串，提取数字
      * 支持格式："1片"、"半片"、"0.5片"、"2粒"、"5ml" 等
      */
-    private double parseDosage(String dosage) {
-        if (dosage == null || dosage.isEmpty()) return 0;
+    private BigDecimal parseDosage(String dosage) {
+        if (dosage == null || dosage.isEmpty()) return BigDecimal.ZERO;
 
         // 处理"半片"等中文表达
         if (dosage.contains("半")) {
-            return 0.5;
+            return new BigDecimal("0.5");
         }
 
         // 提取数字（支持小数）
         Pattern pattern = Pattern.compile("(\\d+\\.?\\d*)");
         Matcher matcher = pattern.matcher(dosage);
         if (matcher.find()) {
-            return Double.parseDouble(matcher.group(1));
+            return new BigDecimal(matcher.group(1));
         }
 
-        return 0;
+        return BigDecimal.ZERO;
     }
 
     /**
@@ -635,7 +639,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
     /**
      * 构建缺药预警DTO
      */
-    private MedicineShortageWarningDTO buildWarningDTO(UserMedicineBox box, double dailyConsumption, int remainingDays) {
+    private MedicineShortageWarningDTO buildWarningDTO(UserMedicineBox box, BigDecimal dailyConsumption, int remainingDays) {
         // 获取药品名称
         String drugName = "未知药品";
         String specification = "";
@@ -689,7 +693,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
                 .dosage(box.getDosage())
                 .frequency(box.getFrequency())
                 .remainingQuantity(box.getRemainingQuantity())
-                .dailyConsumption(Math.round(dailyConsumption * 100.0) / 100.0)
+                .dailyConsumption(dailyConsumption.setScale(2, RoundingMode.HALF_UP))
                 .remainingDays(remainingDays)
                 .warningLevel(warningLevel)
                 .warningLevelDesc(warningLevelDesc)

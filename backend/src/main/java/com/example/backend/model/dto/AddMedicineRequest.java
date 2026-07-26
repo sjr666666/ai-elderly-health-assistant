@@ -5,6 +5,7 @@ import lombok.Data;
 
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import java.math.BigDecimal;
 
 /**
  * 添加药品到药箱请求DTO
@@ -49,7 +50,7 @@ public class AddMedicineRequest {
      * 总数量（如30片、60片）
      */
     @NotNull(message = "总数量不能为空")
-    private Integer totalQuantity;
+    private BigDecimal totalQuantity;
 
     /**
      * 备注说明（最长500字符）

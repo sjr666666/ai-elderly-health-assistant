@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 /**
  * 缺药预警响应 DTO
  */
@@ -47,12 +49,12 @@ public class MedicineShortageWarningDTO {
     /**
      * 剩余数量
      */
-    private Integer remainingQuantity;
+    private BigDecimal remainingQuantity;
 
     /**
      * 每日消耗量（解析后的数值，单位：片/粒等）
      */
-    private Double dailyConsumption;
+    private BigDecimal dailyConsumption;
 
     /**
      * 预计剩余可服用天数

@@ -3,6 +3,7 @@ package com.example.backend.model.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -79,14 +80,14 @@ public class UserMedicineBox {
      * 用户添加时填写的总片数/总瓶数
      */
     @TableField("total_quantity")
-    private Integer totalQuantity;
+    private BigDecimal totalQuantity;
 
     /**
      * 剩余数量
      * 根据服药记录自动扣减
      */
     @TableField("remaining_quantity")
-    private Integer remainingQuantity;
+    private BigDecimal remainingQuantity;
 
     /**
      * 用户备注
