@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -567,28 +568,30 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
      * 解析用量字符串为数字
      * 如："一片" -> 1, "半片" -> 0.5, "2片" -> 2
      */
-    private int parseDosageToNumber(String dosage) {
+    private BigDecimal parseDosage(String dosage) {
         if (dosage == null || dosage.isEmpty()) {
-            return 1;
+            return BigDecimal.ONE;
         }
 
         String d = dosage.trim();
         if (d.contains("半")) {
-            return 1; // 半片按1片算（简化处理）
-        }
-
-        // 提取数字
-        String numStr = d.replaceAll("[^0-9]", "");
-        if (numStr.isEmpty()) {
-            return 1;
+            return new BigDecimal("0.5");
         }
 
         try {
-            int num = Integer.parseInt(numStr);
-            return num > 0 ? num : 1;
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("(?:\\d+(?:\\.\\d+)?|\\.\\d+)")
+                    .matcher(d);
+            if (matcher.find()) {
+                BigDecimal amount = new BigDecimal(matcher.group());
+                if (amount.signum() > 0) {
+                    return amount;
+                }
+            }
         } catch (NumberFormatException e) {
-            return 1;
+            logger.warn("无法解析用量，按 1 份扣减 - dosage: {}", dosage);
         }
+        return BigDecimal.ONE;
     }
 
     /**
@@ -698,7 +701,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             return;
         }
 
-        int amount = parseDosageToNumber(dosage);
+        BigDecimal amount = parseDosage(dosage);
         int rows;
         if (isRestore) {
             rows = userMedicineBoxMapper.restoreInventory(boxItemId, amount);

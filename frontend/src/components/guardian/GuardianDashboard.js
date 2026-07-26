@@ -58,7 +58,7 @@ function GuardianDashboard({ onViewElder }) {
   const drugCount = elders.reduce((s, e) => s + (e.expiringDrugCount || 0), 0);
 
   return (
-    <div>
+    <div className="g-dashboard">
       <div className="g-stats">
         <div className="g-stat-card">
           <div className="g-stat-num">{dashboard?.elderCount || 0}</div>

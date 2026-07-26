@@ -96,7 +96,7 @@ function GuardianNotification({ onRead }) {
   if (error) return <div className="g-error"><p>{error}</p><button className="g-btn g-btn-primary" onClick={loadNotifications}>重新加载</button></div>;
 
   return (
-    <div>
+    <div className="g-notifications-page">
       <div className="g-notif-header">
         <h2>通知记录</h2>
         <div className="g-notif-header-actions">

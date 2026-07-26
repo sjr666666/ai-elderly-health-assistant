@@ -2,37 +2,37 @@
 .g-app * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --primary: #3A7BC8;
-  --primary-light: #E8F1FB;
-  --primary-dark: #2D6AB5;
-  --bg: #F4F6F9;
+  --primary: #155E75;
+  --primary-light: #DDF4F1;
+  --primary-dark: #0F4658;
+  --bg: #F4F7F5;
   --card: #FFFFFF;
-  --text: #1A1A1A;
-  --text-sub: #666;
-  --text-hint: #999;
-  --border: #EAEAEA;
-  --danger: #E74C3C;
-  --danger-light: #FFF1F0;
-  --warn: #FAAD14;
-  --warn-light: #FFFBE6;
-  --success: #52C41A;
-  --success-light: #F6FFED;
-  --radius: 12px;
-  --border-light: #F5F5F5;
-  --bg-muted: #F0F0F0;
-  --bg-input: #FAFAFA;
-  --danger-border: #FFCDD2;
-  --success-border: #C8E6C9;
-  --warn-border: #FFE58F;
-  --warn-bg: #FFF3E0;
-  --warn-dark: #E8960A;
-  --read-border: #DDD;
-  --event-pending-border: #FDCCD3;
+  --text: #17313B;
+  --text-sub: #587078;
+  --text-hint: #8A9BA0;
+  --border: #DCE8E5;
+  --danger: #C94B4B;
+  --danger-light: #FFF0EE;
+  --warn: #C9872E;
+  --warn-light: #FFF7E8;
+  --success: #2F866D;
+  --success-light: #EAF7F0;
+  --radius: 16px;
+  --border-light: #EDF3F1;
+  --bg-muted: #EAF1EF;
+  --bg-input: #F8FBFA;
+  --danger-border: #F0C9C4;
+  --success-border: #BFE0D2;
+  --warn-border: #EFD5A8;
+  --warn-bg: #FFF1D7;
+  --warn-dark: #99621C;
+  --read-border: #CBD8D5;
+  --event-pending-border: #E9B8B2;
 }
 
 /* 全屏App容器 */
 .g-app {
-  max-width: 480px;
+  max-width: 560px;
   margin: 0 auto;
   min-height: 100vh;
   min-height: 100dvh;
@@ -47,9 +47,10 @@
 
 /* ============ 顶部导航栏 ============ */
 .g-header {
-  background: var(--primary);
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
   color: white;
-  padding: 14px 16px;
+  padding: 18px 20px 16px;
+  box-shadow: 0 8px 22px rgba(15, 70, 88, 0.16);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -67,8 +68,8 @@
 .g-header-icon { font-size: 20px; }
 
 .g-header-title {
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   letter-spacing: 0.5px;
 }
 
@@ -127,6 +128,15 @@
 
 .g-tab-item.active { color: var(--primary); }
 
+.g-tab-item:focus-visible,
+.g-btn:focus-visible,
+.g-bind-btn:focus-visible,
+.g-elder-card:focus-visible,
+.g-header-logout:focus-visible {
+  outline: 3px solid rgba(201, 135, 46, 0.55);
+  outline-offset: 3px;
+}
+
 .g-tab-item span { font-weight: 500; }
 
 /* 通知红点 */
@@ -150,7 +160,7 @@
 /* ============ 主内容区 ============ */
 .g-body {
   flex: 1;
-  padding: 12px 14px;
+  padding: 20px 18px 84px;
   padding-bottom: 64px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -503,19 +513,21 @@
 .g-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 18px;
+  gap: 10px;
+  margin-bottom: 24px;
 }
 
 .g-stat-card {
-  background: white;
+  background: linear-gradient(150deg, #fff, #F8FBFA);
   border-radius: var(--radius);
-  padding: 14px 6px;
+  padding: 17px 8px 14px;
   text-align: center;
+  border: 1px solid var(--border-light);
+  box-shadow: 0 6px 18px rgba(27, 66, 75, 0.06);
 }
 
 .g-stat-num {
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 700;
   color: var(--primary);
   line-height: 1.2;
@@ -531,21 +543,23 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  padding: 0 2px;
 }
 
 .g-action-bar h2 {
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   color: var(--text);
 }
 
 .g-bind-btn {
-  background: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary-dark);
   color: white;
   border: none;
-  padding: 6px 14px;
-  border-radius: 8px;
+  padding: 8px 14px;
+  border-radius: 10px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -556,9 +570,10 @@
 .g-bind-form {
   background: white;
   border-radius: var(--radius);
-  padding: 14px;
+  padding: 18px;
   margin-bottom: 14px;
-  border: 1px solid var(--primary-light);
+  border: 1px solid #B9DED8;
+  box-shadow: 0 8px 20px rgba(21, 94, 117, 0.08);
 }
 
 .g-bind-form h3 {
@@ -603,19 +618,21 @@
 .g-elder-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .g-elder-card {
   background: white;
   border-radius: var(--radius);
-  padding: 14px;
+  padding: 17px;
   cursor: pointer;
-  border: 1px solid transparent;
-  transition: border-color 0.15s;
+  border: 1px solid var(--border-light);
+  box-shadow: 0 8px 22px rgba(27, 66, 75, 0.06);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
-.g-elder-card:active { border-color: var(--primary); }
+.g-elder-card:hover { transform: translateY(-2px); border-color: #B9DED8; box-shadow: 0 12px 26px rgba(27, 66, 75, 0.11); }
+.g-elder-card:active { transform: translateY(0); border-color: var(--primary); }
 
 .g-elder-top {
   display: flex;
@@ -666,7 +683,7 @@
   padding-top: 8px;
   border-top: 1px solid var(--border-light);
   margin-top: 6px;
-  color: var(--primary);
+  color: var(--primary-dark);
   font-weight: 500;
   font-size: 13px;
 }
@@ -1128,7 +1145,11 @@
   background: white;
   border-radius: var(--radius);
   padding: 12px;
-  border-left: 3px solid var(--primary);
+  border-left: 4px solid var(--primary);
+  border-top: 1px solid var(--border-light);
+  border-right: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+  box-shadow: 0 6px 18px rgba(27, 66, 75, 0.05);
   transition: opacity 0.2s, border-color 0.2s;
 }
 
@@ -1156,3 +1177,18 @@
 }
 
 .g-notif-time { font-size: 11px; color: var(--text-hint); }
+
+@media (min-width: 768px) {
+  .g-app { margin: 24px auto; min-height: calc(100vh - 48px); border-radius: 24px; overflow: hidden; box-shadow: 0 18px 50px rgba(23, 49, 59, 0.12); }
+  .g-tab-bar { bottom: 24px; border-radius: 0 0 24px 24px; }
+}
+
+@media (max-width: 380px) {
+  .g-body { padding-left: 14px; padding-right: 14px; }
+  .g-stat-num { font-size: 26px; }
+  .g-stat-label { font-size: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}

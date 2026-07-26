@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -42,7 +43,7 @@ public interface UserMedicineBoxMapper extends BaseMapper<UserMedicineBox> {
      * @return 影响行数
      */
     @Update("UPDATE user_medicine_box SET remaining_quantity = GREATEST(0, remaining_quantity - #{amount}) WHERE id = #{boxItemId} AND remaining_quantity IS NOT NULL")
-    int deductInventory(@Param("boxItemId") Long boxItemId, @Param("amount") int amount);
+    int deductInventory(@Param("boxItemId") Long boxItemId, @Param("amount") BigDecimal amount);
 
     /**
      * 原子恢复库存（remaining_quantity + amount）
@@ -52,5 +53,5 @@ public interface UserMedicineBoxMapper extends BaseMapper<UserMedicineBox> {
      * @return 影响行数
      */
     @Update("UPDATE user_medicine_box SET remaining_quantity = remaining_quantity + #{amount} WHERE id = #{boxItemId} AND remaining_quantity IS NOT NULL")
-    int restoreInventory(@Param("boxItemId") Long boxItemId, @Param("amount") int amount);
+    int restoreInventory(@Param("boxItemId") Long boxItemId, @Param("amount") BigDecimal amount);
 }
