@@ -7,7 +7,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import javax.servlet.http.HttpServletRequest;
@@ -26,9 +28,17 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     private final Map<String, RateLimitInfo> requestCounts = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper;
+    private final StringRedisTemplate redisTemplate;
 
-    public RateLimitInterceptor(ObjectMapper objectMapper) {
+    @Autowired
+    public RateLimitInterceptor(ObjectMapper objectMapper, StringRedisTemplate redisTemplate) {
         this.objectMapper = objectMapper;
+        this.redisTemplate = redisTemplate;
+    }
+
+    /** Kept for focused unit tests that do not load a Redis context. */
+    public RateLimitInterceptor(ObjectMapper objectMapper) {
+        this(objectMapper, null);
     }
 
     @Override
@@ -36,6 +46,25 @@ public class RateLimitInterceptor implements HandlerInterceptor {
             throws Exception {
         String userId = getAuthenticatedUserId();
         String key = userId != null ? "user:" + userId : "ip:" + getClientIp(request);
+        if (redisTemplate != null) {
+            try {
+                String redisKey = "rate-limit:ai:" + key;
+                Long count = redisTemplate.opsForValue().increment(redisKey);
+                if (count != null && count == 1L) {
+                    redisTemplate.expire(redisKey, java.time.Duration.ofMinutes(1));
+                }
+                if (count != null && count > MAX_REQUESTS_PER_MINUTE) {
+                    logger.warn("Rate limit exceeded: key={}, uri={}", key, request.getRequestURI());
+                    sendRateLimitResponse(response);
+                    return false;
+                }
+                return true;
+            } catch (RuntimeException exception) {
+                logger.warn("Redis rate limiter unavailable; falling back to local limiter: {}",
+                        exception.getClass().getSimpleName());
+            }
+        }
+
         RateLimitInfo info = requestCounts.computeIfAbsent(key, ignored -> new RateLimitInfo());
 
         synchronized (info) {

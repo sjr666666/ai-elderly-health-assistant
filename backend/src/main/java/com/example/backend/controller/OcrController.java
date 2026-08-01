@@ -118,8 +118,9 @@ public class OcrController {
     @GetMapping("/result/{taskId}")
     public ResponseResult<OcrResultResponse> getOcrResult(@PathVariable String taskId) {
         try {
-            logger.info("查询 OCR 结果 - taskId: {}", taskId);
-            OcrResultResponse result = ocrService.getOcrResult(taskId);
+            Long userId = getCurrentUserId();
+            logger.info("查询 OCR 结果 - taskId: {}, userId: {}", taskId, userId);
+            OcrResultResponse result = ocrService.getOcrResult(taskId, userId);
 
             if (result == null) {
                 return ResponseResult.fail("未找到该识别任务");
@@ -136,8 +137,9 @@ public class OcrController {
     @GetMapping("/batch-result/{batchId}")
     public ResponseResult<BatchRecognizeResponse> getBatchResult(@PathVariable String batchId) {
         try {
-            logger.info("查询批量 OCR 结果 - batchId: {}", batchId);
-            BatchRecognizeResponse result = ocrService.getBatchResult(batchId);
+            Long userId = getCurrentUserId();
+            logger.info("查询批量 OCR 结果 - batchId: {}, userId: {}", batchId, userId);
+            BatchRecognizeResponse result = ocrService.getBatchResult(batchId, userId);
 
             if (result == null) {
                 return ResponseResult.fail("未找到该批量识别任务");

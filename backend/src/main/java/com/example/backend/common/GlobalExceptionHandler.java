@@ -34,7 +34,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ResponseResult<Void>> handleConstraintViolation(ConstraintViolationException exception) {
         return ResponseEntity.badRequest()
-                .body(ResponseResult.fail(ResponseCode.VALIDATION_ERROR.getCode(), exception.getMessage()));
+                .body(ResponseResult.fail(ResponseCode.VALIDATION_ERROR.getCode(), "请求参数校验失败"));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ResponseResult<Void>> handleIllegalArgument(IllegalArgumentException exception) {
+        return ResponseEntity.badRequest()
+                .body(ResponseResult.fail(ResponseCode.PARAM_ERROR.getCode(), exception.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

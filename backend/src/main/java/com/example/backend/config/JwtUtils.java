@@ -12,6 +12,7 @@ import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
 
 /**
  * JWT工具类 - 用于生成、验证和解析JWT令牌
@@ -30,7 +31,11 @@ public class JwtUtils {
 
     @PostConstruct
     public void init() {
-        this.key = Keys.hmacShaKeyFor(secret.getBytes());
+        if (secret == null || secret.isBlank() || secret.length() < 32
+                || secret.contains("change-me") || secret.contains("local-dev")) {
+            throw new IllegalStateException("jwt.secret must be a strong, non-default value of at least 32 characters");
+        }
+        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -47,6 +52,10 @@ public class JwtUtils {
     /**
      * 创建令牌
      */
+    public long getExpiration() {
+        return expiration;
+    }
+
     private String createToken(Map<String, Object> claims, String subject) {
         return Jwts.builder()
                 .setClaims(claims)
@@ -137,7 +146,7 @@ public class JwtUtils {
                     .parseClaimsJws(token);
             return !isTokenExpired(token);
         } catch (JwtException | IllegalArgumentException e) {
-            log.error("JWT令牌验证失败: {}", e.getMessage());
+            log.debug("JWT validation failed: {}", e.getClass().getSimpleName());
             return false;
         }
     }

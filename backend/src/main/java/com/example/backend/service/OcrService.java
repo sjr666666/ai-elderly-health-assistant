@@ -9,9 +9,9 @@ public interface OcrService {
 
     OcrUploadResponse uploadAndRecognize(MultipartFile file, Long userId);
 
-    OcrResultResponse getOcrResult(String taskId);
+    OcrResultResponse getOcrResult(String taskId, Long userId);
 
     BatchRecognizeResponse batchUploadAndRecognize(MultipartFile[] files, Long userId);
 
-    BatchRecognizeResponse getBatchResult(String batchId);
+    BatchRecognizeResponse getBatchResult(String batchId, Long userId);
 }

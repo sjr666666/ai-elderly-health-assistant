@@ -16,7 +16,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/ai")
-@CrossOrigin(origins = "*")
 public class AiController {
 
     private static final Logger logger = LoggerFactory.getLogger(AiController.class);
@@ -38,12 +37,8 @@ public class AiController {
      */
     @PostMapping("/elderly-guide")
     public ResponseResult<String> generateElderlyGuide(@RequestBody DrugDetailResponse drugDetail) {
-        try {
-            String guide = deepSeekService.generateElderlyFriendlyGuide(drugDetail);
-            return ResponseResult.success(guide);
-        } catch (Exception e) {
-            return ResponseResult.fail("生成用药指导失败: " + e.getMessage());
-        }
+        String guide = deepSeekService.generateElderlyFriendlyGuide(drugDetail);
+        return ResponseResult.success(guide);
     }
 
     /**
@@ -71,7 +66,7 @@ public class AiController {
             }
         } catch (Exception e) {
             logger.error("药品追问失败: ", e);
-            return ResponseResult.fail("回答失败: " + e.getMessage());
+            return ResponseResult.fail("AI服务暂时不可用，请稍后重试");
         }
     }
 
@@ -87,10 +82,10 @@ public class AiController {
             @RequestParam String text,
             @RequestParam(defaultValue = "5") int speechRate) {
         try {
-            logger.info("百度TTS配置 - appId: {}, apiKey: {}, secretKey: {}",
-                    baiduTtsConfig.getAppId(),
-                    baiduTtsConfig.getApiKey(),
-                    baiduTtsConfig.getSecretKey() != null ? "*****" : "null");
+            logger.debug("百度TTS配置已加载: appIdPresent={}, apiKeyPresent={}, secretKeyPresent={}",
+                    baiduTtsConfig.getAppId() != null && !baiduTtsConfig.getAppId().isBlank(),
+                    baiduTtsConfig.getApiKey() != null && !baiduTtsConfig.getApiKey().isBlank(),
+                    baiduTtsConfig.getSecretKey() != null && !baiduTtsConfig.getSecretKey().isBlank());
 
             if (baiduTtsService == null) {
                 logger.error("BaiduTtsService 为 null");
@@ -107,7 +102,7 @@ public class AiController {
             }
         } catch (Exception e) {
             logger.error("语音转换异常: ", e);
-            return ResponseResult.fail("语音转换失败: " + e.getMessage());
+            return ResponseResult.fail("语音服务暂时不可用，请稍后重试");
         }
     }
 
@@ -124,7 +119,7 @@ public class AiController {
                 return ResponseResult.fail("AI分类失败，返回null");
             }
         } catch (Exception e) {
-            return ResponseResult.fail("药品分类失败: " + e.getMessage());
+            return ResponseResult.fail("AI服务暂时不可用，请稍后重试");
         }
     }
 

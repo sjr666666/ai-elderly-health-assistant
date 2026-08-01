@@ -1,0 +1,8 @@
+FROM maven:3.9-eclipse-temurin-17
+
+WORKDIR /app
+
+COPY dev-run.sh /usr/local/bin/dev-run.sh
+RUN chmod +x /usr/local/bin/dev-run.sh
+
+CMD ["/usr/local/bin/dev-run.sh"]

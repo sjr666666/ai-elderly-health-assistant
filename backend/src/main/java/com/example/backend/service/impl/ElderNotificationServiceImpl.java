@@ -11,6 +11,7 @@ import com.example.backend.model.entity.EmergencyContact;
 import com.example.backend.model.entity.SysUser;
 import com.example.backend.service.EmergencyContactService;
 import com.example.backend.service.ElderNotificationService;
+import com.example.backend.service.NotificationOutboxService;
 import com.example.backend.websocket.WebSocketHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ public class ElderNotificationServiceImpl implements ElderNotificationService {
     private final UserMapper userMapper;
     private final WebSocketHandler webSocketHandler;
     private final ObjectMapper objectMapper;
+    private final NotificationOutboxService notificationOutboxService;
 
     @Override
     public ElderNotificationDTO createNotification(Long elderId, String notificationType, String title, String content, String extraData) {
@@ -56,7 +58,7 @@ public class ElderNotificationServiceImpl implements ElderNotificationService {
                     "type", "new_notification",
                     "data", dto
             ));
-            webSocketHandler.sendMessageToUser(elderId, message);
+            notificationOutboxService.enqueue(notificationType, notification.getId(), elderId, message);
             log.info("WebSocket推送通知成功 - elderId: {}", elderId);
         } catch (Exception e) {
             log.warn("WebSocket推送通知失败 - elderId: {}, error: {}", elderId, e.getMessage());

@@ -8,22 +8,35 @@ import com.example.backend.model.dto.UserProfileUpdateRequest;
 import com.example.backend.model.dto.UserRegisterRequest;
 import com.example.backend.model.dto.UserRegisterResponse;
 import com.example.backend.service.UserService;
+import com.example.backend.service.RefreshTokenService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.time.Duration;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/user")
 public class UserController {
 
     private final UserService userService;
+    private final RefreshTokenService refreshTokenService;
+
+    @Value("${jwt.refresh-cookie-secure:false}")
+    private boolean refreshCookieSecure;
 
     @Autowired
-    public UserController(UserService userService) {
+    public UserController(UserService userService, RefreshTokenService refreshTokenService) {
         this.userService = userService;
+        this.refreshTokenService = refreshTokenService;
     }
 
     /**
@@ -39,22 +52,53 @@ public class UserController {
 
     @PostMapping("/register")
     public ResponseResult<UserRegisterResponse> register(@Valid @RequestBody UserRegisterRequest request) {
-        try {
-            UserRegisterResponse response = userService.register(request);
-            return ResponseResult.success("创建成功", response);
-        } catch (Exception e) {
-            // 捕获业务异常，返回友好的错误信息
-            return ResponseResult.fail(e.getMessage());
-        }
+        UserRegisterResponse response = userService.register(request);
+        return ResponseResult.success("创建成功", response);
     }
 
     @PostMapping("/login")
-    public ResponseResult<UserLoginResponse> login(@Valid @RequestBody UserLoginRequest request) {
+    public ResponseResult<UserLoginResponse> login(@Valid @RequestBody UserLoginRequest request,
+                                                   HttpServletResponse httpResponse) {
         UserLoginResponse response = userService.login(request);
         if (response == null) {
             return ResponseResult.fail("用户名或密码错误");
         }
+        setRefreshCookie(httpResponse, response.getRefreshToken());
+        response.setRefreshToken(null);
         return ResponseResult.success("登录成功", response);
+    }
+
+    @PostMapping("/refresh")
+    public ResponseResult<Map<String, String>> refresh(HttpServletRequest request,
+                                                       HttpServletResponse response) {
+        Map<String, String> tokens = refreshTokenService.consumeAndRotate(readRefreshCookie(request));
+        setRefreshCookie(response, tokens.remove("refreshToken"));
+        return ResponseResult.success("刷新成功", tokens);
+    }
+
+    @PostMapping("/logout")
+    public ResponseResult<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+        refreshTokenService.revoke(readRefreshCookie(request));
+        ResponseCookie cookie = ResponseCookie.from("refresh_token", "")
+                .httpOnly(true).secure(refreshCookieSecure).sameSite("Lax").path("/")
+                .maxAge(Duration.ZERO).build();
+        response.addHeader("Set-Cookie", cookie.toString());
+        return ResponseResult.success("退出成功", null);
+    }
+
+    private String readRefreshCookie(HttpServletRequest request) {
+        if (request.getCookies() == null) return null;
+        for (Cookie cookie : request.getCookies()) {
+            if ("refresh_token".equals(cookie.getName())) return cookie.getValue();
+        }
+        return null;
+    }
+
+    private void setRefreshCookie(HttpServletResponse response, String token) {
+        ResponseCookie cookie = ResponseCookie.from("refresh_token", token)
+                .httpOnly(true).secure(refreshCookieSecure).sameSite("Lax").path("/")
+                .maxAge(Duration.ofDays(30)).build();
+        response.addHeader("Set-Cookie", cookie.toString());
     }
 
     /**
@@ -63,13 +107,9 @@ public class UserController {
      */
     @GetMapping("/profile")
     public ResponseResult<UserProfileResponse> getProfile() {
-        try {
-            Long userId = getCurrentUserId();
-            UserProfileResponse profile = userService.getUserProfile(userId);
-            return ResponseResult.success("success", profile);
-        } catch (Exception e) {
-            return ResponseResult.fail("获取用户信息失败: " + e.getMessage());
-        }
+        Long userId = getCurrentUserId();
+        UserProfileResponse profile = userService.getUserProfile(userId);
+        return ResponseResult.success("success", profile);
     }
 
     /**
@@ -78,13 +118,9 @@ public class UserController {
      */
     @PutMapping("/profile")
     public ResponseResult<Void> updateProfile(@RequestBody UserProfileUpdateRequest request) {
-        try {
-            Long userId = getCurrentUserId();
-            userService.updateUserProfile(userId, request);
-            return ResponseResult.success("更新成功", null);
-        } catch (Exception e) {
-            return ResponseResult.fail("更新失败: " + e.getMessage());
-        }
+        Long userId = getCurrentUserId();
+        userService.updateUserProfile(userId, request);
+        return ResponseResult.success("更新成功", null);
     }
 
     /**
@@ -93,17 +129,13 @@ public class UserController {
      */
     @PutMapping("/password")
     public ResponseResult<Void> changePassword(@RequestBody java.util.Map<String, String> body) {
-        try {
-            Long userId = getCurrentUserId();
-            String oldPassword = body.get("oldPassword");
-            String newPassword = body.get("newPassword");
-            if (oldPassword == null || newPassword == null) {
-                return ResponseResult.fail("旧密码和新密码不能为空");
-            }
-            userService.changePassword(userId, oldPassword, newPassword);
-            return ResponseResult.success("密码修改成功", null);
-        } catch (Exception e) {
-            return ResponseResult.fail(e.getMessage());
+        Long userId = getCurrentUserId();
+        String oldPassword = body.get("oldPassword");
+        String newPassword = body.get("newPassword");
+        if (oldPassword == null || newPassword == null) {
+            throw new IllegalArgumentException("旧密码和新密码不能为空");
         }
+        userService.changePassword(userId, oldPassword, newPassword);
+        return ResponseResult.success("密码修改成功", null);
     }
 }

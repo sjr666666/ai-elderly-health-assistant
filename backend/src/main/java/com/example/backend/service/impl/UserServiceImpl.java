@@ -11,6 +11,7 @@ import com.example.backend.model.dto.UserRegisterRequest;
 import com.example.backend.model.dto.UserRegisterResponse;
 import com.example.backend.model.entity.SysUser;
 import com.example.backend.service.UserService;
+import com.example.backend.service.RefreshTokenService;
 import com.example.backend.service.ElderNotificationService;
 import com.example.backend.mapper.GuardianElderRelationMapper;
 import com.example.backend.model.entity.GuardianElderRelation;
@@ -36,6 +37,7 @@ public class UserServiceImpl implements UserService {
     private final JwtUtils jwtUtils;
     private final ElderNotificationService elderNotificationService;
     private final GuardianElderRelationMapper guardianElderRelationMapper;
+    private final RefreshTokenService refreshTokenService;
 
     @Override
     public UserRegisterResponse register(UserRegisterRequest request) {
@@ -98,6 +100,7 @@ public class UserServiceImpl implements UserService {
 
         // 生成JWT令牌
         String token = jwtUtils.generateToken(user.getId(), user.getUsername(), user.getRole());
+        String refreshToken = refreshTokenService.issue(user.getId(), user.getUsername(), user.getRole());
         logger.info("用户登录成功 - userId: {}, username: {}, role: {}", user.getId(), user.getUsername(), user.getRole());
 
         return UserLoginResponse.builder()
@@ -119,6 +122,7 @@ public class UserServiceImpl implements UserService {
                 .isDrinking(user.getIsDrinking())
                 .role(user.getRole())
                 .token(token)  // 返回JWT令牌
+                .refreshToken(refreshToken)
                 .build();
     }
 
@@ -250,6 +254,7 @@ public class UserServiceImpl implements UserService {
         }
         user.setPassword(passwordEncoder.encode(newPassword));
         userMapper.updateById(user);
+        refreshTokenService.revokeAllForUser(userId);
         logger.info("用户密码修改成功 - userId: {}", userId);
     }
 
