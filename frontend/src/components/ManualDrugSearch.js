@@ -7,8 +7,6 @@ function ManualDrugSearch({ onSelectDrug }) {
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmingDrug, setConfirmingDrug] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [displayCount, setDisplayCount] = useState(3); // 当前显示的药品数量，默认3条
@@ -18,7 +16,6 @@ function ManualDrugSearch({ onSelectDrug }) {
     return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
   });
   const inputRef = useRef(null);
-  const debounceRef = useRef(null);
   const recognitionRef = useRef(null);
 
   const searchDrugs = async (query) => {
@@ -505,7 +502,6 @@ function ManualDrugSearch({ onSelectDrug }) {
     
     const distance = touchStartRef.current - touchEndRef.current;
     const isSwipeUp = distance > 50; // 向上滑动超过50px
-    const isSwipeDown = distance < -50; // 向下滑动超过50px
 
     // 向上滑动到底部时，加载更多
     if (isSwipeUp && displayCount < searchResults.length) {

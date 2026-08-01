@@ -1,0 +1,34 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: elderly_medication
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./backend/src/main/resources/init_database.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./backend/src/main/resources/init_drug_data.sql:/docker-entrypoint-initdb.d/02-drug-data.sql:ro
+      - ./backend/src/main/resources/init_guardian_tables.sql:/docker-entrypoint-initdb.d/03-guardian.sql:ro
+      - ./backend/src/main/resources/init_weekly_report_table.sql:/docker-entrypoint-initdb.d/04-weekly-report.sql:ro
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+  backend:
+    build: ./backend
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/elderly_medication?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      SPRING_REDIS_HOST: redis
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      PHONE_ENCRYPT_KEY: ${PHONE_ENCRYPT_KEY:-change-me-16byte}
+    ports:
+      - "8080:8080"
+volumes:
+  mysql-data:

@@ -11,18 +11,18 @@ import { formatRelativeTime } from '../utils/timeUtils';
 const ElderNotificationPanel = ({ isOpen, onClose, onUnreadCountChange, onContactAdded, wsConnected = false }) => {
   const { showToast } = useToast();
   const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [, setUnreadCount] = useState(0);
+  const [loading] = useState(false);
 
-  const authHeaders = {
+  const getAuthHeaders = () => ({
     'Authorization': `Bearer ${getToken()}`,
     'Content-Type': 'application/json',
-  };
+  });
 
   // 加载通知列表
   const loadNotifications = useCallback(async () => {
     try {
-      const res = await fetch(`/api/v1/elder/notifications?limit=20`, { headers: authHeaders });
+      const res = await fetch(`/api/v1/elder/notifications?limit=20`, { headers: getAuthHeaders() });
       const data = await res.json();
       if (data.code === 200) {
         setNotifications(data.data || []);
@@ -35,7 +35,7 @@ const ElderNotificationPanel = ({ isOpen, onClose, onUnreadCountChange, onContac
   // 加载未读数
   const fetchUnreadCount = useCallback(async () => {
     try {
-      const res = await fetch(`/api/v1/elder/notifications/unread-count`, { headers: authHeaders });
+      const res = await fetch(`/api/v1/elder/notifications/unread-count`, { headers: getAuthHeaders() });
       const data = await res.json();
       if (data.code === 200) {
         setUnreadCount(data.data || 0);
@@ -53,7 +53,7 @@ const ElderNotificationPanel = ({ isOpen, onClose, onUnreadCountChange, onContac
       // 延迟标记已读，让用户先看到未读状态
       const timer = setTimeout(async () => {
         try {
-          await fetch(`/api/v1/elder/notifications/read-all`, { method: 'PUT', headers: authHeaders });
+          await fetch(`/api/v1/elder/notifications/read-all`, { method: 'PUT', headers: getAuthHeaders() });
           fetchUnreadCount();
         } catch (e) {
           console.error('标记已读失败:', e);
@@ -82,7 +82,7 @@ const ElderNotificationPanel = ({ isOpen, onClose, onUnreadCountChange, onContac
     try {
       const res = await fetch(`/api/v1/elder/notifications/${notificationId}/add-contact`, {
         method: 'POST',
-        headers: authHeaders,
+        headers: getAuthHeaders(),
       });
       const data = await res.json();
       if (data.code === 200) {
@@ -104,7 +104,7 @@ const ElderNotificationPanel = ({ isOpen, onClose, onUnreadCountChange, onContac
   // 忽略通知
   const handleDismiss = async (notificationId) => {
     try {
-      await fetch(`/api/v1/elder/notifications/${notificationId}/read`, { method: 'PUT', headers: authHeaders });
+      await fetch(`/api/v1/elder/notifications/${notificationId}/read`, { method: 'PUT', headers: getAuthHeaders() });
       setNotifications(prev =>
         prev.map(n => n.id === notificationId ? { ...n, isHandled: 1, isRead: 1 } : n)
       );
@@ -118,7 +118,7 @@ const ElderNotificationPanel = ({ isOpen, onClose, onUnreadCountChange, onContac
     try {
       const res = await fetch(`/api/v1/elder/notifications/${notificationId}/update-phone`, {
         method: 'POST',
-        headers: authHeaders,
+        headers: getAuthHeaders(),
       });
       const data = await res.json();
       if (data.code === 200) {
@@ -138,7 +138,7 @@ const ElderNotificationPanel = ({ isOpen, onClose, onUnreadCountChange, onContac
   // 一键已读
   const handleMarkAllRead = async () => {
     try {
-      await fetch(`/api/v1/elder/notifications/read-all`, { method: 'PUT', headers: authHeaders });
+      await fetch(`/api/v1/elder/notifications/read-all`, { method: 'PUT', headers: getAuthHeaders() });
       setNotifications(prev => prev.map(n => ({ ...n, isRead: 1 })));
       fetchUnreadCount();
       showToast('已全部标记为已读', 'success');
@@ -150,7 +150,7 @@ const ElderNotificationPanel = ({ isOpen, onClose, onUnreadCountChange, onContac
   // 清除已读通知
   const handleClearRead = async () => {
     try {
-      const res = await fetch(`/api/v1/elder/notifications/read`, { method: 'DELETE', headers: authHeaders });
+      const res = await fetch(`/api/v1/elder/notifications/read`, { method: 'DELETE', headers: getAuthHeaders() });
       const data = await res.json();
       if (data.code === 200) {
         setNotifications(prev => prev.filter(n => n.isRead === 0));

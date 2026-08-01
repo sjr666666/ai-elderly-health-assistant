@@ -24,7 +24,7 @@ function GuardianNotification({ onRead }) {
       } catch (e) { /* 静默失败，不影响用户体验 */ }
     };
     autoMarkAllRead();
-  }, []);
+  }, [onRead]);
 
   // 点击单条通知标记已读
   const handleItemClick = async (n) => {

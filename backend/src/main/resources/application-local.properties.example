@@ -1,41 +1,16 @@
-# =====================================================
-# 本地开发环境配置 - 团队成员各自维护
-# =====================================================
-# 使用方法：
-#   1. 复制本文件为 application-local.properties
-#      cp application-local.properties.example application-local.properties
-#   2. 填入下方所有真实值（不要提交到 git）
-#   3. 该文件已被 .gitignore 忽略，可安全保存
-# =====================================================
-
-# ==================== MySQL 数据库密码 ====================
-# 必须填写，否则 Spring Boot 启动后会因密码错误而连接失败
+# Copy this file to application-local.properties for local development.
 spring.datasource.password=your_mysql_password_here
 
-# ==================== 阿里云 OSS ====================
-# 申请地址：https://ram.console.aliyun.com
-# 权限建议：仅授权 cxcy-aa bucket
-aliyun.oss.access-key-id=your_aliyun_oss_access_key_id
-aliyun.oss.access-key-secret=your_aliyun_oss_access_key_secret
+aliyun.oss.access-key-id=${ALIYUN_OSS_ACCESS_KEY_ID:}
+aliyun.oss.access-key-secret=${ALIYUN_OSS_ACCESS_KEY_SECRET:}
 
-# ==================== 百度 OCR（药品包装识别） ====================
-# 申请地址：https://console.bce.baidu.com → 文字识别 OCR
-# 勾选能力：高精度版/通用版等
-baidu.ocr.app-id=your_baidu_ocr_app_id
-baidu.ocr.api-key=your_baidu_ocr_api_key
-baidu.ocr.secret-key=your_baidu_ocr_secret_key
+baidu.ocr.app-id=${BAIDU_OCR_APP_ID:}
+baidu.ocr.api-key=${BAIDU_OCR_API_KEY:}
+baidu.ocr.secret-key=${BAIDU_OCR_SECRET_KEY:}
 
-# ==================== 百度 TTS（语音播报） ====================
-# 申请地址：https://console.bce.baidu.com → 短文本在线合成
-baidu.tts.appId=your_baidu_tts_app_id
-baidu.tts.apiKey=your_baidu_tts_api_key
-baidu.tts.secretKey=your_baidu_tts_secret_key
+baidu.tts.appId=${BAIDU_TTS_APP_ID:}
+baidu.tts.apiKey=${BAIDU_TTS_API_KEY:}
+baidu.tts.secretKey=${BAIDU_TTS_SECRET_KEY:}
 
-# ==================== DeepSeek 大模型 ====================
-# 申请地址：https://platform.deepseek.com
-# 用途：紧急咨询、用药指导、冲突分析
-deepseek.api-key=sk-your_deepseek_api_key_here
-
-# ==================== 可选：Redis 密码 ====================
-# 如本地 Redis 未设置密码可保持默认
-spring.redis.password=dev_redis_password
+deepseek.api-key=${DEEPSEEK_API_KEY:}
+spring.redis.password=${SPRING_REDIS_PASSWORD:}

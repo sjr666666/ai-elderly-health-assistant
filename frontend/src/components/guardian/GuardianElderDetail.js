@@ -15,15 +15,6 @@ function GuardianElderDetail({ elderId, onBack }) {
   const [showUnbindConfirm, setShowUnbindConfirm] = useState(false);
   const [isUnbinding, setIsUnbinding] = useState(false);
 
-  useEffect(() => { if (elderId) loadAllData(); }, [elderId]);
-
-  const loadAllData = async () => {
-    setIsLoading(true); setError('');
-    try { await Promise.all([loadElderDetail(), loadEvents(), loadExpiringDrugs(), loadMedPlan()]); }
-    catch { setError('加载失败'); }
-    finally { setIsLoading(false); }
-  };
-
   const loadElderDetail = async () => {
     try {
       const data = await guardianApi.getElderDetail(elderId);
@@ -51,6 +42,19 @@ function GuardianElderDetail({ elderId, onBack }) {
       if (data.code === 200) setMedPlan(data.data);
     } catch {}
   };
+
+  const loadAllData = async () => {
+    setIsLoading(true); setError('');
+    try { await Promise.all([loadElderDetail(), loadEvents(), loadExpiringDrugs(), loadMedPlan()]); }
+    catch { setError('加载失败'); }
+    finally { setIsLoading(false); }
+  };
+
+  useEffect(() => {
+    if (elderId) loadAllData();
+    // These loaders are local to this screen and always use the current elderId.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elderId]);
 
   const handleResolveEvent = async (eventId) => {
     try {

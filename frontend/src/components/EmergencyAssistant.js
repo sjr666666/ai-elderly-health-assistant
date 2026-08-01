@@ -91,11 +91,6 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
     other: '⚠️ **紧急情况处理建议：**\n\n1. 保持冷静，评估情况\n2. 确保自身安全\n3. 立即拨打相应的紧急电话（110/120/119）\n4. 提供准确的位置信息\n5. 等待专业人员到达',
   };
 
-  // 检查是否为紧急问题
-  const isEmergencyQuestion = (question) => {
-    const emergencyKeywords = ['紧急', '救命', '快', '难受', '疼', '痛', '呼吸困难', '心跳', '晕倒', '出血', '着火', '中毒'];
-    return emergencyKeywords.some(keyword => question.includes(keyword));
-  };
 
   // 获取分类标签
   const getCategoryByQuestion = (question) => {
