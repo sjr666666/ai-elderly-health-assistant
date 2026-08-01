@@ -78,8 +78,9 @@ function Register({ onRegister }) {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8080/api/v1/user/register', {
+      const response = await fetch('/api/v1/user/register', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -99,6 +100,7 @@ function Register({ onRegister }) {
         // 注册成功后自动调用登录接口
         const loginResponse = await fetch('/api/v1/user/login', {
           method: 'POST',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json;charset=UTF-8',
             'Accept': 'application/json',

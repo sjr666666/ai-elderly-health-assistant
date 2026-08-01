@@ -8,6 +8,7 @@ import com.example.backend.model.entity.MedicationPlan;
 import com.example.backend.model.entity.UserMedicineBox;
 import com.example.backend.service.DailyLessonService;
 import com.example.backend.service.ProgressiveReminderService;
+import com.example.backend.config.ScheduledLock.DistributedTaskLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.Duration;
 
 /**
  * 定时任务组件
@@ -42,12 +44,17 @@ public class ScheduledTask {
     @Autowired
     private ProgressiveReminderService progressiveReminderService;
 
+    @Autowired
+    private DistributedTaskLock distributedTaskLock;
+
     /**
      * 每天凌晨1点执行：自动将已过期的药品状态更新为stopped
      * Cron表达式：0 0 1 * * ? 表示每天凌晨1点执行
      */
     @Scheduled(cron = "0 0 1 * * ?")
     public void autoExpireMedicines() {
+        String lockToken = acquireLock("auto-expire-medicines");
+        if (lockToken == null) return;
         logger.info("=== 开始执行药品过期检查定时任务 ===");
         
         try {
@@ -110,6 +117,8 @@ public class ScheduledTask {
             
         } catch (Exception e) {
             logger.error("药品过期检查定时任务执行失败", e);
+        } finally {
+            releaseLock("auto-expire-medicines", lockToken);
         }
     }
 
@@ -120,6 +129,8 @@ public class ScheduledTask {
     @Scheduled(cron = "0 0 0 * * ?")
     @Transactional(rollbackFor = Exception.class)
     public void generateNextDayMedicationPlan() {
+        String lockToken = acquireLock("generate-next-day-plan");
+        if (lockToken == null) return;
         logger.info("=== 开始执行生成下一天用药计划定时任务 ===");
         
         try {
@@ -231,6 +242,8 @@ public class ScheduledTask {
             
         } catch (Exception e) {
             logger.error("生成下一天用药计划定时任务执行失败", e);
+        } finally {
+            releaseLock("generate-next-day-plan", lockToken);
         }
     }
 
@@ -240,12 +253,16 @@ public class ScheduledTask {
      */
     @Scheduled(cron = "0 0 6 * * ?")
     public void generateDailyLessons() {
+        String lockToken = acquireLock("generate-daily-lessons");
+        if (lockToken == null) return;
         logger.info("=== 开始执行今日一课预生成定时任务 ===");
         try {
             dailyLessonService.generateDailyLessons();
             logger.info("=== 今日一课预生成定时任务完成 ===");
         } catch (Exception e) {
             logger.error("今日一课预生成定时任务执行失败", e);
+        } finally {
+            releaseLock("generate-daily-lessons", lockToken);
         }
     }
 
@@ -255,10 +272,31 @@ public class ScheduledTask {
      */
     @Scheduled(cron = "0 * * * * ?")
     public void progressiveReminderCheck() {
+        String lockToken = acquireLock("progressive-reminders");
+        if (lockToken == null) return;
         try {
             progressiveReminderService.processProgressiveReminders();
         } catch (Exception e) {
             logger.error("渐进式提醒定时任务执行失败", e);
+        } finally {
+            releaseLock("progressive-reminders", lockToken);
+        }
+    }
+
+    private String acquireLock(String name) {
+        try {
+            return distributedTaskLock.tryAcquire(name, Duration.ofMinutes(5));
+        } catch (RuntimeException exception) {
+            logger.warn("Unable to acquire scheduled task lock: {}", exception.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    private void releaseLock(String name, String token) {
+        try {
+            distributedTaskLock.release(name, token);
+        } catch (RuntimeException exception) {
+            logger.warn("Unable to release scheduled task lock: {}", exception.getClass().getSimpleName());
         }
     }
 }

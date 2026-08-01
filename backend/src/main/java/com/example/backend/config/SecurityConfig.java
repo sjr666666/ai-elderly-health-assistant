@@ -50,8 +50,9 @@ public class SecurityConfig {
             .authorizeHttpRequests()
                 // CORS 预检请求放行
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .antMatchers("/actuator/health", "/actuator/info").permitAll()
                 // 登录和注册接口无需认证
-                .antMatchers(HttpMethod.POST, "/api/v1/user/login", "/api/v1/user/register").permitAll()
+                .antMatchers(HttpMethod.POST, "/api/v1/user/login", "/api/v1/user/register", "/api/v1/user/refresh", "/api/v1/user/logout").permitAll()
                 // 家属端API需要FAMILY角色认证
                 .antMatchers("/api/v1/guardian/**").hasRole("FAMILY")
                 // 老人端核心API需要认证（ELDER或FAMILY角色均可）
@@ -91,6 +92,11 @@ public class SecurityConfig {
             .and()
             // 添加JWT认证过滤器
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+        http.headers(headers -> headers
+                .contentTypeOptions()
+                .and()
+                .frameOptions().deny());
 
         return http.build();
     }

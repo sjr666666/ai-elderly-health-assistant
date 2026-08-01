@@ -31,4 +31,5 @@ public class UserLoginResponse {
     private Integer isDrinking;
     private String role;
     private String token;  // JWT令牌，用于身份认证
+    private String refreshToken;
 }

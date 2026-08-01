@@ -5,6 +5,7 @@ import com.example.backend.common.RateLimitInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 
 /**
  * Web MVC配置
@@ -44,5 +45,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
         registry.addInterceptor(developmentOnlyEndpointFilter)
                 .addPathPatterns("/**/test/**");
+    }
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        // Uploaded files are never served as public static resources.
     }
 }

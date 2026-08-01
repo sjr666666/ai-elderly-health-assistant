@@ -14,6 +14,7 @@ import com.example.backend.model.entity.SysUser;
 import com.example.backend.service.DrugRecognitionService;
 import com.example.backend.service.OcrAsyncService;
 import com.example.backend.service.OcrService;
+import com.example.backend.service.RedisOcrTaskQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,7 @@ public class OcrServiceImpl implements OcrService {
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final OcrAsyncService ocrAsyncService;
     private final DrugRecognitionService drugRecognitionService;
+    private final RedisOcrTaskQueue ocrTaskQueue;
 
     @Value("${upload.path:./uploads}")
     private String uploadPath;
@@ -116,10 +118,12 @@ public class OcrServiceImpl implements OcrService {
     private static final class CacheEntry {
         final long createdAt;
         final BatchRecognizeResponse response;
+        final Long userId;
 
-        CacheEntry(BatchRecognizeResponse response) {
+        CacheEntry(BatchRecognizeResponse response, Long userId) {
             this.createdAt = System.currentTimeMillis();
             this.response = response;
+            this.userId = userId;
         }
 
         boolean isExpired(long now, long ttlMillis) {
@@ -133,13 +137,15 @@ public class OcrServiceImpl implements OcrService {
             DrugBaseMapper drugBaseMapper,
             UserMapper userMapper,
             OcrAsyncService ocrAsyncService,
-            DrugRecognitionService drugRecognitionService) {
+            DrugRecognitionService drugRecognitionService,
+            RedisOcrTaskQueue ocrTaskQueue) {
         this.ocrRecordMapper = ocrRecordMapper;
         this.drugBaseMapper = drugBaseMapper;
         this.userMapper = userMapper;
         this.snowflakeIdGenerator = new SnowflakeIdGenerator(1, 1);
         this.ocrAsyncService = ocrAsyncService;
         this.drugRecognitionService = drugRecognitionService;
+        this.ocrTaskQueue = ocrTaskQueue;
     }
 
     @Override
@@ -177,7 +183,7 @@ public class OcrServiceImpl implements OcrService {
             logger.info("OCR记录已创建 - dbRecordId: {}, imageUrl: {}", dbRecordId, imageUrl);
 
             // 调用异步服务处理OCR识别
-            ocrAsyncService.processOcrAsync(dbRecordId);
+            ocrTaskQueue.publish(dbRecordId);
             logger.info("异步OCR任务已提交 - dbRecordId: {}", dbRecordId);
 
             return OcrUploadResponse.builder()
@@ -239,12 +245,12 @@ public class OcrServiceImpl implements OcrService {
     
 
     @Override
-    public OcrResultResponse getOcrResult(String taskId) {
+    public OcrResultResponse getOcrResult(String taskId, Long userId) {
         try {
             Long recordId = Long.parseLong(taskId);
             OcrRecord ocrRecord = ocrRecordMapper.selectById(recordId);
 
-            if (ocrRecord == null) {
+            if (ocrRecord == null || !userId.equals(ocrRecord.getUserId())) {
                 return null;
             }
 
@@ -314,7 +320,7 @@ public class OcrServiceImpl implements OcrService {
                 Long recordId = ocrRecord.getId();
 
                 // 调用异步OCR处理（会直接执行完成）
-                ocrAsyncService.processOcrAsync(recordId);
+                ocrTaskQueue.publish(recordId);
 
                 // 等待异步处理完成并获取结果
                 OcrRecord processedRecord = waitForProcessingResult(recordId);
@@ -364,7 +370,7 @@ public class OcrServiceImpl implements OcrService {
         response.setFailedCount(failedCount.get());
 
         // 缓存结果供后续查询
-        batchResultCache.put(batchId, new CacheEntry(response));
+        batchResultCache.put(batchId, new CacheEntry(response, actualUserId));
 
         logger.info("批量OCR识别完成 - batchId: {}, 成功: {}, 失败: {}",
                 batchId, successCount.get(), failedCount.get());
@@ -393,9 +399,9 @@ public class OcrServiceImpl implements OcrService {
     }
 
     @Override
-    public BatchRecognizeResponse getBatchResult(String batchId) {
+    public BatchRecognizeResponse getBatchResult(String batchId, Long userId) {
         CacheEntry entry = batchResultCache.get(batchId);
-        if (entry == null) {
+        if (entry == null || !userId.equals(entry.userId)) {
             return null;
         }
         if (entry.isExpired(System.currentTimeMillis(), batchCacheTtlMillis)) {
@@ -428,6 +434,21 @@ public class OcrServiceImpl implements OcrService {
         String contentType = file.getContentType();
         if (contentType != null && !contentType.startsWith("image/")) {
             throw new IllegalArgumentException("请上传图片文件（当前文件类型：" + contentType + "）");
+        }
+        try (var input = file.getInputStream()) {
+            byte[] header = input.readNBytes(12);
+            boolean jpeg = header.length >= 3 && (header[0] & 0xff) == 0xff
+                    && (header[1] & 0xff) == 0xd8 && (header[2] & 0xff) == 0xff;
+            boolean png = header.length >= 8 && (header[0] & 0xff) == 0x89
+                    && header[1] == 0x50 && header[2] == 0x4e && header[3] == 0x47;
+            boolean webp = header.length >= 12 && header[0] == 'R' && header[1] == 'I'
+                    && header[2] == 'F' && header[3] == 'F' && header[8] == 'W'
+                    && header[9] == 'E' && header[10] == 'B' && header[11] == 'P';
+            if (!jpeg && !png && !webp) {
+                throw new IllegalArgumentException("文件内容不是受支持的图片格式");
+            }
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("无法读取上传文件");
         }
     }
 }

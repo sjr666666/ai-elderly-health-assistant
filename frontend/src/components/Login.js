@@ -38,6 +38,7 @@ function Login({ onLogin, onShowRegister, onSwitchToGuardian }) {
     try {
       const response = await fetch('/api/v1/user/login', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json;charset=UTF-8',
           'Accept': 'application/json',

@@ -11,83 +11,74 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * WebSocket处理器 - 老人端通知实时推送
- */
+/** Pushes notifications to sessions identified by an authenticated user ID. */
 @Slf4j
 @Component
 public class WebSocketHandler extends TextWebSocketHandler {
 
-    // elderId -> WebSocketSession
-    private final Map<Long, WebSocketSession> sessions = new ConcurrentHashMap<>();
+    private final Map<Long, Map<String, WebSocketSession>> sessions = new ConcurrentHashMap<>();
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        Long elderId = extractElderId(session);
-        if (elderId != null) {
-            sessions.put(elderId, session);
-            log.info("WebSocket连接建立 - elderId: {}", elderId);
+    public void afterConnectionEstablished(WebSocketSession session) {
+        Long userId = authenticatedUserId(session);
+        if (userId == null) {
+            return;
         }
+        sessions.computeIfAbsent(userId, ignored -> new ConcurrentHashMap<>())
+                .put(session.getId(), session);
+        log.info("WebSocket connection established - userId: {}", userId);
     }
 
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
-        Long elderId = extractElderId(session);
-        if (elderId != null) {
-            sessions.remove(elderId);
-            log.info("WebSocket连接关闭 - elderId: {}, status: {}", elderId, status);
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        Long userId = authenticatedUserId(session);
+        if (userId == null) {
+            return;
         }
+        Map<String, WebSocketSession> userSessions = sessions.get(userId);
+        if (userSessions != null) {
+            userSessions.remove(session.getId());
+            if (userSessions.isEmpty()) {
+                sessions.remove(userId, userSessions);
+            }
+        }
+        log.info("WebSocket connection closed - userId: {}, status: {}", userId, status.getCode());
     }
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
-        Long elderId = extractElderId(session);
-        log.error("WebSocket传输错误 - elderId: {}", elderId, exception);
+        log.warn("WebSocket transport error - userId: {}, type: {}", authenticatedUserId(session),
+                exception.getClass().getSimpleName());
         if (session.isOpen()) {
             session.close();
         }
     }
 
-    /**
-     * 向指定老人发送消息
-     */
-    public void sendMessageToUser(Long elderId, String message) {
-        WebSocketSession session = sessions.get(elderId);
-        if (session != null && session.isOpen()) {
+    public void sendMessageToUser(Long userId, String message) {
+        Map<String, WebSocketSession> userSessions = sessions.get(userId);
+        if (userSessions == null) {
+            return;
+        }
+        for (WebSocketSession session : userSessions.values()) {
+            if (!session.isOpen()) {
+                continue;
+            }
             try {
                 session.sendMessage(new TextMessage(message));
-            } catch (IOException e) {
-                log.error("WebSocket发送消息失败 - elderId: {}", elderId, e);
+            } catch (IOException exception) {
+                log.warn("WebSocket send failed - userId: {}, type: {}", userId,
+                        exception.getClass().getSimpleName());
             }
         }
     }
 
-    /**
-     * 检查老人是否在线
-     */
-    public boolean isUserOnline(Long elderId) {
-        WebSocketSession session = sessions.get(elderId);
-        return session != null && session.isOpen();
+    public boolean isUserOnline(Long userId) {
+        Map<String, WebSocketSession> userSessions = sessions.get(userId);
+        return userSessions != null && userSessions.values().stream().anyMatch(WebSocketSession::isOpen);
     }
 
-    /**
-     * 从session中提取elderId
-     * 连接URL格式：ws://host/ws/notifications?elderId=xxx
-     */
-    private Long extractElderId(WebSocketSession session) {
-        String query = session.getUri().getQuery();
-        if (query != null) {
-            for (String param : query.split("&")) {
-                String[] kv = param.split("=");
-                if (kv.length == 2 && "elderId".equals(kv[0])) {
-                    try {
-                        return Long.valueOf(kv[1]);
-                    } catch (NumberFormatException e) {
-                        return null;
-                    }
-                }
-            }
-        }
-        return null;
+    private Long authenticatedUserId(WebSocketSession session) {
+        Object userId = session.getAttributes().get("userId");
+        return userId instanceof Long ? (Long) userId : null;
     }
 }

@@ -21,6 +21,28 @@ export function clearAuth() {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
+let refreshPromise = null;
+
+async function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = fetch('/api/v1/user/refresh', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    }).then(async (response) => {
+      const data = await response.json();
+      if (!response.ok || data.code === 401 || !data.data?.accessToken) {
+        throw new Error('登录已过期');
+      }
+      saveToken(data.data.accessToken);
+      return data.data.accessToken;
+    }).finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
 // 检查是否已认证
 export function isAuthenticated() {
   return !!getToken();
@@ -46,12 +68,26 @@ export async function elderFetch(url, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     ...options,
     headers,
+    credentials: 'include',
   });
 
-  const data = await response.json();
+  let data = await response.json();
+
+  if ((response.status === 401 || data.code === 401) && token && !url.includes('/user/refresh')) {
+    try {
+      const nextToken = await refreshAccessToken();
+      headers.Authorization = `Bearer ${nextToken}`;
+      response = await fetch(url, { ...options, headers, credentials: 'include' });
+      data = await response.json();
+    } catch (refreshError) {
+      clearAuth();
+      window.dispatchEvent(new CustomEvent('elder-auth-expired'));
+      throw refreshError;
+    }
+  }
 
   // 处理401未认证错误
   if (response.status === 401 || data.code === 401 || data.message?.includes('未认证') || data.message?.includes('Unauthorized') || data.message?.includes('Access Denied')) {

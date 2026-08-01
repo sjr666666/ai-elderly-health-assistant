@@ -34,21 +34,26 @@ services:
       retries: 12
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
     restart: unless-stopped
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
     environment:
-      SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/elderly_medication?useUnicode=true&characterEncoding=utf8&connectionCollation=utf8mb4_unicode_ci&serverTimezone=Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: local
+      FLYWAY_ENABLED: "true"
+      SPRING_DEVTOOLS_RESTART_ENABLED: "true"
+      MANAGEMENT_HEALTH_NEO4J_ENABLED: "false"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/elderly_medication?useUnicode=true&characterEncoding=utf8&connectionCollation=utf8mb4_unicode_ci&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: medication_app
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_APP_PASSWORD}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      PHONE_ENCRYPT_KEY: ${PHONE_ENCRYPT_KEY:?PHONE_ENCRYPT_KEY is required}
-      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:?APP_CORS_ALLOWED_ORIGINS is required}
+      JWT_SECRET: ${JWT_SECRET}
+      PHONE_ENCRYPT_KEY: ${PHONE_ENCRYPT_KEY}
+      APP_CORS_ALLOWED_ORIGINS: http://localhost:3000
       ALIYUN_OSS_ACCESS_KEY_ID: ${ALIYUN_OSS_ACCESS_KEY_ID:-}
       ALIYUN_OSS_ACCESS_KEY_SECRET: ${ALIYUN_OSS_ACCESS_KEY_SECRET:-}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
@@ -59,24 +64,41 @@ services:
       BAIDU_TTS_API_KEY: ${BAIDU_TTS_API_KEY:-}
       BAIDU_TTS_SECRET_KEY: ${BAIDU_TTS_SECRET_KEY:-}
     volumes:
-      - uploads-data:/app/uploads
-    networks: [internal, edge]
-    expose: ["8080"]
+      - ./backend/src:/app/src
+      - ./backend/pom.xml:/app/pom.xml:ro
+      - ./uploads:/app/uploads
+      - maven-cache:/root/.m2
+    networks: [internal, dev]
+    ports:
+      - "8080:8080"
 
   frontend:
-    build: ./frontend
+    build: !reset []
+    image: node:20.16-alpine
     restart: unless-stopped
     depends_on: [backend]
-    networks: [edge]
-    ports:
-      - "${HTTP_PORT:-80}:80"
+    working_dir: /app
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      BROWSER: none
+      CHOKIDAR_USEPOLLING: "true"
+      BACKEND_PROXY_TARGET: http://backend:8080
+    command: ["sh", "-c", "if [ ! -x node_modules/.bin/react-scripts ]; then npm install --legacy-peer-deps --no-audit --no-fund; fi && npm run start:dev"]
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+    networks: !override [dev]
+    ports: !override
+      - "3000:3000"
 
 networks:
+  dev:
   internal:
     internal: true
-  edge:
 
 volumes:
   mysql-data:
   redis-data:
-  uploads-data:
+  maven-cache:
+  frontend-node-modules:
