@@ -38,7 +38,7 @@ const ContactModal = ({ isOpen, onClose, contacts }) => {
         document.body.style.overflow = '';
       }
     };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (!isOpen) {

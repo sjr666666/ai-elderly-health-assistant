@@ -14,7 +14,6 @@ function BatchRecognizeModal({ onClose, onAddToBox, userId }) {
   // 状态管理
   const [selectedImages, setSelectedImages] = useState([]); // 已选择的图片
   const [isRecognizing, setIsRecognizing] = useState(false); // 是否正在识别
-  const [recognizeResults, setRecognizeResults] = useState([]); // 识别结果
   const [selectedForAdd, setSelectedForAdd] = useState(new Set()); // 选中的要添加的药品
   const [isAddingToBox, setIsAddingToBox] = useState(false); // 是否正在添加到药箱
 

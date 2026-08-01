@@ -121,7 +121,7 @@ function DrugListView({
   // 批量确认弹窗状态
   const [batchConfirm, setBatchConfirm] = useState({ show: false, type: null }); // type: 'delete' | 'discard'
   // 批量操作加载状态
-  const [batchLoading, setBatchLoading] = useState(false);
+  const [, setBatchLoading] = useState(false);
 
   // 检查药品是否已设置用药计划
   const hasPlan = (drug) => {
@@ -376,7 +376,6 @@ function DrugListView({
             
             const isExpired = daysUntilExpiry < 0;
             const isExpiring = daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
-            const isNormal = !isExpired && !isExpiring;
             
             const hasDrugPlan = hasPlan(drug);
             const isExpanded = expandedDrugs[drug.boxItemId];

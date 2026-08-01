@@ -2,8 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import html2canvas from 'html2canvas';
 import DOMPurify from 'dompurify';
 import './App.css';
-import Login from './components/Login';
-import Register from './components/Register';
+import AuthGate from './components/AuthGate';
 import ProfileModal from './components/ProfileModal';
 import ProfileEdit from './components/ProfileEdit';
 import EmergencyContacts from './components/EmergencyContacts';
@@ -12,24 +11,23 @@ import AddDrugModal from './components/AddDrugModal';
 import EditDrugModal from './components/EditDrugModal';
 import ConfirmDeleteModal from './components/ConfirmDeleteModal';
 import ManualDrugSearch from './components/ManualDrugSearch';
-import EmergencyAssistant from './components/EmergencyAssistant';
 import AddToPlanModal from './components/AddToPlanModal';
 import ConfirmDrugModal from './components/ConfirmDrugModal';
 import MedicationReminderModal from './components/MedicationReminderModal';
-import DrugListView from './components/DrugListView';
+import DrugManagementTab from './components/DrugManagementTab';
 import DailyLessonCard from './components/DailyLessonCard';
 import GuardianApp from './components/guardian/GuardianApp';
-import GuardianLogin from './components/guardian/GuardianLogin';
 import ElderNotificationPanel from './components/ElderNotificationPanel';
 import WeeklyReport from './components/WeeklyReport';
+import EmergencyTab from './components/EmergencyTab';
 import { useToast } from './components/Toast';
 import FloatingMicButton from './components/FloatingMicButton';
-import { clearAuth, isAuthenticated, getToken } from './utils/elderApi';
-import { isAuthenticated as isGuardianAuthenticated, getToken as getGuardianToken } from './utils/guardianApi';
+import { clearAuth, getToken } from './utils/elderApi';
 import { formatDateTime } from './utils/timeUtils';
 
 function App() {
   const { showToast } = useToast();
+  const loadWeeklyMedicationRef = useRef(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [loginMode, setLoginMode] = useState('elder'); // 'elder' | 'guardian'
@@ -75,7 +73,7 @@ function App() {
   const [pendingDrugInfo, setPendingDrugInfo] = useState(null); // 待确认的药品信息
   const [showDrugDetailModal, setShowDrugDetailModal] = useState(false); // 药品详情弹窗
   const [selectedDrug, setSelectedDrug] = useState(null); // 选中的药品
-  const [drugsWithPlan, setDrugsWithPlan] = useState(new Set()); // 已设置用药计划的药品ID集合
+  const [, setDrugsWithPlan] = useState(new Set()); // 已设置用药计划的药品ID集合
   const [showExpiringDrugsModal, setShowExpiringDrugsModal] = useState(false); // 过期药品弹窗
   const [showExpiredDrugModal, setShowExpiredDrugModal] = useState(false); // 添加药品时发现过期的弹窗
   const [expiredDrugInfo, setExpiredDrugInfo] = useState(null); // 过期药品信息
@@ -85,9 +83,9 @@ function App() {
   const [pendingUndoId, setPendingUndoId] = useState(null); // 待撤销的计划ID
   const [showMedicationReminder, setShowMedicationReminder] = useState(false); // 用药提醒弹窗
   const [missedReminders, setMissedReminders] = useState([]); // 超时未服用的用药计划
-  const lastCheckedTimeRef = useRef(null); // 上次检查的时间，避免重复提醒
   const lastReminderTimeRef = useRef(null); // 上次弹窗提醒的时间，避免频繁提醒
   const lastShownStageRef = useRef(null); // 上次已展示的最高阶段，只有阶段升级才再次提醒
+  const speakRef = useRef(null);
   // 获取本地日期 key（YYYY-MM-DD），避免 toISOString() 返回 UTC 日期导致凌晨跨日判断错误
   const getLocalDateKey = () => {
     const d = new Date();
@@ -133,7 +131,7 @@ function App() {
   const [showBatchConfirmModal, setShowBatchConfirmModal] = useState(false); // 批量确认弹窗
   const [batchDrugIndex, setBatchDrugIndex] = useState(0); // 当前正在确认的药品索引
   const [batchConfirmedDrugs, setBatchConfirmedDrugs] = useState([]); // 已确认的药品信息列表
-  const [isBatchAddingAll, setIsBatchAddingAll] = useState(false); // 是否正在批量添加所有药品
+  const [, setIsBatchAddingAll] = useState(false); // 是否正在批量添加所有药品
   const batchConfirmModalRef = useRef(null); // 批量确认弹窗容器引用
   
   const fileInputRef = useRef(null);
@@ -206,7 +204,18 @@ function App() {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const response = await fetch(url, { ...options, headers });
+    const controller = options.signal ? null : new AbortController();
+    const timeoutId = controller ? window.setTimeout(() => controller.abort(), 15000) : null;
+    let response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+        ...(controller ? { signal: controller.signal } : {})
+      });
+    } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
+    }
     const data = await response.json();
     // 处理401认证失败
     if (response.status === 401 || data.code === 401 || data.message?.includes('Access Denied')) {
@@ -383,11 +392,14 @@ function App() {
 
   // 从后端加载今日用药计划（根据家庭药箱自动生成）
   // userIdOverride: 可选，登录时直接传入 userId，避免等待 setUser 异步更新
+  // This loader is intentionally recreated with the current auth state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const loadCalendarPlans = async (userIdOverride) => {
     const effectiveUserId = userIdOverride || (user && user.userId);
     if (!effectiveUserId) {
       console.warn('用户未登录，无法加载用药计划');
       setCalendarPlans([]);
+      setIsLoadingCalendar(false);
       return;
     }
     
@@ -482,6 +494,8 @@ function App() {
   loadCalendarPlansRef.current = loadCalendarPlans;
 
   // 从后端加载一周用药记录（包括已删除但在查询范围内的记录）
+  // This loader is intentionally recreated with the current auth state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const loadWeeklyMedication = async () => {
     if (!user) {
       console.warn('用户未登录，无法加载用药记录');
@@ -719,7 +733,7 @@ function App() {
   const handleDeleteContact = async (contactId) => {
     if (user && user.id) {
       try {
-        const { response, data: result } = await authFetch(`/api/emergency/v1/contacts/${contactId}`, {
+        const { data: result } = await authFetch(`/api/emergency/v1/contacts/${contactId}`, {
           method: 'DELETE'
         });
         
@@ -934,6 +948,8 @@ function App() {
   };
 
   // 关闭用药提醒弹窗
+  // This handler closes over the current reminder list.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleCloseMedicationReminder = () => {
     // 关闭弹窗时自动停止播报
     stopSpeaking();
@@ -996,7 +1012,7 @@ function App() {
         handleCloseMedicationReminder();
       }
     }
-  }, [calendarPlans, shouldRefreshReminder]);
+  }, [calendarPlans, shouldRefreshReminder, handleCloseMedicationReminder]);
 
   const handleMarkAsTakenFromReminder = async (reminder) => {
     console.log('标记为已服用:', reminder);
@@ -1071,6 +1087,7 @@ function App() {
   };
 
   // 处理丢弃临期/过期药品
+  // eslint-disable-next-line no-unused-vars
   const handleDiscardDrug = async () => {
     if (!selectedDrug || !selectedDrug.boxItemId) {
       showToast('缺少必要参数，无法丢弃', 'error');
@@ -1388,7 +1405,7 @@ function App() {
         wsRef.current = null;
       }
     };
-  }, [user?.id, user?.role]);
+  }, [user, user?.id, user?.role]);
 
   // 全局阻止拖拽默认行为，防止文件被浏览器打开
   useEffect(() => {
@@ -1413,13 +1430,13 @@ function App() {
   // 将语音播报方法绑定到 window 对象，供 MedicationReminderModal 使用
   useEffect(() => {
     window.speakMedicationReminder = (text) => {
-      speak(text);
+      speakRef.current?.(text);
     };
     
     return () => {
       delete window.speakMedicationReminder;
     };
-  }, []); // 空依赖数组，只执行一次
+  }, []);
 
   // 用药提醒：每分钟检查一次，支持渐进式提醒
   useEffect(() => {
@@ -1589,7 +1606,7 @@ function App() {
           default:
             speakText = `用药提醒！您有以下药物还没有服用：${reminderTexts.join('；')}。请及时服用。`;
         }
-        speak(speakText);
+        speakRef.current?.(speakText);
       }, 500);
       
       return () => clearTimeout(timer);
@@ -1643,6 +1660,8 @@ function App() {
       speakWithBrowser(cleanText, rate);
     }
   };
+  loadWeeklyMedicationRef.current = loadWeeklyMedication;
+  speakRef.current = speak;
 
   // 浏览器原生语音（备用方案）
   const speakWithBrowser = (text, rate) => {
@@ -1850,9 +1869,9 @@ function App() {
     if (activeTab === 'calendar' && isLoggedIn) {
       // 如果已经有数据，不重新加载，提升用户体验
       if (calendarViewMode === 'today' && calendarPlans.length === 0) {
-        loadCalendarPlans();
+        loadCalendarPlansRef.current?.();
       } else if (calendarViewMode === 'week' && !weeklyMedicationData) {
-        loadWeeklyMedication();
+        loadWeeklyMedicationRef.current?.();
       }
     }
 
@@ -1881,7 +1900,7 @@ function App() {
       // 药品不足2种，清除之前的自动检测结果
       setAutoCheckResult(null);
     }
-  }, [activeTab, isLoggedIn]); // 移除calendarViewMode依赖，避免切换视图时重复触发
+  }, [activeTab, isLoggedIn, calendarPlans.length, calendarViewMode, drugList, weeklyMedicationData]);
 
   const [ocrTaskId, setOcrTaskId] = useState(null);
   const [ocrPolling, setOcrPolling] = useState(false);
@@ -2170,6 +2189,7 @@ function App() {
       guide += `【药品类别】：这是${detectedCategory}\n\n`;
       
       // 根据类别给出特殊提醒
+      // eslint-disable-next-line default-case
       switch(detectedCategory) {
         case '降压药':
           guide += `【特别提醒】：降压药要坚持每天吃，不能随便停药。最好在固定时间吃，比如每天早上起床后。记得定期量血压哦。\n\n`;
@@ -2197,7 +2217,7 @@ function App() {
     const mediumWarnings = [];
     const criticalWarnings = [];
     
-    for (const [key, data] of Object.entries(contraindications)) {
+    for (const [, data] of Object.entries(contraindications)) {
       if (data.keywords.some(kw => precautions.includes(kw) || indications.includes(kw))) {
         if (data.severity === 'critical') {
           criticalWarnings.push(data.warning);
@@ -2481,6 +2501,7 @@ function App() {
   };
 
   // 批量添加到药箱
+  // eslint-disable-next-line no-unused-vars
   const handleBatchAddToMedicineBox = async () => {
     if (batchSelectedForAdd.size === 0) {
       showToast('请选择要添加到药箱的药品', 'warning');
@@ -2824,6 +2845,7 @@ function App() {
   };
 
   // 批量添加所有确认的药品并检测冲突
+  // eslint-disable-next-line no-unused-vars
   const handleBatchAddAllDrugs = async () => {
     console.log('=== 开始批量添加 ===');
     console.log('batchConfirmedDrugs:', batchConfirmedDrugs);
@@ -3274,6 +3296,7 @@ function App() {
   };
 
   // 更新药箱剩余数量（仅用于乐观更新 UI，实际由后端处理）
+  // eslint-disable-next-line no-unused-vars
   const updateMedicineBoxQuantity = async (boxItemId, currentRemaining, dosage, isRestore = false) => {
     if (!boxItemId || !user || !user.userId) {
       console.warn('缺少必要参数，无法更新药箱库存');
@@ -3356,7 +3379,6 @@ function App() {
 
   const takenCount = calendarPlans.filter(r => r.taken).length;
   const totalCount = calendarPlans.length;
-  const progressPercent = totalCount > 0 ? (takenCount / totalCount) * 440 : 0;
   const isFullProgress = takenCount === totalCount && totalCount > 0;
 
   const renderHeader = () => (
@@ -4901,8 +4923,6 @@ function App() {
   };
 
   const renderConflictTab = () => {
-    const hasConflict = drugList.length > 1;
-
     // 冲突规则缓存 key
     const CONFLICT_RULES_CACHE_KEY = 'conflict_rules_cache';
 
@@ -6301,7 +6321,7 @@ function App() {
 
   const renderDrugsTab = () => {
     return (
-      <DrugListView
+      <DrugManagementTab
         drugList={drugList}
         searchQuery={searchQuery}
         isSearching={isSearching}
@@ -6326,24 +6346,16 @@ function App() {
       <audio ref={followUpAudioRef} style={{ display: 'none' }} />
 
       <div className="watermark-bg"></div>
-      {showRegister ? (
-        <Register onRegister={handleRegister} />
-      ) : !isLoggedIn ? (
-        loginMode === 'guardian' ? (
-          <GuardianLogin
-            onLogin={(userData) => {
-              setUser(userData);
-              setIsLoggedIn(true);
-            }}
-            onSwitchToElder={() => setLoginMode('elder')}
-          />
-        ) : (
-          <Login
-            onLogin={handleLogin}
-            onShowRegister={() => setShowRegister(true)}
-            onSwitchToGuardian={() => setLoginMode('guardian')}
-          />
-        )
+      {!isLoggedIn ? (
+        <AuthGate
+          mode={loginMode}
+          showRegister={showRegister}
+          onLogin={handleLogin}
+          onRegister={handleRegister}
+          onShowRegister={() => setShowRegister(true)}
+          onSwitchToGuardian={() => setLoginMode('guardian')}
+          onSwitchToElder={() => setLoginMode('elder')}
+        />
       ) : loginMode === 'guardian' ? (
         <GuardianApp
           onLogout={() => {
@@ -6391,11 +6403,7 @@ function App() {
             {activeTab === 'conflict' && renderConflictTab()}
             {activeTab === 'calendar' && renderCalendarTab()}
             {activeTab === 'drugs' && renderDrugsTab()}
-            {activeTab === 'emergency' && (
-              <div className="card emergency-card">
-                <EmergencyAssistant emergencyContacts={emergencyContacts} elderId={user?.id} />
-              </div>
-            )}
+            {activeTab === 'emergency' && <EmergencyTab emergencyContacts={emergencyContacts} elderId={user?.id} />}
             </div>
           </div>
 

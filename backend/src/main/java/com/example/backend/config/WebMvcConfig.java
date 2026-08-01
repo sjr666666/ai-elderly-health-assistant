@@ -14,10 +14,13 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     private final RateLimitInterceptor rateLimitInterceptor;
     private final ActiveTimeInterceptor activeTimeInterceptor;
+    private final DevelopmentOnlyEndpointFilter developmentOnlyEndpointFilter;
 
-    public WebMvcConfig(RateLimitInterceptor rateLimitInterceptor, ActiveTimeInterceptor activeTimeInterceptor) {
+    public WebMvcConfig(RateLimitInterceptor rateLimitInterceptor, ActiveTimeInterceptor activeTimeInterceptor,
+                        DevelopmentOnlyEndpointFilter developmentOnlyEndpointFilter) {
         this.rateLimitInterceptor = rateLimitInterceptor;
         this.activeTimeInterceptor = activeTimeInterceptor;
+        this.developmentOnlyEndpointFilter = developmentOnlyEndpointFilter;
     }
 
     @Override
@@ -38,5 +41,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/v1/drug/**")
                 .addPathPatterns("/api/conflict/**")
                 .addPathPatterns("/api/v1/guardian/**");
+
+        registry.addInterceptor(developmentOnlyEndpointFilter)
+                .addPathPatterns("/**/test/**");
     }
 }
