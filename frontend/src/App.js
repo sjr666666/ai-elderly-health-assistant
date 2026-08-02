@@ -24,9 +24,19 @@ import { useToast } from './components/Toast';
 import FloatingMicButton from './components/FloatingMicButton';
 import { clearAuth, getToken } from './utils/elderApi';
 import { formatDateTime } from './utils/timeUtils';
+import { useTTS } from './hooks/useTTS';
 
 function App() {
   const { showToast } = useToast();
+
+  // 语音播报 Hook（百度TTS + 浏览器原生语音）
+  const {
+    isSpeaking, speechRate, setSpeechRate,
+    isFollowUpSpeaking, speakingFollowUpIdx,
+    audioRef, followUpAudioRef, followUpMessagesRef, speakRef,
+    setAuthFetch,
+    speak, stopSpeaking, stopFollowUpSpeaking, toggleFollowUpSpeech,
+  } = useTTS({ showToast });
   const loadWeeklyMedicationRef = useRef(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
@@ -41,8 +51,6 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredDrugList, setFilteredDrugList] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [speechRate, setSpeechRate] = useState(1);
   const [reminders, setReminders] = useState([
     { id: 1, time: '08:00', period: '早上', drug: '硝苯地平缓释片', taken: true, missed: false },
     { id: 2, time: '12:00', period: '中午', drug: '二甲双胍片', taken: true, missed: false },
@@ -85,7 +93,6 @@ function App() {
   const [missedReminders, setMissedReminders] = useState([]); // 超时未服用的用药计划
   const lastReminderTimeRef = useRef(null); // 上次弹窗提醒的时间，避免频繁提醒
   const lastShownStageRef = useRef(null); // 上次已展示的最高阶段，只有阶段升级才再次提醒
-  const speakRef = useRef(null);
   // 获取本地日期 key（YYYY-MM-DD），避免 toISOString() 返回 UTC 日期导致凌晨跨日判断错误
   const getLocalDateKey = () => {
     const d = new Date();
@@ -229,6 +236,9 @@ function App() {
     }
     return { response, data };
   };
+
+  // 将 authFetch 注入 useTTS（hook 在组件顶部声明，此处动态绑定避免顺序耦合）
+  setAuthFetch(authFetch);
 
   // 从数据库加载药箱列表
   const loadMedicineBoxList = async (userId) => {
@@ -1570,179 +1580,6 @@ function App() {
     }
   }, [showMedicationReminder, missedReminders]);
 
-  const audioRef = useRef(null);
-  const followUpAudioRef = useRef(null); // 追问消息专用音频元素，独立于全局播放
-  const followUpMessagesRef = useRef(null); // 追问消息容器，用于自动滚动到底部
-
-  const speak = async (text, rate = speechRate) => {
-    // 剥离HTML标签，避免TTS朗读标签内容
-    const cleanText = (text || '').replace(/<[^>]*>/g, '');
-    if (!cleanText || cleanText.trim() === '') {
-      return;
-    }
-
-    // 先停止当前播放，避免中断错误
-    stopSpeaking();
-
-    // 优先尝试调用百度TTS API
-    try {
-      setIsSpeaking(true);
-
-      // 将前端语速(0.6-1)映射到百度TTS语速(3-5)
-      const baiduRate = rate === 0.6 ? 3 : 5;
-      const { response, data: result } = await authFetch(`/api/ai/tts?text=${encodeURIComponent(cleanText)}&speechRate=${baiduRate}`);
-
-      if (response.ok) {
-        if (result.code === 200 && result.data) {
-          // 播放百度返回的音频
-          if (audioRef.current) {
-            audioRef.current.src = result.data;
-            // 添加错误处理，避免播放中断错误
-            audioRef.current.play().catch(err => {
-              console.error('音频播放失败:', err);
-              setIsSpeaking(false);
-            });
-            return; // 成功则返回
-          }
-        }
-      }
-
-      // 如果百度TTS失败，使用浏览器原生语音（备用方案）
-      console.warn('百度TTS不可用，使用浏览器原生语音');
-      speakWithBrowser(cleanText, rate);
-
-    } catch (error) {
-      console.error('百度TTS调用失败，使用备用方案:', error);
-      speakWithBrowser(cleanText, rate);
-    }
-  };
-  loadWeeklyMedicationRef.current = loadWeeklyMedication;
-  speakRef.current = speak;
-
-  // 浏览器原生语音（备用方案）
-  const speakWithBrowser = (text, rate) => {
-    if ('speechSynthesis' in window) {
-      // 停止当前播放
-      window.speechSynthesis.cancel();
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-CN';
-      utterance.rate = rate;
-      utterance.volume = 1;
-
-      // 尝试选择最好的中文语音
-      const voices = window.speechSynthesis.getVoices();
-      const chineseVoice = voices.find(v => v.lang.includes('zh') && v.name.includes('Female'));
-      if (chineseVoice) {
-        utterance.voice = chineseVoice;
-      }
-
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => {
-        console.error('浏览器语音播放失败');
-        setIsSpeaking(false);
-      };
-
-      window.speechSynthesis.speak(utterance);
-    } else {
-      showToast('您的浏览器不支持语音播报功能', 'error');
-      setIsSpeaking(false);
-    }
-  };
-
-  const stopSpeaking = () => {
-    // 停止百度TTS
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-    // 停止追问消息的播放（避免音频重叠）
-    if (followUpAudioRef.current) {
-      followUpAudioRef.current.pause();
-      followUpAudioRef.current.currentTime = 0;
-    }
-    // 停止浏览器语音
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    setIsSpeaking(false);
-    setIsFollowUpSpeaking(false);
-    setSpeakingFollowUpIdx(null);
-  };
-
-  // 追问消息专用语音播放（独立于全局isSpeaking，避免与用药说明播放按钮联动）
-  const speakFollowUp = async (text, rate = speechRate) => {
-    const cleanText = (text || '').replace(/<[^>]*>/g, '');
-    if (!cleanText || cleanText.trim() === '') { return; }
-    // 先停止所有播放（包括全局播放），避免音频重叠
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
-    if (followUpAudioRef.current) { followUpAudioRef.current.pause(); followUpAudioRef.current.currentTime = 0; }
-    if ('speechSynthesis' in window) { window.speechSynthesis.cancel(); }
-    setIsSpeaking(false);
-    try {
-      setIsFollowUpSpeaking(true);
-      const baiduRate = rate === 0.6 ? 3 : 5;
-      const { response, data: result } = await authFetch(`/api/ai/tts?text=${encodeURIComponent(cleanText)}&speechRate=${baiduRate}`);
-      if (response.ok) {
-        if (result.code === 200 && result.data) {
-          if (followUpAudioRef.current) {
-            followUpAudioRef.current.src = result.data;
-            followUpAudioRef.current.play().catch(err => {
-              setIsFollowUpSpeaking(false); setSpeakingFollowUpIdx(null);
-            });
-            return;
-          }
-        }
-      }
-      speakFollowUpWithBrowser(cleanText, rate);
-    } catch (error) {
-      speakFollowUpWithBrowser(cleanText, rate);
-    }
-  };
-
-  // 追问消息专用浏览器语音（备用方案）
-  const speakFollowUpWithBrowser = (text, rate) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-CN';
-      utterance.rate = rate;
-      utterance.volume = 1;
-      const voices = window.speechSynthesis.getVoices();
-      const chineseVoice = voices.find(v => v.lang.includes('zh') && v.name.includes('Female'));
-      if (chineseVoice) { utterance.voice = chineseVoice; }
-      utterance.onend = () => { setIsFollowUpSpeaking(false); setSpeakingFollowUpIdx(null); };
-      utterance.onerror = () => { setIsFollowUpSpeaking(false); setSpeakingFollowUpIdx(null); };
-      window.speechSynthesis.speak(utterance);
-    } else {
-      showToast('您的浏览器不支持语音播报功能', 'error');
-      setIsFollowUpSpeaking(false);
-      setSpeakingFollowUpIdx(null);
-    }
-  };
-
-  // 仅停止追问消息的播放（不影响全局isSpeaking）
-  const stopFollowUpSpeaking = () => {
-    if (followUpAudioRef.current) {
-      followUpAudioRef.current.pause();
-      followUpAudioRef.current.currentTime = 0;
-    }
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    setIsFollowUpSpeaking(false);
-    setSpeakingFollowUpIdx(null);
-  };
-
-  // 切换追问消息的语音播放
-  const toggleFollowUpSpeech = (idx, text) => {
-    if (speakingFollowUpIdx === idx && isFollowUpSpeaking) {
-      stopFollowUpSpeaking();
-    } else {
-      setSpeakingFollowUpIdx(idx);
-      speakFollowUp(text);
-    }
-  };
 
   // 调用后端追问API
   const handleAskFollowUp = async () => {
@@ -1787,29 +1624,6 @@ function App() {
       setIsFollowUpLoading(false);
     }
   };
-
-  // 监听音频播放结束
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (audio) {
-      const handleEnded = () => setIsSpeaking(false);
-      audio.addEventListener('ended', handleEnded);
-      return () => audio.removeEventListener('ended', handleEnded);
-    }
-  }, []);
-
-  // 监听追问音频播放结束（独立重置追问播放状态）
-  useEffect(() => {
-    const audio = followUpAudioRef.current;
-    if (audio) {
-      const handleEnded = () => {
-        setIsFollowUpSpeaking(false);
-        setSpeakingFollowUpIdx(null);
-      };
-      audio.addEventListener('ended', handleEnded);
-      return () => audio.removeEventListener('ended', handleEnded);
-    }
-  }, []);
 
   // 监听activeTab变化，离开上传页面时清除图片
   useEffect(() => {
@@ -1865,8 +1679,6 @@ function App() {
   const [followUpMessages, setFollowUpMessages] = useState([]); // 追问对话消息列表
   const [followUpQuestion, setFollowUpQuestion] = useState(''); // 当前追问输入
   const [isFollowUpLoading, setIsFollowUpLoading] = useState(false); // 追问加载中
-  const [isFollowUpSpeaking, setIsFollowUpSpeaking] = useState(false); // 追问语音播放中（独立于全局isSpeaking）
-  const [speakingFollowUpIdx, setSpeakingFollowUpIdx] = useState(null); // 当前正在播放语音的追问消息索引
 
   // 追问消息变化时自动滚动到底部（用户发送新问题后跳到最下方）
   useEffect(() => {
