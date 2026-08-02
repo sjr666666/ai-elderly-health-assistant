@@ -1,6 +1,7 @@
 package com.example.backend.controller;
 
 import com.example.backend.common.ResponseResult;
+import com.example.backend.config.JwtUtils;
 import com.example.backend.model.dto.UserLoginRequest;
 import com.example.backend.model.dto.UserLoginResponse;
 import com.example.backend.model.dto.UserProfileResponse;
@@ -9,11 +10,13 @@ import com.example.backend.model.dto.UserRegisterRequest;
 import com.example.backend.model.dto.UserRegisterResponse;
 import com.example.backend.service.UserService;
 import com.example.backend.service.RefreshTokenService;
+import com.example.backend.service.TokenBlacklistService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
@@ -29,14 +32,19 @@ public class UserController {
 
     private final UserService userService;
     private final RefreshTokenService refreshTokenService;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final JwtUtils jwtUtils;
 
     @Value("${jwt.refresh-cookie-secure:false}")
     private boolean refreshCookieSecure;
 
     @Autowired
-    public UserController(UserService userService, RefreshTokenService refreshTokenService) {
+    public UserController(UserService userService, RefreshTokenService refreshTokenService,
+                          TokenBlacklistService tokenBlacklistService, JwtUtils jwtUtils) {
         this.userService = userService;
         this.refreshTokenService = refreshTokenService;
+        this.tokenBlacklistService = tokenBlacklistService;
+        this.jwtUtils = jwtUtils;
     }
 
     /**
@@ -78,7 +86,20 @@ public class UserController {
 
     @PostMapping("/logout")
     public ResponseResult<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+        // 1. 撤销 refresh token（服务端 session 删除）
         refreshTokenService.revoke(readRefreshCookie(request));
+
+        // 2. 将当前 access token 加入黑名单，使其立即失效
+        String bearer = request.getHeader("Authorization");
+        if (StringUtils.hasText(bearer) && bearer.startsWith("Bearer ")) {
+            String accessToken = bearer.substring(7);
+            if (jwtUtils.validateToken(accessToken)) {
+                tokenBlacklistService.blacklist(jwtUtils.getJtiFromToken(accessToken),
+                        Duration.ofMillis(jwtUtils.getRemainingMillis(accessToken)));
+            }
+        }
+
+        // 3. 清除 refresh cookie
         ResponseCookie cookie = ResponseCookie.from("refresh_token", "")
                 .httpOnly(true).secure(refreshCookieSecure).sameSite("Lax").path("/")
                 .maxAge(Duration.ZERO).build();

@@ -47,27 +47,22 @@ public class WeeklyReportController {
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate) {
 
-        try {
-            Long userId = getCurrentUserId();
-            log.info("收到用药周报生成请求 - userId: {}, startDate: {}, endDate: {}",
-                    userId, startDate, endDate);
+        Long userId = getCurrentUserId();
+        log.info("收到用药周报生成请求 - userId: {}, startDate: {}, endDate: {}",
+                userId, startDate, endDate);
 
-            // 构建请求对象
-            WeeklyReportRequest request = WeeklyReportRequest.builder()
-                    .userId(userId)
-                    .startDate(startDate != null ? LocalDate.parse(startDate) : null)
-                    .endDate(endDate != null ? LocalDate.parse(endDate) : null)
-                    .build();
+        // 构建请求对象
+        WeeklyReportRequest request = WeeklyReportRequest.builder()
+                .userId(userId)
+                .startDate(startDate != null ? LocalDate.parse(startDate) : null)
+                .endDate(endDate != null ? LocalDate.parse(endDate) : null)
+                .build();
 
-            // 生成周报
-            WeeklyReportResponse report = weeklyReportService.generateWeeklyReport(request);
+        // 生成周报
+        WeeklyReportResponse report = weeklyReportService.generateWeeklyReport(request);
 
-            return ResponseResult.success("用药周报生成成功", report);
+        return ResponseResult.success("用药周报生成成功", report);
 
-        } catch (Exception e) {
-            log.error("用药周报生成失败: ", e);
-            return ResponseResult.fail("用药周报生成失败: " + e.getMessage());
-        }
     }
 
     /**
@@ -77,21 +72,17 @@ public class WeeklyReportController {
      */
     @GetMapping("/latest")
     public ResponseResult<WeeklyReportResponse> getLatestWeeklyReport() {
-        try {
-            Long userId = getCurrentUserId();
-            log.info("获取最新用药周报 - userId: {}", userId);
+        Long userId = getCurrentUserId();
+        log.info("获取最新用药周报 - userId: {}", userId);
 
-            WeeklyReportRequest request = WeeklyReportRequest.builder()
-                    .userId(userId)
-                    .build();
+        WeeklyReportRequest request = WeeklyReportRequest.builder()
+                .userId(userId)
+                .build();
 
-            WeeklyReportResponse report = weeklyReportService.generateWeeklyReport(request);
+        WeeklyReportResponse report = weeklyReportService.generateWeeklyReport(request);
 
-            return ResponseResult.success("用药周报获取成功", report);
+        return ResponseResult.success("用药周报获取成功", report);
 
-        } catch (Exception e) {
-            log.error("获取用药周报失败: ", e);
-            return ResponseResult.fail("获取用药周报失败: " + e.getMessage());
-        }
     }
 }
+

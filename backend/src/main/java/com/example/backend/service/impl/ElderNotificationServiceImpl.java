@@ -1,5 +1,6 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.common.BusinessException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -110,13 +111,13 @@ public class ElderNotificationServiceImpl implements ElderNotificationService {
     public EmergencyContact addEmergencyContactFromNotification(Long notificationId) {
         ElderNotification notification = elderNotificationMapper.selectById(notificationId);
         if (notification == null) {
-            throw new RuntimeException("通知不存在");
+            throw new BusinessException("通知不存在");
         }
         if (!"bind_request".equals(notification.getNotificationType())) {
-            throw new RuntimeException("该通知类型不支持添加紧急联系人");
+            throw new BusinessException("该通知类型不支持添加紧急联系人");
         }
         if (notification.getIsHandled() == 1) {
-            throw new RuntimeException("该通知已处理");
+            throw new BusinessException("该通知已处理");
         }
 
         // 解析extraData获取家属信息
@@ -157,13 +158,13 @@ public class ElderNotificationServiceImpl implements ElderNotificationService {
     public void updateEmergencyContactPhoneFromNotification(Long notificationId) {
         ElderNotification notification = elderNotificationMapper.selectById(notificationId);
         if (notification == null) {
-            throw new RuntimeException("通知不存在");
+            throw new BusinessException("通知不存在");
         }
         if (!"phone_update".equals(notification.getNotificationType())) {
-            throw new RuntimeException("该通知类型不支持更新电话");
+            throw new BusinessException("该通知类型不支持更新电话");
         }
         if (notification.getIsHandled() == 1) {
-            throw new RuntimeException("该通知已处理");
+            throw new BusinessException("该通知已处理");
         }
 
         try {

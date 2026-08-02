@@ -12,6 +12,7 @@ import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -46,7 +47,16 @@ public class JwtUtils {
         claims.put("userId", userId);
         claims.put("username", username);
         claims.put("role", role);
+        claims.put("jti", UUID.randomUUID().toString());
         return createToken(claims, username);
+    }
+
+    /**
+     * 从令牌中获取JTI（JWT ID，用于登出黑名单）
+     */
+    public String getJtiFromToken(String token) {
+        Claims claims = getAllClaimsFromToken(token);
+        return (String) claims.get("jti");
     }
 
     /**
@@ -148,6 +158,18 @@ public class JwtUtils {
         } catch (JwtException | IllegalArgumentException e) {
             log.debug("JWT validation failed: {}", e.getClass().getSimpleName());
             return false;
+        }
+    }
+
+    /**
+     * 获取令牌剩余有效期（毫秒），用于设置登出黑名单的 TTL
+     */
+    public long getRemainingMillis(String token) {
+        try {
+            Date expiration = getExpirationDateFromToken(token);
+            return Math.max(0, expiration.getTime() - System.currentTimeMillis());
+        } catch (Exception e) {
+            return 0;
         }
     }
 

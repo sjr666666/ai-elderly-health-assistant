@@ -1,5 +1,6 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.common.BusinessException;
 import com.example.backend.mapper.DrugBaseMapper;
 import com.example.backend.mapper.OcrRecordMapper;
 import com.example.backend.model.dto.OcrResultResponse;
@@ -156,14 +157,14 @@ public class OcrAsyncServiceImpl implements OcrAsyncService {
                 int w = img.getWidth();
                 int h = img.getHeight();
                 if (w < 15 || h < 15) {
-                    throw new RuntimeException("图片太小（" + w + "×" + h + " 像素），请使用至少 15×15 像素的图片");
+                    throw new BusinessException("图片太小（" + w + "×" + h + " 像素），请使用至少 15×15 像素的图片");
                 }
                 if (w > 4096 || h > 4096) {
-                    throw new RuntimeException("图片尺寸过大（" + w + "×" + h + " 像素），请使用不超过 4096×4096 像素的图片");
+                    throw new BusinessException("图片尺寸过大（" + w + "×" + h + " 像素），请使用不超过 4096×4096 像素的图片");
                 }
                 logger.info("图片尺寸校验通过: {}×{} 像素", w, h);
             } else {
-                throw new RuntimeException("无法解析图片，请确认上传的是有效的图片文件");
+                throw new BusinessException("无法解析图片，请确认上传的是有效的图片文件");
             }
         }
 
@@ -184,7 +185,7 @@ public class OcrAsyncServiceImpl implements OcrAsyncService {
         logger.info("百度OCR响应状态码: {}, 响应体长度: {} bytes", response.getStatus(), responseBody.length());
 
         if (response.getStatus() != 200) {
-            throw new RuntimeException("百度OCR HTTP错误: " + response.getStatus() + ", 请稍后重试");
+            throw new BusinessException("百度OCR HTTP错误: " + response.getStatus() + ", 请稍后重试");
         }
 
         JsonNode jsonNode = objectMapper.readTree(responseBody);
@@ -389,6 +390,6 @@ public class OcrAsyncServiceImpl implements OcrAsyncService {
             throw new RuntimeException("百度AccessToken API错误: " + jsonNode.get("error").asText() + ", " + jsonNode.get("error_description").asText());
         }
 
-        throw new RuntimeException("获取百度OCR AccessToken失败");
+        throw new BusinessException("获取百度OCR AccessToken失败");
     }
 }
