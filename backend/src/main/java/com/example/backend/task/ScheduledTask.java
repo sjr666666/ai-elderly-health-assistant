@@ -156,6 +156,7 @@ public class ScheduledTask {
             int skippedCount = 0;
             int expiredCount = 0;
             int endedCount = 0;
+            int failedCount = 0;
             
             // 按用户分组处理
             Map<Long, List<MedicationPlan>> plansByUser = new HashMap<>();
@@ -234,13 +235,19 @@ public class ScheduledTask {
                         }
                         
                     } catch (Exception e) {
-                        logger.error("创建用药计划失败 - yesterdayPlanId: {}", yesterdayPlan.getId(), e);
+                        // 单条失败不影响其他用户，但必须计数并在日志中完整记录，便于事后补偿
+                        failedCount++;
+                        logger.error("创建用药计划失败 - yesterdayPlanId: {}, userId: {}",
+                                yesterdayPlan.getId(), yesterdayPlan.getUserId(), e);
                     }
                 }
             }
             
-            logger.info("=== 生成下一天用药计划完成 === 成功: {}, 跳过: {}, 已结束: {}, 已过期: {}", 
-                    successCount, skippedCount, endedCount, expiredCount);
+            logger.info("=== 生成下一天用药计划完成 === 成功: {}, 跳过: {}, 已结束: {}, 已过期: {}, 失败: {}", 
+                    successCount, skippedCount, endedCount, expiredCount, failedCount);
+            if (failedCount > 0) {
+                logger.warn("有 {} 条用药计划生成失败，请检查上方错误日志并手动补偿", failedCount);
+            }
             
         } catch (Exception e) {
             logger.error("生成下一天用药计划定时任务执行失败", e);

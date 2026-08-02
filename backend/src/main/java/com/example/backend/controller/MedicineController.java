@@ -46,13 +46,9 @@ public class MedicineController {
      */
     @PostMapping("/box")
     public ResponseResult<Void> addMedicineToBox(@Valid @RequestBody AddMedicineRequest request) {
-        try {
-            Long userId = getCurrentUserId();
-            medicineBoxService.addMedicineToBox(userId, request);
-            return ResponseResult.success("添加成功", null);
-        } catch (Exception e) {
-            return ResponseResult.fail("添加失败: " + e.getMessage());
-        }
+        Long userId = getCurrentUserId();
+        medicineBoxService.addMedicineToBox(userId, request);
+        return ResponseResult.success("添加成功", null);
     }
 
     /**
@@ -65,13 +61,9 @@ public class MedicineController {
     @GetMapping("/box/list")
     public ResponseResult<List<MedicineBoxResponse>> getMedicineBoxList(
             @RequestParam(required = false) String status) {
-        try {
-            Long userId = getCurrentUserId();
-            List<MedicineBoxResponse> boxList = medicineBoxService.getMedicineBoxList(userId, status);
-            return ResponseResult.success("success", boxList);
-        } catch (Exception e) {
-            return ResponseResult.fail("查询失败: " + e.getMessage());
-        }
+        Long userId = getCurrentUserId();
+        List<MedicineBoxResponse> boxList = medicineBoxService.getMedicineBoxList(userId, status);
+        return ResponseResult.success("success", boxList);
     }
 
     /**
@@ -86,13 +78,9 @@ public class MedicineController {
     public ResponseResult<List<MedicineBoxResponse>> searchMedicineBox(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status) {
-        try {
-            Long userId = getCurrentUserId();
-            List<MedicineBoxResponse> searchResults = medicineBoxService.searchMedicineBox(userId, keyword, status);
-            return ResponseResult.success("success", searchResults);
-        } catch (Exception e) {
-            return ResponseResult.fail("搜索失败: " + e.getMessage());
-        }
+        Long userId = getCurrentUserId();
+        List<MedicineBoxResponse> searchResults = medicineBoxService.searchMedicineBox(userId, keyword, status);
+        return ResponseResult.success("success", searchResults);
     }
 
     /**
@@ -107,13 +95,9 @@ public class MedicineController {
     public ResponseResult<Void> updateMedicineBoxEntry(
             @PathVariable Long id,
             @Valid @RequestBody UpdateMedicineRequest request) {
-        try {
-            Long userId = getCurrentUserId();
-            medicineBoxService.updateMedicineBoxEntry(userId, id, request);
-            return ResponseResult.success("修改成功", null);
-        } catch (Exception e) {
-            return ResponseResult.fail("修改失败: " + e.getMessage());
-        }
+        Long userId = getCurrentUserId();
+        medicineBoxService.updateMedicineBoxEntry(userId, id, request);
+        return ResponseResult.success("修改成功", null);
     }
 
     /**
@@ -125,13 +109,9 @@ public class MedicineController {
      */
     @DeleteMapping("/box/{id}")
     public ResponseResult<Void> deleteMedicineBoxEntry(@PathVariable Long id) {
-        try {
-            Long userId = getCurrentUserId();
-            medicineBoxService.deleteMedicineBoxEntry(userId, id);
-            return ResponseResult.success("已移除", null);
-        } catch (Exception e) {
-            return ResponseResult.fail("删除失败: " + e.getMessage());
-        }
+        Long userId = getCurrentUserId();
+        medicineBoxService.deleteMedicineBoxEntry(userId, id);
+        return ResponseResult.success("已移除", null);
     }
 
     /**
@@ -146,13 +126,9 @@ public class MedicineController {
     public ResponseResult<Void> updateMedicineBoxEntryStatus(
             @PathVariable Long id,
             @Valid @RequestBody UpdateMedicineRequest request) {
-        try {
-            Long userId = getCurrentUserId();
-            medicineBoxService.updateMedicineBoxEntry(userId, id, request);
-            return ResponseResult.success("修改成功", null);
-        } catch (Exception e) {
-            return ResponseResult.fail("修改失败: " + e.getMessage());
-        }
+        Long userId = getCurrentUserId();
+        medicineBoxService.updateMedicineBoxEntry(userId, id, request);
+        return ResponseResult.success("修改成功", null);
     }
 
     /**
@@ -163,13 +139,9 @@ public class MedicineController {
      */
     @GetMapping("/box/expired/today")
     public ResponseResult<List<MedicineBoxResponse>> getTodayExpiredMedicines() {
-        try {
-            Long userId = getCurrentUserId();
-            List<MedicineBoxResponse> expiredList = medicineBoxService.getTodayExpiredMedicines(userId);
-            return ResponseResult.success("success", expiredList);
-        } catch (Exception e) {
-            return ResponseResult.fail("查询失败: " + e.getMessage());
-        }
+        Long userId = getCurrentUserId();
+        List<MedicineBoxResponse> expiredList = medicineBoxService.getTodayExpiredMedicines(userId);
+        return ResponseResult.success("success", expiredList);
     }
 
     /**
@@ -183,12 +155,8 @@ public class MedicineController {
      */
     @GetMapping("/box/shortage-warnings")
     public ResponseResult<List<MedicineShortageWarningDTO>> getShortageWarnings() {
-        try {
-            Long userId = getCurrentUserId();
-            List<MedicineShortageWarningDTO> warnings = medicineBoxService.getShortageWarnings(userId);
-            return ResponseResult.success("success", warnings);
-        } catch (Exception e) {
-            return ResponseResult.fail("查询缺药预警失败: " + e.getMessage());
-        }
+        Long userId = getCurrentUserId();
+        List<MedicineShortageWarningDTO> warnings = medicineBoxService.getShortageWarnings(userId);
+        return ResponseResult.success("success", warnings);
     }
 }

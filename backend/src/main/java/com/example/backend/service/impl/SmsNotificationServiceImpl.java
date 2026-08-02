@@ -1,5 +1,6 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.common.BusinessException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -112,10 +113,10 @@ public class SmsNotificationServiceImpl implements SmsNotificationService {
         // 归属校验：确保该通知属于当前用户
         SmsNotificationLog notification = smsNotificationLogMapper.selectById(notificationId);
         if (notification == null) {
-            throw new RuntimeException("通知不存在");
+            throw new BusinessException("通知不存在");
         }
         if (!notification.getGuardianId().equals(guardianId)) {
-            throw new RuntimeException("无权操作该通知");
+            throw new BusinessException("无权操作该通知");
         }
         // 标记已读
         notification.setIsRead(1);

@@ -1,5 +1,6 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.common.BusinessException;
 import com.example.backend.common.util.SnowflakeIdGenerator;
 import com.example.backend.config.JwtUtils;
 import com.example.backend.mapper.UserMapper;
@@ -53,7 +54,7 @@ public class UserServiceImpl implements UserService {
         queryWrapper.eq(SysUser::getUsername, username);
         Long count = userMapper.selectCount(queryWrapper);
         if (count > 0) {
-            throw new RuntimeException("用户名已存在");
+            throw new BusinessException("用户名已存在");
         }
 
         SysUser user = new SysUser();
@@ -138,7 +139,7 @@ public class UserServiceImpl implements UserService {
         // userId 为数据库主键 id（由 SecurityContext 提供）
         SysUser user = userMapper.selectById(userId);
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         return UserProfileResponse.builder()
@@ -177,7 +178,7 @@ public class UserServiceImpl implements UserService {
         SysUser user = userMapper.selectById(userId);
         if (user == null) {
             logger.error("用户不存在 - userId: {}", userId);
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         // 更新称呼（realName）
@@ -251,13 +252,13 @@ public class UserServiceImpl implements UserService {
         // userId 为数据库主键 id（由 SecurityContext 提供）
         SysUser user = userMapper.selectById(userId);
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
         if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
-            throw new RuntimeException("旧密码错误");
+            throw new BusinessException("旧密码错误");
         }
         if (newPassword == null || newPassword.length() < 6) {
-            throw new RuntimeException("新密码长度不能少于6位");
+            throw new BusinessException("新密码长度不能少于6位");
         }
         user.setPassword(passwordEncoder.encode(newPassword));
         userMapper.updateById(user);

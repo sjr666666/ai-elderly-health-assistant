@@ -1,5 +1,6 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.common.BusinessException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.backend.mapper.DrugBaseMapper;
@@ -20,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -68,7 +70,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
 
         if (user == null) {
             logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         Long actualUserId = user.getId();
@@ -90,7 +92,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
             Long existCount = userMedicineBoxMapper.selectCount(existWrapper);
             if (existCount > 0) {
                 logger.error("药品已存在 - userId: {}, drugName: {}", userId, drugNameToCheck);
-                throw new RuntimeException("该药品已在药箱中，请勿重复添加");
+                throw new BusinessException("该药品已在药箱中，请勿重复添加");
             }
         }
 
@@ -148,7 +150,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         logger.info("药品添加结果 - userId: {}, drugId: {}, 影响行数: {}", userId, request.getDrugId(), result);
 
         if (result <= 0) {
-            throw new RuntimeException("药品添加失败");
+            throw new BusinessException("药品添加失败");
         }
 
         // 不再自动检查过期并修改status，允许用户手动丢弃过期药品
@@ -166,7 +168,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
 
         if (user == null) {
             logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         Long actualUserId = user.getId();
@@ -192,7 +194,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
 
         if (user == null) {
             logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         Long actualUserId = user.getId();
@@ -218,7 +220,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
 
         if (user == null) {
             logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         Long actualUserId = user.getId();
@@ -227,13 +229,13 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         UserMedicineBox medicineBox = userMedicineBoxMapper.selectById(boxId);
         if (medicineBox == null) {
             logger.error("药箱条目不存在 - boxId: {}", boxId);
-            throw new RuntimeException("药箱条目不存在");
+            throw new BusinessException("药箱条目不存在");
         }
 
         // 越权校验：确认该药箱条目属于当前用户
         if (!medicineBox.getUserId().equals(actualUserId)) {
             logger.error("越权操作 - userId: {}, boxId: {}", userId, boxId);
-            throw new RuntimeException("无权修改该药箱条目");
+            throw new BusinessException("无权修改该药箱条目");
         }
 
         // 只更新非空字段（部分更新）
@@ -269,11 +271,12 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         logger.info("修改药箱条目结果 - boxId: {}, 影响行数: {}", boxId, result);
 
         if (result <= 0) {
-            throw new RuntimeException("修改药箱条目失败");
+            throw new BusinessException("修改药箱条目失败");
         }
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteMedicineBoxEntry(Long userId, Long boxId) {
         logger.info("删除药箱条目 - userId (雪花算法ID): {}, boxId: {}", userId, boxId);
 
@@ -284,7 +287,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
 
         if (user == null) {
             logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         Long actualUserId = user.getId();
@@ -293,13 +296,13 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         UserMedicineBox medicineBox = userMedicineBoxMapper.selectById(boxId);
         if (medicineBox == null) {
             logger.error("药箱条目不存在 - boxId: {}", boxId);
-            throw new RuntimeException("药箱条目不存在");
+            throw new BusinessException("药箱条目不存在");
         }
 
         // 越权校验：确认该药箱条目属于当前用户
         if (!medicineBox.getUserId().equals(actualUserId)) {
             logger.error("越权操作 - userId: {}, boxId: {}", userId, boxId);
-            throw new RuntimeException("无权删除该药箱条目");
+            throw new BusinessException("无权删除该药箱条目");
         }
 
         // 逻辑删除：将状态改为 stopped
@@ -308,7 +311,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
         logger.info("删除药箱条目结果 - boxId: {}, 影响行数: {}", boxId, result);
 
         if (result <= 0) {
-            throw new RuntimeException("删除药箱条目失败");
+            throw new BusinessException("删除药箱条目失败");
         }
 
         // 同时删除该药箱条目对应的用药计划（硬删除，彻底删除）
@@ -330,7 +333,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
 
         if (user == null) {
             logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         Long actualUserId = user.getId();
@@ -434,7 +437,7 @@ public class MedicineBoxServiceImpl implements MedicineBoxService {
 
         if (user == null) {
             logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         Long actualUserId = user.getId();

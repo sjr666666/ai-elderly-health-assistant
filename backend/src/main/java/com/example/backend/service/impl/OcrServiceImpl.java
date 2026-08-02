@@ -1,5 +1,6 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.common.BusinessException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.backend.common.util.SnowflakeIdGenerator;
 import com.example.backend.mapper.DrugBaseMapper;
@@ -165,7 +166,7 @@ public class OcrServiceImpl implements OcrService {
 
             if (user == null) {
                 logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
-                throw new RuntimeException("用户不存在");
+                throw new BusinessException("用户不存在");
             }
 
             Long actualUserId = user.getId();
@@ -284,7 +285,7 @@ public class OcrServiceImpl implements OcrService {
 
         if (user == null) {
             logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         Long actualUserId = user.getId();

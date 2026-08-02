@@ -8,9 +8,11 @@ import com.example.backend.model.dto.AddToPlanRequest;
 import com.example.backend.model.dto.MedicationActionRequest;
 import com.example.backend.service.PlanService;
 import com.example.backend.service.ProgressiveReminderService;
+import com.example.backend.common.BusinessException;
 import com.example.backend.common.ResponseResult;
 import com.example.backend.task.ScheduledTask;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +26,10 @@ public class PlanController {
     private final PlanService planService;
     private final ScheduledTask scheduledTask;
     private final ProgressiveReminderService progressiveReminderService;
+
+    /** 开发环境专用接口开关，生产环境由 application-prod 配置为 false */
+    @Value("${app.development-endpoints-enabled:false}")
+    private boolean developmentEndpointsEnabled;
 
     /**
      * 获取当前认证用户的ID（数据库主键）
@@ -89,10 +95,11 @@ public class PlanController {
     }
 
     /**
-     * 7.7 清空用户的所有用药计划（仅用于测试）
+     * 7.7 清空用户的所有用药计划（仅开发环境可用）
      */
     @DeleteMapping("/clear-all")
     public ResponseResult<Void> clearAllPlans() {
+        ensureDevEndpoint();
         Long userId = getCurrentUserId();
         planService.clearAllPlans(userId);
         return ResponseResult.success("已清空所有用药计划", null);
@@ -123,21 +130,32 @@ public class PlanController {
     }
 
     /**
-     * 7.10 手动触发生成下一天用药计划（仅用于测试）
-     * 注意：此接口会立即执行定时任务逻辑，生产环境应删除或禁用
+     * 7.10 手动触发生成下一天用药计划（仅开发环境可用）
+     * 生产环境由 app.development-endpoints-enabled=false 关闭
      */
     @PostMapping("/test/generate-next-day")
     public ResponseResult<Void> testGenerateNextDayPlan() {
+        ensureDevEndpoint();
         scheduledTask.generateNextDayMedicationPlan();
         return ResponseResult.success("已手动触发生成下一天用药计划", null);
     }
 
     /**
-     * 7.11 手动触发渐进式提醒扫描（仅用于测试）
+     * 7.11 手动触发渐进式提醒扫描（仅开发环境可用）
      */
     @PostMapping("/test/progressive-reminder")
     public ResponseResult<Void> testProgressiveReminder() {
+        ensureDevEndpoint();
         progressiveReminderService.processProgressiveReminders();
         return ResponseResult.success("已手动触发渐进式提醒扫描", null);
+    }
+
+    /**
+     * 开发环境专用接口守卫：生产环境一律拒绝
+     */
+    private void ensureDevEndpoint() {
+        if (!developmentEndpointsEnabled) {
+            throw new BusinessException("该接口仅在开发环境可用");
+        }
     }
 }

@@ -50,23 +50,18 @@ public class AiController {
      */
     @PostMapping("/follow-up-question")
     public ResponseResult<String> followUpQuestion(@RequestBody FollowUpQuestionRequest request) {
-        try {
-            if (request.getQuestion() == null || request.getQuestion().trim().isEmpty()) {
-                return ResponseResult.fail("问题不能为空");
-            }
-            String answer = deepSeekService.answerFollowUpQuestion(
-                    request.getDrugDetail(),
-                    request.getQuestion(),
-                    request.getConversationHistory()
-            );
-            if (answer != null) {
-                return ResponseResult.success(answer);
-            } else {
-                return ResponseResult.fail("AI服务暂时不可用，请稍后再试");
-            }
-        } catch (Exception e) {
-            logger.error("药品追问失败: ", e);
-            return ResponseResult.fail("AI服务暂时不可用，请稍后重试");
+        if (request.getQuestion() == null || request.getQuestion().trim().isEmpty()) {
+            return ResponseResult.fail("问题不能为空");
+        }
+        String answer = deepSeekService.answerFollowUpQuestion(
+                request.getDrugDetail(),
+                request.getQuestion(),
+                request.getConversationHistory()
+        );
+        if (answer != null) {
+            return ResponseResult.success(answer);
+        } else {
+            return ResponseResult.fail("AI服务暂时不可用，请稍后再试");
         }
     }
 
@@ -81,28 +76,23 @@ public class AiController {
     public ResponseResult<String> textToSpeech(
             @RequestParam String text,
             @RequestParam(defaultValue = "5") int speechRate) {
-        try {
-            logger.debug("百度TTS配置已加载: appIdPresent={}, apiKeyPresent={}, secretKeyPresent={}",
-                    baiduTtsConfig.getAppId() != null && !baiduTtsConfig.getAppId().isBlank(),
-                    baiduTtsConfig.getApiKey() != null && !baiduTtsConfig.getApiKey().isBlank(),
-                    baiduTtsConfig.getSecretKey() != null && !baiduTtsConfig.getSecretKey().isBlank());
+        logger.debug("百度TTS配置已加载: appIdPresent={}, apiKeyPresent={}, secretKeyPresent={}",
+                baiduTtsConfig.getAppId() != null && !baiduTtsConfig.getAppId().isBlank(),
+                baiduTtsConfig.getApiKey() != null && !baiduTtsConfig.getApiKey().isBlank(),
+                baiduTtsConfig.getSecretKey() != null && !baiduTtsConfig.getSecretKey().isBlank());
 
-            if (baiduTtsService == null) {
-                logger.error("BaiduTtsService 为 null");
-                return ResponseResult.fail("语音服务暂不可用");
-            }
+        if (baiduTtsService == null) {
+            logger.error("BaiduTtsService 为 null");
+            return ResponseResult.fail("语音服务暂不可用");
+        }
 
-            String audioData = baiduTtsService.textToSpeech(text, speechRate);
+        String audioData = baiduTtsService.textToSpeech(text, speechRate);
 
-            if (audioData != null) {
-                return ResponseResult.success(audioData);
-            } else {
-                logger.error("百度TTS返回空数据");
-                return ResponseResult.fail("语音转换失败，请稍后重试");
-            }
-        } catch (Exception e) {
-            logger.error("语音转换异常: ", e);
-            return ResponseResult.fail("语音服务暂时不可用，请稍后重试");
+        if (audioData != null) {
+            return ResponseResult.success(audioData);
+        } else {
+            logger.error("百度TTS返回空数据");
+            return ResponseResult.fail("语音转换失败，请稍后重试");
         }
     }
 
@@ -111,15 +101,11 @@ public class AiController {
      */
     @GetMapping("/classify-drug")
     public ResponseResult<String> classifyDrug(@RequestParam String drugName) {
-        try {
-            String category = deepSeekService.classifyDrugCategory(drugName);
-            if (category != null) {
-                return ResponseResult.success(category);
-            } else {
-                return ResponseResult.fail("AI分类失败，返回null");
-            }
-        } catch (Exception e) {
-            return ResponseResult.fail("AI服务暂时不可用，请稍后重试");
+        String category = deepSeekService.classifyDrugCategory(drugName);
+        if (category != null) {
+            return ResponseResult.success(category);
+        } else {
+            return ResponseResult.fail("AI分类失败，返回null");
         }
     }
 
@@ -133,3 +119,4 @@ public class AiController {
                 ", secretKey: " + (baiduTtsConfig.getSecretKey() != null ? "*****" : "null"));
     }
 }
+

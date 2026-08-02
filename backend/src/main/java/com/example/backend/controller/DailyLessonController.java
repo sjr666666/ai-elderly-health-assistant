@@ -44,14 +44,9 @@ public class DailyLessonController {
      */
     @GetMapping("/today")
     public ResponseResult<DailyLessonDTO> getTodayLesson() {
-        try {
-            Long userId = getCurrentUserId();
-            DailyLessonDTO lesson = dailyLessonService.getTodayLesson(userId);
-            return ResponseResult.success(lesson);
-        } catch (Exception e) {
-            logger.error("获取今日科普失败", e);
-            return ResponseResult.fail("获取今日科普失败: " + e.getMessage());
-        }
+        Long userId = getCurrentUserId();
+        DailyLessonDTO lesson = dailyLessonService.getTodayLesson(userId);
+        return ResponseResult.success(lesson);
     }
 
     /**
@@ -59,14 +54,9 @@ public class DailyLessonController {
      */
     @PostMapping("/regenerate")
     public ResponseResult<DailyLessonDTO> regenerateTodayLesson() {
-        try {
-            Long userId = getCurrentUserId();
-            DailyLessonDTO lesson = dailyLessonService.regenerateTodayLesson(userId);
-            return ResponseResult.success(lesson);
-        } catch (Exception e) {
-            logger.error("重新生成今日科普失败", e);
-            return ResponseResult.fail("重新生成失败: " + e.getMessage());
-        }
+        Long userId = getCurrentUserId();
+        DailyLessonDTO lesson = dailyLessonService.regenerateTodayLesson(userId);
+        return ResponseResult.success(lesson);
     }
 
     /**
@@ -76,13 +66,9 @@ public class DailyLessonController {
     public ResponseResult<List<DailyLessonDTO>> getHistory(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
-        try {
-            Long userId = getCurrentUserId();
-            List<DailyLessonDTO> history = dailyLessonService.getLessonHistory(userId, page, size);
-            return ResponseResult.success(history);
-        } catch (Exception e) {
-            logger.error("获取科普历史失败", e);
-            return ResponseResult.fail("获取历史记录失败: " + e.getMessage());
-        }
+        Long userId = getCurrentUserId();
+        List<DailyLessonDTO> history = dailyLessonService.getLessonHistory(userId, page, size);
+        return ResponseResult.success(history);
     }
 }
+

@@ -1,7 +1,8 @@
 package com.example.backend.config;
 
+import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.entity.SysUser;
-import com.example.backend.service.UserService;
+import com.example.backend.service.TokenBlacklistService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -21,6 +22,7 @@ import java.util.Collections;
 
 /**
  * JWT认证过滤器 - 从请求头中提取并验证JWT令牌
+ * 校验链：签名/过期 → 登出黑名单 → 用户仍存在（未被逻辑删除）
  */
 @Slf4j
 @Component
@@ -28,6 +30,8 @@ import java.util.Collections;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtils jwtUtils;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final UserMapper userMapper;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -35,7 +39,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             String jwt = getJwtFromRequest(request);
             if (StringUtils.hasText(jwt) && jwtUtils.validateToken(jwt)) {
+                String jti = jwtUtils.getJtiFromToken(jwt);
+
+                // 1. 登出黑名单校验：已登出的 token 直接拒绝
+                if (tokenBlacklistService.isBlacklisted(jti)) {
+                    log.debug("JWT token is blacklisted, rejecting - jti: {}", jti);
+                    SecurityContextHolder.clearContext();
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+
+                // 2. 用户状态校验：逻辑删除的用户其 token 立即失效
                 Long userId = jwtUtils.getUserIdFromToken(jwt);
+                SysUser user = userMapper.selectById(userId);
+                if (user == null) {
+                    log.debug("JWT user no longer exists, rejecting - userId: {}", userId);
+                    SecurityContextHolder.clearContext();
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+
                 String username = jwtUtils.getUsernameFromToken(jwt);
                 String role = jwtUtils.getRoleFromToken(jwt);
 
