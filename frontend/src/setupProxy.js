@@ -12,7 +12,6 @@ module.exports = function(app) {
             '^/api': '/api'  // 关键：明确保留 /api 前缀
         },
         onProxyReq: (proxyReq, req, res) => {
-          console.log('[Proxy] Forwarding:', req.method, req.url);
           // 转发Cookie
           if (req.headers.cookie) {
             proxyReq.setHeader('Cookie', req.headers.cookie);

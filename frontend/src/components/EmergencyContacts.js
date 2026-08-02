@@ -181,11 +181,9 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
         });
       }
       
-      console.log(`需要更新 ${updates.length} 个联系人`);
       
       // 逐个更新
       for (const contact of updates) {
-        console.log(`更新联系人 ${contact.name}，isPrimary:`, contact.isPrimary);
         
         const response = await fetch(`/api/emergency/emergency-contact`, {
           method: 'PUT',
@@ -205,7 +203,6 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
         });
         
         const result = await response.json();
-        console.log(`更新结果:`, result);
         
         if (result.code !== 200) {
           throw new Error(result.message || `更新 ${contact.name} 失败`);
@@ -216,7 +213,6 @@ function EmergencyContacts({ contacts, onAdd, onDelete, onClose, userId }) {
       }
       
       // 所有更新都成功
-      console.log('所有更新成功，刷新列表');
       // 刷新联系人列表
       if (onAdd) {
         await onAdd();
