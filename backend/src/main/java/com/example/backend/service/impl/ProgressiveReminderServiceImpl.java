@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 
 /**
@@ -34,6 +35,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class ProgressiveReminderServiceImpl implements ProgressiveReminderService {
+
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
 
     private final MedicationPlanMapper medicationPlanMapper;
     private final DrugBaseMapper drugBaseMapper;
@@ -47,8 +50,8 @@ public class ProgressiveReminderServiceImpl implements ProgressiveReminderServic
 
     @Override
     public void processProgressiveReminders() {
-        LocalDate today = LocalDate.now();
-        LocalTime now = LocalTime.now();
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalTime now = LocalTime.now(BUSINESS_ZONE);
 
         // 查询今日所有 pending 状态的用药计划
         LambdaQueryWrapper<MedicationPlan> query = new LambdaQueryWrapper<>();
@@ -72,7 +75,14 @@ public class ProgressiveReminderServiceImpl implements ProgressiveReminderServic
 
             String newStage = currentStage;
 
-            if (currentStage == null || ReminderStage.NONE.getCode().equals(currentStage)) {
+            // Catch up directly after a restart or scheduler interruption. Otherwise an old pending plan
+            // would need to pass every reminder stage again before it can become missed.
+            if (!now.isBefore(familyNotifyTime)) {
+                newStage = ReminderStage.NOTIFY_FAMILY.getCode();
+                if (!ReminderStage.NOTIFY_FAMILY.getCode().equals(currentStage)) {
+                    familyNotifyCount++;
+                }
+            } else if (currentStage == null || ReminderStage.NONE.getCode().equals(currentStage)) {
                 // 阶段1：提前提醒
                 if (!now.isBefore(preRemindTime)) {
                     newStage = ReminderStage.PRE_REMIND.getCode();

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { saveToken } from '../utils/elderApi';
+import { validateCredentials } from '../utils/authValidation';
 
 function Login({ onLogin, onShowRegister, onSwitchToGuardian }) {
   const [username, setUsername] = useState('');
@@ -12,20 +13,20 @@ function Login({ onLogin, onShowRegister, onSwitchToGuardian }) {
     // 阻止表单默认提交
     if (e) e.preventDefault();
 
-    // 手动验证并触发表单气泡提示
-    if (!username.trim() || !password) {
+    const credentialError = validateCredentials(username, password);
+    if (credentialError) {
       const usernameInput = document.querySelector('input[type="text"]');
       const passwordInput = document.querySelector('input[placeholder="请输入密码"]');
       
       if (!username.trim()) {
-        usernameInput.setCustomValidity('请输入用户名');
+        usernameInput.setCustomValidity(credentialError);
         usernameInput.reportValidity();
         usernameInput.focus();
         return;
       }
       
       if (!password) {
-        passwordInput.setCustomValidity('请输入密码');
+        passwordInput.setCustomValidity(credentialError);
         passwordInput.reportValidity();
         passwordInput.focus();
         return;

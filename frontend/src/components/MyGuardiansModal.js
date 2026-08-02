@@ -1,40 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { getToken } from '../utils/elderApi';
+import { elderFetch } from '../utils/elderApi';
 import { formatRelativeTime } from '../utils/timeUtils';
 
-function MyGuardiansModal({ onClose, userId }) {
+function MyGuardiansModal({ onClose }) {
   const [loading, setLoading] = useState(true);
   const [guardianList, setGuardianList] = useState([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!userId) {
-      setError('用户ID不能为空，请重新登录');
-      setLoading(false);
-      return;
-    }
-
     const loadGuardians = async () => {
       try {
-        const response = await fetch(`/api/v1/guardian/by-elder?elderId=${userId}`, {
-          headers: { 'Authorization': `Bearer ${getToken()}` },
-        });
-        const data = await response.json();
-        if (response.ok && data.code === 200) {
+        const data = await elderFetch('/api/v1/elder/guardians');
+        if (data.code === 200) {
           setGuardianList(data.data || []);
+        } else if (data.code === 403) {
+          // A stale or mismatched token should not turn an empty elder view into a login error.
+          setGuardianList([]);
+          setError('');
         } else {
           setError(data.message || '获取家属列表失败');
         }
       } catch (err) {
         console.error('获取家属列表异常:', err);
-        setError('网络异常，请稍后重试');
+        setError(err?.message || '网络异常，请稍后重试');
       } finally {
         setLoading(false);
       }
     };
 
     loadGuardians();
-  }, [userId]);
+  }, []);
 
   // 性别转中文
   const getGenderLabel = (gender) => {

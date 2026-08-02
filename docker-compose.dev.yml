@@ -83,6 +83,7 @@ services:
       PORT: 3000
       BROWSER: none
       CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
       BACKEND_PROXY_TARGET: http://backend:8080
     command: ["sh", "-c", "if [ ! -x node_modules/.bin/react-scripts ]; then npm install --legacy-peer-deps --no-audit --no-fund; fi && npm run start:dev"]
     volumes:

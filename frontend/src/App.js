@@ -191,6 +191,10 @@ function App() {
 
   const handleRegister = (registerData) => {
     setShowRegister(false);
+    if (registerData) {
+      setLoginMode(registerData.role === 'family' ? 'guardian' : 'elder');
+      handleLogin(registerData);
+    }
   };
 
   // 带认证的fetch helper - 自动添加JWT token到请求头
@@ -3401,10 +3405,12 @@ function App() {
               <span className="btn-icon">📞</span>
               <span className="btn-label">紧急联系人</span>
             </button>
-            <button className="header-btn guardian-btn" onClick={() => setShowMyGuardians(true)}>
-              <span className="btn-icon">👨‍👩‍👧</span>
-              <span className="btn-label">我的家属</span>
-            </button>
+            {user?.role !== 'family' && (
+              <button className="header-btn guardian-btn" onClick={() => setShowMyGuardians(true)}>
+                <span className="btn-icon">👨‍👩‍👧</span>
+                <span className="btn-label">我的家属</span>
+              </button>
+            )}
           </div>
           <span className="virtual-pharmacist">👨‍⚕️</span>
           <div className="user-greeting">
@@ -6586,7 +6592,6 @@ function App() {
       {showMyGuardians && (
         <MyGuardiansModal
           onClose={() => setShowMyGuardians(false)}
-          userId={user?.id}
         />
       )}
 
