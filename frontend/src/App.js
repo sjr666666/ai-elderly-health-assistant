@@ -237,10 +237,6 @@ function App() {
     try {
       const { response, data } = await authFetch(`/api/v1/box/list`);
       
-      console.log('=== 药箱列表响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
       
       if (response.ok && data.code === 200) {
         // 转换后端数据格式为前端需要的格式
@@ -328,10 +324,6 @@ function App() {
     try {
       const { response, data } = await authFetch(`/api/emergency/v1/contacts?elderId=${elderId}`);
 
-      console.log('=== 紧急联系人列表响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
 
       if (response.ok && data.code === 200) {
         setEmergencyContacts(data.data);
@@ -351,8 +343,7 @@ function App() {
     try {
       const cached = localStorage.getItem(TODAY_PLANS_CACHE_KEY);
       if (cached) {
-        let { plans, timestamp } = JSON.parse(cached);
-        console.log('从本地缓存加载用药计划，缓存时间:', new Date(timestamp).toLocaleString());
+        let { plans } = JSON.parse(cached);
         
         // 过滤掉已过期药品的用药计划
         const today = new Date();
@@ -412,10 +403,6 @@ function App() {
     try {
       const { response, data } = await authFetch(`/api/v1/plan/generate-today?userId=${effectiveUserId}`);
       
-      console.log('=== 用药计划响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
       
       if (response.ok && data.code === 200 && data.data) {
         // 转换后端数据格式为前端需要的格式
@@ -468,7 +455,6 @@ function App() {
         // 更新已设置用药计划的药品ID集合
         const drugIds = new Set(validPlans.map(p => p.drugId).filter(Boolean));
         setDrugsWithPlan(drugIds);
-        console.log('用药计划已更新，共', validPlans.length, '条记录（已过滤过期药品）');
         
         // 保存到本地缓存（用于断网可读）
         try {
@@ -476,7 +462,6 @@ function App() {
             plans: validPlans,
             timestamp: Date.now()
           }));
-          console.log('今日用药计划已缓存');
         } catch (cacheErr) {
           console.error('缓存用药计划失败:', cacheErr);
         }
@@ -512,10 +497,6 @@ function App() {
     try {
       const { response, data } = await authFetch(`/api/v1/plan/weekly`);
 
-      console.log('=== 一周用药记录响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
 
       if (response.ok && data.code === 200 && data.data) {
         setWeeklyMedicationData(data.data);
@@ -550,7 +531,6 @@ function App() {
         };
       }
       localStorage.setItem(key, JSON.stringify(savedStatus));
-      console.log(`已保存本地服药状态: planId=${planId}, status=${status}`);
     } catch (err) {
       console.error('保存本地服药状态失败:', err);
     }
@@ -563,7 +543,6 @@ function App() {
       const savedStatus = JSON.parse(localStorage.getItem(key) || '{}');
       
       if (Object.keys(savedStatus).length > 0) {
-        console.log('发现本地保存的服药状态，正在合并...', savedStatus);
         
         return plans.map(plan => {
           const localStatus = savedStatus[plan.id] || savedStatus[plan.planId];
@@ -644,9 +623,6 @@ function App() {
         })
       });
 
-      console.log('=== 添加到用药计划响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
 
       if (response.ok && data.code === 200) {
         // 关闭弹窗
@@ -809,10 +785,6 @@ function App() {
     try {
       const { response, data } = await authFetch(`/api/v1/box/${pendingDeleteDrug.boxItemId}`, { method: 'DELETE' });
       
-      console.log('=== 删除药品响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
       
       if (response.ok && data.code === 200) {
         // 关闭确认弹窗
@@ -1000,17 +972,14 @@ function App() {
         })()
       );
       
-      console.log('刷新弹窗 - 剩余未服用的药物数量:', remainingMissed.length);
       
       // 如果还有未服用的药物，重新打开弹窗
       if (remainingMissed.length > 0) {
-        console.log('还有未服用的药物，重新打开弹窗:', remainingMissed);
         setMissedReminders(remainingMissed);
         setShowMedicationReminder(true);
         lastReminderTimeRef.current = Date.now();
       } else {
         // 所有药物都已服用，关闭弹窗
-        console.log('所有药物都已服用，关闭弹窗');
         // 重置阶段记录，下次有新药品时从 pre_remind 开始正常提醒
         lastShownStageRef.current = null;
         handleCloseMedicationReminder();
@@ -1019,7 +988,6 @@ function App() {
   }, [calendarPlans, shouldRefreshReminder, handleCloseMedicationReminder]);
 
   const handleMarkAsTakenFromReminder = async (reminder) => {
-    console.log('标记为已服用:', reminder);
 
     // markAsTaken 内部已经 await API + reload 两个视图，这里不再重复 reload
     await markAsTaken(reminder.id, null);
@@ -1065,17 +1033,13 @@ function App() {
     if (!userId) return;
     
     try {
-      console.log('=== 检查已过期且未丢弃的药品 ===');
       const { response, data } = await authFetch(`/api/v1/box/expired/today`);
       
-      console.log('响应数据:', data);
-      console.log('================================');
       
       if (response.ok && data.code === 200 && data.data && data.data.length > 0) {
         // 有已过期且未丢弃的药品，显示弹窗
         setTodayExpiredDrugs(data.data);
         setShowTodayExpiredModal(true);
-        console.log(`发现 ${data.data.length} 个已过期且未丢弃的药品`);
       }
     } catch (error) {
       console.error('检查已过期药品失败:', error);
@@ -1176,7 +1140,6 @@ function App() {
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      console.log('文件选择:', file.name, file.type);
       const reader = new FileReader();
       reader.onload = (e) => {
         setImagePreview(e.target.result);
@@ -1224,7 +1187,6 @@ function App() {
         dt.items.add(file);
         fileInputRef.current.files = dt.files;
         
-        console.log('拖拽文件已设置:', file.name, file.type);
         
         // 自动开始识别
         setTimeout(() => {
@@ -1329,14 +1291,12 @@ function App() {
   // Token过期事件监听 - 自动跳转到对应登录页
   useEffect(() => {
     const handleElderAuthExpired = () => {
-      console.log('老人端token已过期，跳转登录页');
       setUser(null);
       setIsLoggedIn(false);
       setLoginMode('elder'); // 跳转到老人端登录
     };
 
     const handleGuardianAuthExpired = () => {
-      console.log('家属端token已过期，跳转登录页');
       setUser(null);
       setIsLoggedIn(false);
       setLoginMode('guardian'); // 跳转到家属端登录
@@ -1363,7 +1323,6 @@ function App() {
         wsRef.current = ws;
 
         ws.onopen = () => {
-          console.log('WebSocket连接已建立 - elderId:', user.id);
           setWsConnected(true);
         };
 
@@ -1380,7 +1339,6 @@ function App() {
         };
 
         ws.onclose = () => {
-          console.log('WebSocket连接已关闭');
           wsRef.current = null;
           setWsConnected(false);
           // 5秒后重连
@@ -1522,10 +1480,6 @@ function App() {
           setMissedReminders(needRemind);
           setShowMedicationReminder(true);
           lastReminderTimeRef.current = Date.now();
-          console.log('触发渐进式用药提醒（阶段升级）:', needRemind.map(r => ({
-            drug: r.drug || r.drugName,
-            stage: r.reminderStage
-          })));
         }
       }
     };
@@ -1546,7 +1500,6 @@ function App() {
     const checkDateChange = () => {
       const todayKey = getLocalDateKey();
       if (lastDateRef.current && lastDateRef.current !== todayKey) {
-        console.log(`检测到跨日变化: ${lastDateRef.current} -> ${todayKey}，自动刷新用药计划`);
         lastDateRef.current = todayKey;
         // 清空昨日缓存，避免断网时误读昨天的计划
         localStorage.removeItem(TODAY_PLANS_CACHE_KEY);
@@ -1625,7 +1578,6 @@ function App() {
     // 剥离HTML标签，避免TTS朗读标签内容
     const cleanText = (text || '').replace(/<[^>]*>/g, '');
     if (!cleanText || cleanText.trim() === '') {
-      console.log('没有可播放的内容');
       return;
     }
 
@@ -1958,7 +1910,6 @@ function App() {
         description: drugInfo.description || ''
       };
 
-      console.log('=== 尝试调用后端 AI 服务 ===');
       
       // 第一层：尝试调用后端 AI 服务
       const { data } = await authFetch('/api/ai/elderly-guide', {
@@ -1970,7 +1921,6 @@ function App() {
         // 将<br/>标签替换为换行符，方便阅读
         const guideText = data.data.replace(/<br\/>/g, '\n');
         setElderlyGuide(guideText);
-        console.log('✅ 后端 AI 服务成功:', guideText.substring(0, 100));
         return; // 成功则直接返回
       } else {
         console.error('❌ 后端 AI 服务失败:', data.message);
@@ -1982,7 +1932,6 @@ function App() {
       // 第二层：使用 DeepSeek API 作为兜底
       try {
         await callDeepSeekForGuide(drugInfo);
-        console.log('✅ DeepSeek 兜底成功');
         return;
       } catch (deepseekError) {
         console.error('❌ DeepSeek 兜底也失败，使用本地规则集:', deepseekError);
@@ -2033,7 +1982,6 @@ function App() {
 - 控制在500字以内
 - 用中文回答`;
 
-      console.log('正在调用 DeepSeek API...');
       
       const { data } = await authFetch('/api/deepseek/chat', {
         method: 'POST',
@@ -2048,7 +1996,6 @@ function App() {
       if (data.choices && data.choices[0]) {
         const aiResponse = data.choices[0].message.content;
         setElderlyGuide(aiResponse);
-        console.log('DeepSeek 生成用药指导成功，长度:', aiResponse.length);
       } else {
         throw new Error('DeepSeek API 返回异常');
       }
@@ -2294,25 +2241,18 @@ function App() {
   // 将图片转换为JPEG格式
   const convertToJpeg = (file) => {
     return new Promise((resolve) => {
-      console.log('=== 图片转换 ===');
-      console.log('原始文件名:', file.name);
-      console.log('原始文件类型:', file.type);
-      console.log('原始文件大小:', file.size);
       
       if (!file.type.startsWith('image/')) {
-        console.log('不是图片类型，直接返回');
         resolve(file);
         return;
       }
 
       // 如果不是WebP格式，直接返回
       if (!file.type.includes('webp') && !file.name.toLowerCase().endsWith('.webp')) {
-        console.log('不是WebP格式，直接返回');
         resolve(file);
         return;
       }
 
-      console.log('开始转换WebP到JPEG...');
       
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -2327,22 +2267,18 @@ function App() {
           canvas.toBlob((blob) => {
             if (blob) {
               const jpegFile = new File([blob], file.name.replace(/\.webp$/i, '.jpg'), { type: 'image/jpeg' });
-              console.log('转换成功，新文件大小:', jpegFile.size);
               resolve(jpegFile);
             } else {
-              console.log('转换失败，返回原始文件');
               resolve(file);
             }
           }, 'image/jpeg', 0.9);
         };
         img.onerror = () => {
-          console.log('图片加载失败，返回原始文件');
           resolve(file);
         };
         img.src = e.target.result;
       };
       reader.onerror = () => {
-        console.log('FileReader失败，返回原始文件');
         resolve(file);
       };
       reader.readAsDataURL(file);
@@ -2564,10 +2500,6 @@ function App() {
   };
 
   const analyzeImage = async () => {
-    console.log('=== 分析图片 ===');
-    console.log('fileInputRef.current:', fileInputRef.current);
-    console.log('fileInputRef.current?.files:', fileInputRef.current?.files);
-    console.log('fileInputRef.current?.files[0]:', fileInputRef.current?.files[0]);
     
     if (!fileInputRef.current?.files[0]) {
       showToast('请先选择图片', 'warning');
@@ -2630,19 +2562,9 @@ function App() {
       // 将WebP图片转换为JPEG格式
       const convertedFile = await convertToJpeg(fileInputRef.current.files[0]);
       
-      console.log('=== 准备上传 ===');
-      console.log('文件名:', convertedFile.name);
-      console.log('文件类型:', convertedFile.type);
-      console.log('文件大小:', convertedFile.size);
       
       const formData = new FormData();
       formData.append('file', convertedFile);
-      
-      // 调试：检查FormData内容
-      console.log('FormData内容:');
-      for (let pair of formData.entries()) {
-        console.log('  键:', pair[0], ', 值:', pair[1]);
-      }
 
       // 不设置Content-Type，让浏览器自动处理
       // 通过代理转发到后端
@@ -2656,14 +2578,9 @@ function App() {
       });
       
       // 调试：查看实际发送的请求头
-      console.log('响应状态:', response.status);
-      console.log('响应头:', [...response.headers.entries()]);
 
       const data = await response.json();
 
-      console.log('=== 上传响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
 
       if (data.code === 200 && data.data?.taskId) {
         setOcrTaskId(data.data.taskId);
@@ -2688,7 +2605,6 @@ function App() {
       try {
         const { data } = await authFetch(`/api/v1/drug/recognize/result/${taskId}`);
 
-        console.log('查询结果:', data);
 
         if (data.code === 200 && data.data) {
           const result = data.data;
@@ -2718,7 +2634,6 @@ function App() {
                     // 只有在成功跳转到说明页面后，才清除加载状态
                     setIsLoading(false);
                     setShowComplete(false);
-                    console.log('药品信息获取完成，已跳转到说明页面');
                   }
                 });
               }, 1500);
@@ -2851,9 +2766,6 @@ function App() {
   // 批量添加所有确认的药品并检测冲突
   // eslint-disable-next-line no-unused-vars
   const handleBatchAddAllDrugs = async () => {
-    console.log('=== 开始批量添加 ===');
-    console.log('batchConfirmedDrugs:', batchConfirmedDrugs);
-    console.log('待添加药品数量:', batchConfirmedDrugs.length);
     
     if (batchConfirmedDrugs.length === 0) {
       showToast('没有需要添加的药品', 'warning');
@@ -2871,7 +2783,6 @@ function App() {
       // 逐个添加药品，每次添加后刷新药箱列表
       for (let i = 0; i < batchConfirmedDrugs.length; i++) {
         const drug = batchConfirmedDrugs[i];
-        console.log(`正在添加第 ${i + 1}/${batchConfirmedDrugs.length} 个药品:`, drug);
         
         try {
           const { response } = await authFetch(`/api/v1/box`, {
@@ -2890,12 +2801,10 @@ function App() {
           });
           
           const data = await response.json();
-          console.log(`第 ${i + 1} 个药品添加结果:`, data);
           
           if (data.code === 200) {
             successCount++;
             addedDrugNames.push(drug.name);
-            console.log(`✅ 第 ${i + 1} 个药品添加成功: ${drug.name}`);
             
             // 立即刷新药箱列表，确保数据同步
             await loadMedicineBoxList(user?.userId);
@@ -2914,8 +2823,6 @@ function App() {
         }
       }
       
-      console.log('批量添加完成 - 成功:', successCount, ', 失败:', failCount);
-      console.log('成功添加的药品:', addedDrugNames);
       
       if (successCount > 0) {
         showToast(`成功添加 ${successCount} 个药品到药箱`, 'success');
@@ -2927,7 +2834,6 @@ function App() {
         
         // 对最后添加的药品进行冲突检测
         if (lastAddedDrugName && addedDrugNames.length > 0) {
-          console.log('开始对最后添加的药品进行冲突检测:', lastAddedDrugName);
           showToast('正在进行冲突检测...', 'info');
           
           // 重要：重新获取最新的药箱列表，确保包含刚添加的所有药品
@@ -2959,7 +2865,6 @@ function App() {
             console.error('获取最新药箱列表失败:', err);
           }
           
-          console.log('最新药箱列表:', latestDrugList);
           
           // 使用最新的药箱列表进行冲突检测
           const conflictResult = await checkConflictsForNewDrug(lastAddedDrugName, latestDrugList);
@@ -2969,7 +2874,6 @@ function App() {
             setConflictAlertResult(conflictResult);
             setShowConflictAlert(true);
           } else {
-            console.log('未检测到冲突');
           }
         }
         
@@ -2988,9 +2892,6 @@ function App() {
 
   // 批量添加指定药品列表（不依赖状态）
   const handleBatchAddAllDrugsWithList = async (drugList) => {
-    console.log('=== 开始批量添加（带参数） ===');
-    console.log('传入的药品列表:', drugList);
-    console.log('待添加药品数量:', drugList.length);
     
     if (!drugList || drugList.length === 0) {
       showToast('没有需要添加的药品', 'warning');
@@ -3008,7 +2909,6 @@ function App() {
       // 逐个添加药品，每次添加后刷新药箱列表
       for (let i = 0; i < drugList.length; i++) {
         const drug = drugList[i];
-        console.log(`正在添加第 ${i + 1}/${drugList.length} 个药品:`, drug);
         
         try {
           const { response } = await authFetch(`/api/v1/box`, {
@@ -3027,12 +2927,10 @@ function App() {
           });
           
           const data = await response.json();
-          console.log(`第 ${i + 1} 个药品添加结果:`, data);
           
           if (data.code === 200) {
             successCount++;
             addedDrugNames.push(drug.name);
-            console.log(`✅ 第 ${i + 1} 个药品添加成功: ${drug.name}`);
             
             // 立即刷新药箱列表，确保数据同步
             await loadMedicineBoxList(user?.userId);
@@ -3051,15 +2949,12 @@ function App() {
         }
       }
       
-      console.log('批量添加完成 - 成功:', successCount, ', 失败:', failCount);
-      console.log('成功添加的药品:', addedDrugNames);
       
       if (successCount > 0) {
         showToast(`成功添加 ${successCount} 个药品到药箱`, 'success');
         
         // 对最后添加的药品进行冲突检测
         if (lastAddedDrugName && addedDrugNames.length > 0) {
-          console.log('开始对最后添加的药品进行冲突检测:', lastAddedDrugName);
           showToast('正在进行冲突检测...', 'info');
           
           // 重要：重新获取最新的药箱列表，确保包含刚添加的所有药品
@@ -3093,7 +2988,6 @@ function App() {
               return drugList; // 如果失败，使用传入的 drugList
             });
           
-          console.log('最新药箱列表:', latestDrugList);
           
           // 使用最新的药箱列表进行冲突检测
           const conflictResult = await checkConflictsForNewDrug(lastAddedDrugName, latestDrugList);
@@ -3103,7 +2997,6 @@ function App() {
             setConflictAlertResult(conflictResult);
             setShowConflictAlert(true);
           } else {
-            console.log('未检测到冲突');
           }
         }
         
@@ -4937,8 +4830,7 @@ function App() {
       try {
         const cached = localStorage.getItem(CONFLICT_RULES_CACHE_KEY);
         if (cached) {
-          const { report, drugNames, timestamp } = JSON.parse(cached);
-          console.log('从本地缓存加载冲突规则，缓存时间:', new Date(timestamp).toLocaleString());
+          const { report, drugNames } = JSON.parse(cached);
           
           // 检查缓存的药品列表是否与当前药箱匹配
           const currentDrugNames = drugList.map(d => d.name).sort();
@@ -4973,18 +4865,14 @@ function App() {
         // 获取药箱中的药品名称列表
         const drugNames = drugList.map(drug => drug.name);
         
-        console.log('=== 开始冲突检测 ===');
-        console.log('药品列表:', drugNames);
 
         const { data } = await authFetch('/api/conflict/check', {
           method: 'POST',
           body: JSON.stringify(drugNames)
         });
-        console.log('冲突检测响应:', data);
 
         if (data.code === 200 && data.data) {
           setConflictReport(data.data);
-          console.log('冲突检测成功:', data.data);
           
           // 保存到本地缓存（用于断网可读）
           try {
@@ -4993,7 +4881,6 @@ function App() {
               drugNames: drugNames,
               timestamp: Date.now()
             }));
-            console.log('冲突规则已缓存');
           } catch (cacheErr) {
             console.error('缓存冲突规则失败:', cacheErr);
           }
@@ -5141,13 +5028,11 @@ function App() {
           includeAlternatives: true
         };
 
-        console.log('=== 综合冲突检测 ===', requestBody);
 
         const { data } = await authFetch('/api/conflict/analyze', {
           method: 'POST',
           body: JSON.stringify(requestBody)
         });
-        console.log('综合冲突检测响应:', data);
 
         if (data.code === 200 && data.data) {
           setScenarioConflictReport(data.data);
@@ -6289,10 +6174,6 @@ function App() {
       setIsSearching(true);
       const { response, data } = await authFetch(`/api/v1/box/search?keyword=${encodeURIComponent(keyword)}&status=active`);
       
-      console.log('=== 搜索药箱响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
       
       if (response.ok && data.code === 200) {
         // 转换后端数据格式为前端需要的格式
@@ -6763,17 +6644,11 @@ function App() {
                 status: 'active'
               };
               
-              console.log('确认的药品信息:', confirmedDrug);
-              console.log('当前 batchConfirmedDrugs:', batchConfirmedDrugs);
               
               // 检查是否是最后一个选中的药品
               const selectedDrugIds = Array.from(batchSelectedForAdd);
-              console.log('选中的药品ID列表:', selectedDrugIds);
-              console.log('当前药品索引 batchDrugIndex:', batchDrugIndex);
-              console.log('当前药品:', recognizedDrugs[batchDrugIndex]);
               
               const currentIndex = selectedDrugIds.indexOf(recognizedDrugs[batchDrugIndex].id);
-              console.log('在选中列表中的索引:', currentIndex, ', 选中总数:', selectedDrugIds.length);
               
               const isLastDrug = currentIndex >= selectedDrugIds.length - 1;
               
@@ -6783,9 +6658,7 @@ function App() {
                 
                 // 找到下一个选中药品的索引
                 const nextDrugId = selectedDrugIds[currentIndex + 1];
-                console.log('下一个药品ID:', nextDrugId);
                 const nextIndex = recognizedDrugs.findIndex(d => d.id === nextDrugId);
-                console.log('下一个药品在recognizedDrugs中的索引:', nextIndex);
                 setBatchDrugIndex(nextIndex);
                 // 延迟滚动到顶部，确保DOM已更新
                 setTimeout(() => {
@@ -6795,12 +6668,9 @@ function App() {
                 }, 100);
               } else {
                 // 是最后一个药品，将所有药品一起添加
-                console.log('✅ 所有药品已确认，准备批量添加');
                 
                 // 重要：直接构建完整的药品列表，不依赖异步状态
                 const finalDrugList = [...batchConfirmedDrugs, confirmedDrug];
-                console.log('最终的药品列表:', finalDrugList);
-                console.log('总数量:', finalDrugList.length);
                 
                 // 关闭弹窗
                 setShowBatchConfirmModal(false);
@@ -6811,7 +6681,6 @@ function App() {
                 
                 // 使用 setTimeout 确保弹窗关闭后再执行批量添加
                 setTimeout(() => {
-                  console.log('开始执行批量添加...');
                   // 直接传递完整的药品列表给批量添加函数
                   handleBatchAddAllDrugsWithList(finalDrugList);
                 }, 100);

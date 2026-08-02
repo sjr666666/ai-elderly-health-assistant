@@ -55,11 +55,6 @@ const EditDrugModal = ({ onClose, onSave, drug, userId }) => {
       if (note.trim()) requestBody.note = note.trim();
       if (status) requestBody.status = status;
 
-      console.log('=== 编辑药品请求 ===');
-      console.log('boxItemId:', drug.boxItemId);
-      console.log('userId:', userId);
-      console.log('请求体:', requestBody);
-      console.log('==================');
 
       const response = await fetch(`/api/v1/box/${drug.boxItemId}`, {
         method: 'PUT',
@@ -72,10 +67,6 @@ const EditDrugModal = ({ onClose, onSave, drug, userId }) => {
 
       const data = await response.json();
 
-      console.log('=== 编辑药品响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
 
       if (response.ok && data.code === 200) {
         onSave({

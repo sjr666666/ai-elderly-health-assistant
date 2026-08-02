@@ -57,10 +57,6 @@ function AddDrugModal({ onClose, onAdd, userId }) {
         });
         const data = await response.json();
         
-        console.log('=== 药品列表响应 ===');
-        console.log('状态码:', response.status);
-        console.log('响应数据:', data);
-        console.log('==================');
         
         if (response.ok && data.code === 200) {
           // 转换后端数据格式为前端需要的格式
@@ -179,8 +175,6 @@ function AddDrugModal({ onClose, onAdd, userId }) {
         status: 'active'
       };
 
-      console.log('提交药品数据:', drugData);
-      console.log('用户 ID:', userId);
 
       // 调用后端API
       const response = await fetch(`/api/v1/box`, {
