@@ -57,7 +57,7 @@ public class SecurityConfig {
                 .antMatchers("/api/v1/guardian/**").hasRole("FAMILY")
                 // 老人端核心API需要认证（ELDER或FAMILY角色均可）
                 .antMatchers("/api/v1/plan/**").hasAnyRole("ELDER", "FAMILY")
-                .antMatchers("/api/v1/elder/**").hasAnyRole("ELDER", "FAMILY")
+                .antMatchers("/api/v1/elder/**").hasRole("ELDER")
                 .antMatchers("/api/v1/daily-lesson/**").hasAnyRole("ELDER", "FAMILY")
                 .antMatchers("/api/v1/drug/**").hasAnyRole("ELDER", "FAMILY")
                 .antMatchers("/api/v1/box/**").hasAnyRole("ELDER", "FAMILY")

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { saveToken } from '../../utils/guardianApi';
+import { validateCredentials } from '../../utils/authValidation';
 import './guardian.css';
 
-function GuardianLogin({ onLogin, onSwitchToElder }) {
+function GuardianLogin({ onLogin, onSwitchToElder, onShowRegister }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -12,13 +13,9 @@ function GuardianLogin({ onLogin, onSwitchToElder }) {
   const handleLogin = async (e) => {
     if (e) e.preventDefault();
 
-    // 表单验证
-    if (!username.trim()) {
-      setError('请输入用户名');
-      return;
-    }
-    if (!password) {
-      setError('请输入密码');
+    const credentialError = validateCredentials(username, password);
+    if (credentialError) {
+      setError(credentialError);
       return;
     }
 
@@ -192,6 +189,9 @@ function GuardianLogin({ onLogin, onSwitchToElder }) {
 
         {/* 切换到老人端登录 */}
         <div className="g-login-switch">
+          <button type="button" onClick={onShowRegister}>
+            没有家属账号？立即注册
+          </button>
           <button type="button" onClick={onSwitchToElder}>
             老人端登录
           </button>

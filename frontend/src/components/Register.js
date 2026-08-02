@@ -13,6 +13,7 @@ function Register({ onRegister }) {
   const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // 创建输入框引用
   const usernameRef = useRef(null);
@@ -24,6 +25,23 @@ function Register({ onRegister }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    const errors = [];
+    if (!/^[A-Za-z0-9_]{4,20}$/.test(username.trim())) errors.push('用户名需为4-20位字母、数字或下划线');
+    if (!/^.{6,20}$/.test(password)) errors.push('密码长度需为6-20位');
+    if (password !== confirmPassword) errors.push('两次输入的密码不一致');
+    if (!realName.trim() || realName.trim().length > 50) errors.push('请输入真实姓名，且不能超过50个字符');
+    if (age === '' || Number(age) < 0 || Number(age) > 150) errors.push('年龄必须在0-150之间');
+    const nextFieldErrors = {};
+    if (!/^[A-Za-z0-9_]{4,20}$/.test(username.trim())) nextFieldErrors.username = '用户名需为4-20位字母、数字或下划线';
+    if (!/^.{6,20}$/.test(password)) nextFieldErrors.password = '密码长度需为6-20位';
+    if (password !== confirmPassword) nextFieldErrors.confirmPassword = '两次输入的密码不一致';
+    if (!realName.trim() || realName.trim().length > 50) nextFieldErrors.realName = '请输入真实姓名，且不能超过50个字符';
+    if (age === '' || Number(age) < 0 || Number(age) > 150) nextFieldErrors.age = '年龄必须在0-150之间';
+    setFieldErrors(nextFieldErrors);
+    if (errors.length > 0) {
+      return;
+    }
 
     // 验证用户名
     if (!username.trim() || username.trim().length < 4) {
@@ -66,7 +84,7 @@ function Register({ onRegister }) {
     }
 
     // 验证年龄
-    if (!age || parseInt(age) <= 0 || parseInt(age) > 150) {
+    if (!age || parseInt(age) < 0 || parseInt(age) > 150) {
       ageRef.current.setCustomValidity('请输入有效的年龄（1-150）');
       ageRef.current.reportValidity();
       ageRef.current.focus();
@@ -89,8 +107,7 @@ function Register({ onRegister }) {
           password: password,
           realName: realName.trim(),
           age: parseInt(age),
-          role: role,
-          phone: role === 'family' ? phone.trim() : undefined,
+          role: 'elder',
         }),
       });
 
@@ -173,9 +190,9 @@ function Register({ onRegister }) {
           <p style={{ fontSize: '18px', color: '#6B6B6B', marginTop: '8px' }}>请选择身份并填写基本信息</p>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           {/* 角色选择 */}
-          <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'none' }} aria-hidden="true">
             <label style={{
               fontSize: '20px',
               fontWeight: '600',
@@ -186,7 +203,7 @@ function Register({ onRegister }) {
               <span style={{ color: '#E74C3C', marginRight: '4px' }}>*</span>
               我是
             </label>
-            <div style={{ display: 'flex', gap: '16px' }}>
+            <div style={{ display: 'none' }} aria-hidden="true">
               <div
                 onClick={() => setRole('elder')}
                 style={{
@@ -257,6 +274,8 @@ function Register({ onRegister }) {
               placeholder="请输入用户名（至少4个字符）"
               required
               minLength={4}
+              maxLength={20}
+              pattern="[A-Za-z0-9_]+"
               style={{
                 width: '100%',
                 padding: '18px 24px',
@@ -279,6 +298,7 @@ function Register({ onRegister }) {
                 e.target.style.background = '#FAF7F2';
               }}
             />
+            {fieldErrors.username && <div style={{ color: '#E74C3C', marginTop: '8px', fontSize: '15px' }}>{fieldErrors.username}</div>}
           </div>
 
           <div style={{ marginBottom: '24px' }}>
@@ -307,6 +327,7 @@ function Register({ onRegister }) {
                 placeholder="请输入密码（至少6个字符）"
                 required
                 minLength={6}
+                maxLength={20}
                 style={{
                   width: '100%',
                   padding: '18px 60px 18px 24px',
@@ -361,6 +382,7 @@ function Register({ onRegister }) {
                 )}
               </button>
             </div>
+            {fieldErrors.password && <div style={{ color: '#E74C3C', marginTop: '8px', fontSize: '15px' }}>{fieldErrors.password}</div>}
           </div>
 
           <div style={{ marginBottom: '24px' }}>
@@ -442,6 +464,7 @@ function Register({ onRegister }) {
                 )}
               </button>
             </div>
+            {fieldErrors.confirmPassword && <div style={{ color: '#E74C3C', marginTop: '8px', fontSize: '15px' }}>{fieldErrors.confirmPassword}</div>}
           </div>
 
           <div style={{ marginBottom: '24px' }}>
@@ -468,6 +491,7 @@ function Register({ onRegister }) {
               }}
               placeholder="请输入老人姓名"
               required
+              maxLength={50}
               style={{
                 width: '100%',
                 padding: '18px 24px',
@@ -490,6 +514,7 @@ function Register({ onRegister }) {
                 e.target.style.background = '#FAF7F2';
               }}
             />
+            {fieldErrors.realName && <div style={{ color: '#E74C3C', marginTop: '8px', fontSize: '15px' }}>{fieldErrors.realName}</div>}
           </div>
 
           <div style={{ marginBottom: '32px' }}>
@@ -519,6 +544,7 @@ function Register({ onRegister }) {
               required
               min="1"
               max="150"
+              inputMode="numeric"
               style={{
                 width: '100%',
                 padding: '18px 24px',
@@ -541,6 +567,7 @@ function Register({ onRegister }) {
                 e.target.style.background = '#FAF7F2';
               }}
             />
+            {fieldErrors.age && <div style={{ color: '#E74C3C', marginTop: '8px', fontSize: '15px' }}>{fieldErrors.age}</div>}
           </div>
 
           {/* 家属角色时显示联系电话 */}

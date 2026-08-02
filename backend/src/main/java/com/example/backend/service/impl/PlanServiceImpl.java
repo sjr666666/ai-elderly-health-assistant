@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -27,6 +29,7 @@ import java.util.stream.Collectors;
 public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, MedicationPlan> implements PlanService {
 
     private static final Logger logger = LoggerFactory.getLogger(PlanServiceImpl.class);
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
 
     private final MedicationPlanMapper medicationPlanMapper;
     private final MedicationLogMapper medicationLogMapper;
@@ -90,7 +93,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
     @Override
     public TodayPlanResponseDTO getTodayPlan() {
         Long userId = getCurrentUserId();
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
 
         // Mapper中的SQL已经包含deleted=0条件，保持不变
         List<MedicationPlan> plans = medicationPlanMapper.selectUserDailyPlans(userId, today);
@@ -124,7 +127,9 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             item.setTimeSlotLabel(getTimeSlotLabel(plan.getTimeSlot()));
             item.setRemindBefore(plan.getRemindBefore());
             item.setReminderStage(plan.getReminderStage());
-            item.setStatus(planStatusMap.getOrDefault(plan.getId(), MedicationPlan.Status.PENDING.getCode()));
+            String storedStatus = planStatusMap.getOrDefault(plan.getId(),
+                    plan.getStatus() != null ? plan.getStatus() : MedicationPlan.Status.PENDING.getCode());
+            item.setStatus(resolveDisplayStatus(plan, storedStatus, today, LocalTime.now(BUSINESS_ZONE)));
             return item;
         }).collect(Collectors.toList());
 
@@ -205,10 +210,38 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
     @Override
     public TodayPlanResponseDTO generateDailyPlanFromMedicineBox(Long userId) {
         // userId 为数据库主键 id（由 SecurityContext 提供）
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
 
         // 1. 查询数据库中已有的今日用药计划
         List<MedicationPlan> existingPlans = medicationPlanMapper.selectUserDailyPlans(userId, today);
+        if (existingPlans.isEmpty()) {
+            List<MedicationPlan> historicalPlans = medicationPlanMapper.selectList(new LambdaQueryWrapper<MedicationPlan>()
+                    .eq(MedicationPlan::getUserId, userId)
+                    .lt(MedicationPlan::getPlanDate, today)
+                    .ge(MedicationPlan::getPlanDate, today.minusDays(30))
+                    .orderByDesc(MedicationPlan::getPlanDate)
+                    .orderByAsc(MedicationPlan::getId));
+            Map<Long, Set<String>> slotsByDrug = historicalPlans.stream()
+                    .collect(Collectors.groupingBy(MedicationPlan::getDrugId, LinkedHashMap::new,
+                            Collectors.mapping(MedicationPlan::getTimeSlot, Collectors.toCollection(LinkedHashSet::new))));
+            for (UserMedicineBox boxItem : findActiveMedicineBoxItems(userId, today)) {
+                Set<String> slots = slotsByDrug.get(boxItem.getDrugId());
+                if (slots == null) continue;
+                for (String timeSlot : slots) {
+                    MedicationPlan plan = new MedicationPlan();
+                    plan.setUserId(userId);
+                    plan.setDrugId(boxItem.getDrugId());
+                    plan.setBoxItemId(boxItem.getId());
+                    plan.setPlanDate(today);
+                    plan.setTimeSlot(timeSlot);
+                    plan.setDosageAtTime(boxItem.getDosage());
+                    plan.setStatus(MedicationPlan.Status.PENDING.getCode());
+                    plan.setRemindBefore(15);
+                    medicationPlanMapper.insert(plan);
+                }
+            }
+            existingPlans = medicationPlanMapper.selectUserDailyPlans(userId, today);
+        }
         
         // 按药品ID分组已有的计划（用于判断哪些药品已有用户选择的时间段）
         Map<Long, List<MedicationPlan>> existingPlansByDrug = existingPlans.stream()
@@ -221,12 +254,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         }
 
         // 2. 查询家庭药箱中当前用户需要服用的药品（状态为active，且在服用日期范围内）
-        LambdaQueryWrapper<UserMedicineBox> boxQuery = new LambdaQueryWrapper<>();
-        boxQuery.eq(UserMedicineBox::getUserId, userId)
-                .eq(UserMedicineBox::getStatus, UserMedicineBox.Status.ACTIVE.getCode())
-                .le(UserMedicineBox::getStartDate, today)
-                .and(w -> w.isNull(UserMedicineBox::getEndDate).or().ge(UserMedicineBox::getEndDate, today));
-        List<UserMedicineBox> medicineBoxItems = userMedicineBoxMapper.selectList(boxQuery);
+        List<UserMedicineBox> medicineBoxItems = findActiveMedicineBoxItems(userId, today);
 
         if (medicineBoxItems.isEmpty()) {
             TodayPlanResponseDTO emptyResponse = new TodayPlanResponseDTO();
@@ -285,7 +313,9 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
                 if (existingPlanMap.containsKey(key)) {
                     MedicationPlan existingPlan = existingPlanMap.get(key);
                     item.setPlanId(existingPlan.getId());
-                    item.setStatus(planStatusMap.getOrDefault(existingPlan.getId(), MedicationPlan.Status.PENDING.getCode()));
+                    String storedStatus = planStatusMap.getOrDefault(existingPlan.getId(),
+                            existingPlan.getStatus() != null ? existingPlan.getStatus() : MedicationPlan.Status.PENDING.getCode());
+                    item.setStatus(resolveDisplayStatus(existingPlan, storedStatus, today, LocalTime.now(BUSINESS_ZONE)));
                 } else {
                     item.setPlanId(null); // 新生成的计划，暂无ID
                     item.setStatus(MedicationPlan.Status.PENDING.getCode());
@@ -387,7 +417,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
     @Transactional(rollbackFor = Exception.class)
     public void addBoxItemToMedicationPlan(Long userId, Long boxItemId, List<String> timeSlots) {
         // userId 为数据库主键 id（由 SecurityContext 提供）
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
 
         // 1. 查询药箱条目
         UserMedicineBox boxItem = userMedicineBoxMapper.selectById(boxItemId);
@@ -463,7 +493,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         // userId 为数据库主键 id（由 SecurityContext 提供），为空时从安全上下文获取
         Long actualUserId = (userId != null) ? userId : getCurrentUserId();
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
         LocalDate startDate = today.minusDays(6);
 
         List<MedicationPlan> weeklyPlans = medicationPlanMapper.selectUserWeeklyPlans(actualUserId, startDate, today);
@@ -498,7 +528,7 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
             item.setDosageAtTime(plan.getDosageAtTime());
             item.setTimeSlot(plan.getTimeSlot());
             item.setTimeSlotLabel(getTimeSlotLabel(plan.getTimeSlot()));
-            item.setStatus(plan.getStatus());
+            item.setStatus(resolveDisplayStatus(plan, plan.getStatus(), today, LocalTime.now(BUSINESS_ZONE)));
             item.setDeleted(plan.getDeleted() != null && plan.getDeleted() == 1);
 
             if (plan.getBoxItemId() != null) {
@@ -536,6 +566,32 @@ public class PlanServiceImpl extends ServiceImpl<MedicationPlanMapper, Medicatio
         response.setEndDate(today);
         response.setDailyRecords(dailyRecords);
         return response;
+    }
+
+    private List<UserMedicineBox> findActiveMedicineBoxItems(Long userId, LocalDate today) {
+        LambdaQueryWrapper<UserMedicineBox> query = new LambdaQueryWrapper<>();
+        query.eq(UserMedicineBox::getUserId, userId)
+                .eq(UserMedicineBox::getStatus, UserMedicineBox.Status.ACTIVE.getCode())
+                .le(UserMedicineBox::getStartDate, today)
+                .and(w -> w.isNull(UserMedicineBox::getEndDate).or().ge(UserMedicineBox::getEndDate, today));
+        return userMedicineBoxMapper.selectList(query);
+    }
+
+    private String resolveDisplayStatus(MedicationPlan plan, String storedStatus,
+                                        LocalDate today, LocalTime now) {
+        if (!MedicationPlan.Status.PENDING.getCode().equals(storedStatus)) return storedStatus;
+        if (plan.getPlanDate() == null || plan.getPlanDate().isAfter(today)) return storedStatus;
+        if (plan.getPlanDate().isBefore(today)) return MedicationPlan.Status.MISSED.getCode();
+
+        LocalTime slotTime = switch (plan.getTimeSlot()) {
+            case "morning" -> LocalTime.of(8, 0);
+            case "noon" -> LocalTime.of(12, 0);
+            case "evening" -> LocalTime.of(18, 0);
+            case "before_bed", "night" -> LocalTime.of(21, 0);
+            default -> null;
+        };
+        return slotTime != null && !now.isBefore(slotTime.plusMinutes(10))
+                ? MedicationPlan.Status.MISSED.getCode() : storedStatus;
     }
 
     @Override

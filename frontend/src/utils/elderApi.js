@@ -90,7 +90,7 @@ export async function elderFetch(url, options = {}) {
   }
 
   // 处理401未认证错误
-  if (response.status === 401 || data.code === 401 || data.message?.includes('未认证') || data.message?.includes('Unauthorized') || data.message?.includes('Access Denied')) {
+  if (response.status === 401 || data.code === 401 || data.message?.includes('未认证') || data.message?.includes('Unauthorized')) {
     clearAuth();
     // 触发重新登录（通过事件通知App组件）
     window.dispatchEvent(new CustomEvent('elder-auth-expired'));

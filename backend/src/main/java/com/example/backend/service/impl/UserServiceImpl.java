@@ -41,8 +41,16 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserRegisterResponse register(UserRegisterRequest request) {
+        String username = request.getUsername().trim();
+        String realName = request.getRealName().trim();
+        String role = request.getRole().trim().toLowerCase();
+        String phone = request.getPhone() == null ? "" : request.getPhone().trim();
+        if (SysUser.Role.FAMILY.getCode().equals(role) && !phone.matches("^1[3-9]\\d{9}$")) {
+            throw new IllegalArgumentException("家属账号必须填写有效的手机号");
+        }
+
         LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(SysUser::getUsername, request.getUsername());
+        queryWrapper.eq(SysUser::getUsername, username);
         Long count = userMapper.selectCount(queryWrapper);
         if (count > 0) {
             throw new RuntimeException("用户名已存在");
@@ -51,9 +59,9 @@ public class UserServiceImpl implements UserService {
         SysUser user = new SysUser();
         // 生成雪花算法ID作为userId
         user.setUserId(SnowflakeIdGenerator.getInstance().nextId());
-        user.setUsername(request.getUsername());
+        user.setUsername(username);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRealName(request.getRealName());
+        user.setRealName(realName);
         user.setAge(request.getAge());
         user.setGender(request.getGender());
         user.setHeight(request.getHeight());
@@ -66,9 +74,8 @@ public class UserServiceImpl implements UserService {
         user.setIsBreastfeeding(request.getIsBreastfeeding());
         user.setIsSmoking(request.getIsSmoking());
         user.setIsDrinking(request.getIsDrinking());
-        user.setPhone(request.getPhone());
+        user.setPhone(phone.isEmpty() ? null : phone);
         // 根据请求设置角色，仅允许 elder 或 family
-        String role = request.getRole();
         if (SysUser.Role.FAMILY.getCode().equals(role)) {
             user.setRole(SysUser.Role.FAMILY.getCode());
         } else {

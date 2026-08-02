@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.time.Duration;
+import java.time.ZoneId;
 
 /**
  * 定时任务组件
@@ -31,6 +32,7 @@ import java.time.Duration;
 public class ScheduledTask {
 
     private static final Logger logger = LoggerFactory.getLogger(ScheduledTask.class);
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
 
     @Autowired
     private UserMedicineBoxMapper userMedicineBoxMapper;
@@ -58,7 +60,7 @@ public class ScheduledTask {
         logger.info("=== 开始执行药品过期检查定时任务 ===");
         
         try {
-            LocalDate today = LocalDate.now();
+            LocalDate today = LocalDate.now(BUSINESS_ZONE);
             logger.info("当前日期: {}", today);
             
             // 查询所有active状态的药品
@@ -134,7 +136,7 @@ public class ScheduledTask {
         logger.info("=== 开始执行生成下一天用药计划定时任务 ===");
         
         try {
-            LocalDate today = LocalDate.now();
+            LocalDate today = LocalDate.now(BUSINESS_ZONE);
             LocalDate yesterday = today.minusDays(1);
             logger.info("当前日期: {}, 前一天: {}", today, yesterday);
             
