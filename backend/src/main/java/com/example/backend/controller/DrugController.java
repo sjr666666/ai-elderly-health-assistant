@@ -38,12 +38,8 @@ public class DrugController {
     @GetMapping("/drug/list")
     public ResponseResult<List<DrugInfoResponse>> getDrugList(
             @RequestParam(required = false, defaultValue = "") String keyword) {
-        try {
-            List<DrugInfoResponse> drugList = drugService.getDrugList(keyword);
-            return ResponseResult.success("success", drugList);
-        } catch (Exception e) {
-            return ResponseResult.fail("查询失败: " + e.getMessage());
-        }
+        List<DrugInfoResponse> drugList = drugService.getDrugList(keyword);
+        return ResponseResult.success("success", drugList);
     }
 
     /**
@@ -56,15 +52,11 @@ public class DrugController {
     @GetMapping("/drug/detail")
     public ResponseResult<DrugDetailResponse> getDrugDetail(
             @RequestParam String drugName) {
-        try {
-            DrugDetailResponse drugDetail = drugService.getDrugDetailByName(drugName);
-            if (drugDetail != null) {
-                return ResponseResult.success("success", drugDetail);
-            } else {
-                return ResponseResult.fail("未找到该药品信息");
-            }
-        } catch (Exception e) {
-            return ResponseResult.fail("查询失败: " + e.getMessage());
+        DrugDetailResponse drugDetail = drugService.getDrugDetailByName(drugName);
+        if (drugDetail != null) {
+            return ResponseResult.success("success", drugDetail);
+        } else {
+            return ResponseResult.fail("未找到该药品信息");
         }
     }
 
@@ -78,13 +70,8 @@ public class DrugController {
     @GetMapping("/drug/search")
     public ResponseResult<List<DrugSearchResponse>> searchDrugs(
             @RequestParam String keyword) {
-        try {
-            List<DrugSearchResponse> results = drugService.searchDrugs(keyword);
-            return ResponseResult.success("success", results);
-        } catch (Exception e) {
-            logger.error("智能搜索药品失败: {}", e.getMessage(), e);
-            return ResponseResult.fail("搜索失败: " + e.getMessage());
-        }
+        List<DrugSearchResponse> results = drugService.searchDrugs(keyword);
+        return ResponseResult.success("success", results);
     }
 
     /**
@@ -97,12 +84,8 @@ public class DrugController {
     @GetMapping("/drug/ai-search")
     public ResponseResult<List<DrugSearchResponse>> searchDrugsWithAI(
             @RequestParam String keyword) {
-        try {
-            List<DrugSearchResponse> results = drugService.searchDrugsWithAI(keyword);
-            return ResponseResult.success("success", results);
-        } catch (Exception e) {
-            logger.error("AI搜索药品失败: {}", e.getMessage(), e);
-            return ResponseResult.fail("AI识别失败: " + e.getMessage());
-        }
+        List<DrugSearchResponse> results = drugService.searchDrugsWithAI(keyword);
+        return ResponseResult.success("success", results);
     }
 }
+

@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { saveToken } from '../utils/elderApi';
 
 function Register({ onRegister }) {
   const [username, setUsername] = useState('');
@@ -8,8 +9,11 @@ function Register({ onRegister }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [realName, setRealName] = useState('');
   const [age, setAge] = useState('');
+  const [role, setRole] = useState('elder');
+  const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // 创建输入框引用
   const usernameRef = useRef(null);
@@ -21,6 +25,23 @@ function Register({ onRegister }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    const errors = [];
+    if (!/^[A-Za-z0-9_]{4,20}$/.test(username.trim())) errors.push('用户名需为4-20位字母、数字或下划线');
+    if (!/^.{6,20}$/.test(password)) errors.push('密码长度需为6-20位');
+    if (password !== confirmPassword) errors.push('两次输入的密码不一致');
+    if (!realName.trim() || realName.trim().length > 50) errors.push('请输入真实姓名，且不能超过50个字符');
+    if (age === '' || Number(age) < 0 || Number(age) > 150) errors.push('年龄必须在0-150之间');
+    const nextFieldErrors = {};
+    if (!/^[A-Za-z0-9_]{4,20}$/.test(username.trim())) nextFieldErrors.username = '用户名需为4-20位字母、数字或下划线';
+    if (!/^.{6,20}$/.test(password)) nextFieldErrors.password = '密码长度需为6-20位';
+    if (password !== confirmPassword) nextFieldErrors.confirmPassword = '两次输入的密码不一致';
+    if (!realName.trim() || realName.trim().length > 50) nextFieldErrors.realName = '请输入真实姓名，且不能超过50个字符';
+    if (age === '' || Number(age) < 0 || Number(age) > 150) nextFieldErrors.age = '年龄必须在0-150之间';
+    setFieldErrors(nextFieldErrors);
+    if (errors.length > 0) {
+      return;
+    }
 
     // 验证用户名
     if (!username.trim() || username.trim().length < 4) {
@@ -63,7 +84,7 @@ function Register({ onRegister }) {
     }
 
     // 验证年龄
-    if (!age || parseInt(age) <= 0 || parseInt(age) > 150) {
+    if (!age || parseInt(age) < 0 || parseInt(age) > 150) {
       ageRef.current.setCustomValidity('请输入有效的年龄（1-150）');
       ageRef.current.reportValidity();
       ageRef.current.focus();
@@ -75,8 +96,9 @@ function Register({ onRegister }) {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8080/api/v1/user/register', {
+      const response = await fetch('/api/v1/user/register', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -85,6 +107,7 @@ function Register({ onRegister }) {
           password: password,
           realName: realName.trim(),
           age: parseInt(age),
+          role: 'elder',
         }),
       });
 
@@ -94,6 +117,7 @@ function Register({ onRegister }) {
         // 注册成功后自动调用登录接口
         const loginResponse = await fetch('/api/v1/user/login', {
           method: 'POST',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json;charset=UTF-8',
             'Accept': 'application/json',
@@ -107,13 +131,17 @@ function Register({ onRegister }) {
         const loginData = await loginResponse.json();
 
         if (loginResponse.ok && loginData.code === 200) {
-          // 登录成功，保存用户信息并跳转到首页
+          // 登录成功，保存JWT token（用户信息不存localStorage）
+          const loginResult = loginData.data;
+          if (loginResult.token) {
+            saveToken(loginResult.token);
+          }
           const userData = {
-            ...loginData.data,
+            ...loginResult,
             realName: realName.trim(),
             age: parseInt(age)
           };
-          localStorage.setItem('user', JSON.stringify(userData));
+          delete userData.token;
           onRegister(userData);
         } else {
           // 登录失败，但注册成功，提示用户手动登录
@@ -123,6 +151,7 @@ function Register({ onRegister }) {
         setError(data.message || '注册失败，请重试');
       }
     } catch (err) {
+      console.error('注册请求失败:', err);
       setError('网络连接失败，请稍后重试');
     } finally {
       setIsLoading(false);
@@ -140,7 +169,7 @@ function Register({ onRegister }) {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      minHeight: 'calc(var(--vh, 1vh) * 100)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -157,11 +186,69 @@ function Register({ onRegister }) {
       }}>
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <div style={{ fontSize: '80px', marginBottom: '20px', filter: 'drop-shadow(2px 4px 8px rgba(0,0,0,0.1))' }}>👴</div>
-          <h1 style={{ fontSize: '36px', fontWeight: '800', color: '#4A90E2', marginBottom: '8px' }}>创建老人档案</h1>
-          <p style={{ fontSize: '18px', color: '#6B6B6B', marginTop: '8px' }}>请填写基本信息完成注册</p>
+          <h1 style={{ fontSize: '36px', fontWeight: '800', color: '#4A90E2', marginBottom: '8px' }}>创建账号</h1>
+          <p style={{ fontSize: '18px', color: '#6B6B6B', marginTop: '8px' }}>请选择身份并填写基本信息</p>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
+          {/* 角色选择 */}
+          <div style={{ display: 'none' }} aria-hidden="true">
+            <label style={{
+              fontSize: '20px',
+              fontWeight: '600',
+              marginBottom: '12px',
+              display: 'block',
+              color: '#3D3D3D'
+            }}>
+              <span style={{ color: '#E74C3C', marginRight: '4px' }}>*</span>
+              我是
+            </label>
+            <div style={{ display: 'none' }} aria-hidden="true">
+              <div
+                onClick={() => setRole('elder')}
+                style={{
+                  flex: 1,
+                  padding: '20px',
+                  borderRadius: '16px',
+                  border: role === 'elder' ? '3px solid #4A90E2' : '3px solid #F0EBE3',
+                  background: role === 'elder' ? '#EBF2FC' : '#FAF7F2',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={role === 'elder' ? '#4A90E2' : '#999'} strokeWidth="1.5" style={{ marginBottom: '8px' }}>
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                <div style={{ fontSize: '18px', fontWeight: '600', color: role === 'elder' ? '#4A90E2' : '#666' }}>老人</div>
+                <div style={{ fontSize: '13px', color: '#999', marginTop: '4px' }}>管理我的健康与用药</div>
+              </div>
+              <div
+                onClick={() => setRole('family')}
+                style={{
+                  flex: 1,
+                  padding: '20px',
+                  borderRadius: '16px',
+                  border: role === 'family' ? '3px solid #4A90E2' : '3px solid #F0EBE3',
+                  background: role === 'family' ? '#EBF2FC' : '#FAF7F2',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={role === 'family' ? '#4A90E2' : '#999'} strokeWidth="1.5" style={{ marginBottom: '8px' }}>
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                <div style={{ fontSize: '18px', fontWeight: '600', color: role === 'family' ? '#4A90E2' : '#666' }}>家属</div>
+                <div style={{ fontSize: '13px', color: '#999', marginTop: '4px' }}>关注老人健康状态</div>
+              </div>
+            </div>
+          </div>
+
           <div style={{ marginBottom: '24px' }}>
             <label style={{
               fontSize: '20px',
@@ -187,6 +274,8 @@ function Register({ onRegister }) {
               placeholder="请输入用户名（至少4个字符）"
               required
               minLength={4}
+              maxLength={20}
+              pattern="[A-Za-z0-9_]+"
               style={{
                 width: '100%',
                 padding: '18px 24px',
@@ -209,6 +298,7 @@ function Register({ onRegister }) {
                 e.target.style.background = '#FAF7F2';
               }}
             />
+            {fieldErrors.username && <div style={{ color: '#E74C3C', marginTop: '8px', fontSize: '15px' }}>{fieldErrors.username}</div>}
           </div>
 
           <div style={{ marginBottom: '24px' }}>
@@ -237,6 +327,7 @@ function Register({ onRegister }) {
                 placeholder="请输入密码（至少6个字符）"
                 required
                 minLength={6}
+                maxLength={20}
                 style={{
                   width: '100%',
                   padding: '18px 60px 18px 24px',
@@ -291,6 +382,7 @@ function Register({ onRegister }) {
                 )}
               </button>
             </div>
+            {fieldErrors.password && <div style={{ color: '#E74C3C', marginTop: '8px', fontSize: '15px' }}>{fieldErrors.password}</div>}
           </div>
 
           <div style={{ marginBottom: '24px' }}>
@@ -372,6 +464,7 @@ function Register({ onRegister }) {
                 )}
               </button>
             </div>
+            {fieldErrors.confirmPassword && <div style={{ color: '#E74C3C', marginTop: '8px', fontSize: '15px' }}>{fieldErrors.confirmPassword}</div>}
           </div>
 
           <div style={{ marginBottom: '24px' }}>
@@ -398,6 +491,7 @@ function Register({ onRegister }) {
               }}
               placeholder="请输入老人姓名"
               required
+              maxLength={50}
               style={{
                 width: '100%',
                 padding: '18px 24px',
@@ -420,6 +514,7 @@ function Register({ onRegister }) {
                 e.target.style.background = '#FAF7F2';
               }}
             />
+            {fieldErrors.realName && <div style={{ color: '#E74C3C', marginTop: '8px', fontSize: '15px' }}>{fieldErrors.realName}</div>}
           </div>
 
           <div style={{ marginBottom: '32px' }}>
@@ -449,6 +544,7 @@ function Register({ onRegister }) {
               required
               min="1"
               max="150"
+              inputMode="numeric"
               style={{
                 width: '100%',
                 padding: '18px 24px',
@@ -471,7 +567,52 @@ function Register({ onRegister }) {
                 e.target.style.background = '#FAF7F2';
               }}
             />
+            {fieldErrors.age && <div style={{ color: '#E74C3C', marginTop: '8px', fontSize: '15px' }}>{fieldErrors.age}</div>}
           </div>
+
+          {/* 家属角色时显示联系电话 */}
+          {role === 'family' && (
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{
+                fontSize: '20px',
+                fontWeight: '600',
+                marginBottom: '12px',
+                display: 'block',
+                color: '#3D3D3D'
+              }}>
+                <span style={{ color: '#E74C3C', marginRight: '4px' }}>*</span>
+                联系电话
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="请输入联系电话"
+                required
+                style={{
+                  width: '100%',
+                  padding: '18px 24px',
+                  fontSize: '20px',
+                  border: '3px solid #F0EBE3',
+                  borderRadius: '16px',
+                  outline: 'none',
+                  transition: 'all 0.3s ease',
+                  background: '#FAF7F2',
+                  fontFamily: 'inherit'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#4A90E2';
+                  e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
+                  e.target.style.background = 'white';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#F0EBE3';
+                  e.target.style.boxShadow = 'none';
+                  e.target.style.background = '#FAF7F2';
+                }}
+              />
+            </div>
+          )}
 
           <button
             type="submit"

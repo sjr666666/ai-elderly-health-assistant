@@ -1,20 +1,35 @@
 -- =====================================================
 -- 老年人用药管理系统 - 完整药品测试数据初始化脚本
 -- =====================================================
--- 版本: 2.0
--- 更新内容: 补充常见药品关键词数据，确保AI查询功能可用
+-- 版本: 3.1
+-- 更新内容:
+--   1. 改用 INSERT IGNORE 替代 REPLACE INTO，避免 AUTO_INCREMENT ID 漂移
+--   2. 保持与 init_database.sql 的兼容性（已存在的不重复插入）
+--   3. 修复脚本可重复执行不报错
+--   4. init_database.sql 不再插入药品数据，统一由此脚本导入
+-- =====================================================
+-- 执行方式:
+--   MySQL 命令行: source /path/to/init_drug_data.sql
+--   Navicat:      打开脚本 → 运行
+--   DBeaver:      右键脚本 → Execute
+--   注意: 必须在 init_database.sql 之后执行
 -- =====================================================
 
 USE elderly_medication;
+
+-- 设置客户端字符集
+SET NAMES utf8mb4;
 
 -- 关闭外键检查
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ==================== 药品基础数据 ====================
--- 注意：使用 REPLACE INTO 处理可能存在的重复数据
+-- 使用 INSERT IGNORE 处理可能存在的重复数据
+-- 已存在于 drug_base 表的（按 approval_number UNIQUE 判定）记录会被跳过
+-- 这样可避免 AUTO_INCREMENT 主键漂移，保证 drug_conflict_rules 等外键引用稳定
 
 -- 插入完整药品数据（覆盖各类常见药品）
-REPLACE INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `common_name`, `specification`, `manufacturer`, `category`, `description`) VALUES
+INSERT IGNORE INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `common_name`, `specification`, `manufacturer`, `category`, `description`) VALUES
 
 -- =====================================================
 -- 感冒药类 (6种)
@@ -29,14 +44,14 @@ REPLACE INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `comm
 -- =====================================================
 -- 退烧止痛药类 (8种)
 -- =====================================================
-('国药准字H10960013', '对乙酰氨基酚混悬液', '泰诺林混悬液', '小儿泰诺', '100ml', '上海强生制药有限公司', '退烧药', '成分：对乙酰氨基酚。适应症：用于小儿普通感冒或流行性感冒引起的发热，也用于缓解轻至中度疼痛如头痛、关节痛、牙痛、肌肉痛。用法用量：口服，根据儿童年龄和体重给药，详见说明书。'),
+('国药准字H10960014', '对乙酰氨基酚混悬液', '泰诺林混悬液', '小儿泰诺', '100ml', '上海强生制药有限公司', '退烧药', '成分：对乙酰氨基酚。适应症：用于小儿普通感冒或流行性感冒引起的发热，也用于缓解轻至中度疼痛如头痛、关节痛、牙痛、肌肉痛。用法用量：口服，根据儿童年龄和体重给药，详见说明书。'),
 ('国药准字H19991341', '布洛芬混悬液', '美林', '儿童布洛芬', '100ml:2g', '上海强生制药有限公司', '退烧药', '成分：布洛芬。适应症：用于儿童普通感冒或流行性感冒引起的发热，也用于缓解轻至中度疼痛。用法用量：口服，根据儿童体重给药，详见说明书。'),
 ('国药准字H10980007', '尼美舒利颗粒', '瑞芝清', '尼美舒利', '50mg*6袋', '海南康力制药有限公司', '退烧药', '成分：尼美舒利。适应症：本品为非甾体抗炎药，仅在至少一种其他非甾体抗炎药治疗失败的情况下使用。可用于慢性关节炎（如骨关节炎等）的疼痛、手术和急性创伤后的疼痛、原发性痛经的症状。用法用量：口服，一次50-100mg，一日2次。'),
 ('国药准字H42022082', '复方锌布颗粒', '臣功再欣', '锌布颗粒', '复方*12袋', '南京臣功制药有限公司', '退烧药', '成分：布洛芬、葡萄糖酸锌、氯苯那敏。适应症：用于缓解普通感冒或流行性感冒引起的发热、头痛、鼻塞、咽痛等症状。用法用量：口服，温开水冲服，成人一次1-2袋，一日3次。'),
 ('国药准字H11021309', '阿司匹林肠溶片', '拜阿司匹灵', '拜耳阿司匹林', '100mg*30片', '拜耳医药保健有限公司', '止痛药', '成分：阿司匹林。适应症：用于抑制血小板聚集，预防心肌梗死、脑梗死、短暂性脑缺血发作。用法用量：口服，一次1片，一日1次。'),
 ('国药准字H31021402', '双氯芬酸钠缓释片', '扶他林', '双氯芬酸', '75mg*10片', '北京诺华制药有限公司', '止痛药', '成分：双氯芬酸钠。适应症：用于缓解类风湿关节炎、骨关节炎、脊柱关节病、痛风性关节炎等各种关节炎的关节肿痛症状。也用于各种软组织风湿性疼痛如肩痛、腱鞘炎、滑囊炎、肌痛及运动后损伤性疼痛。用法用量：口服，一次1片，一日1次。'),
 ('国药准字H41024228', '去痛片', '去痛片', '索密痛', '复方*20片', '华中药业股份有限公司', '止痛药', '成分：氨基比林、非那西丁、咖啡因、苯巴比妥。适应症：用于发热及轻、中度疼痛。用法用量：口服，一次1-2片，一日3次。'),
-('国药准字H11021309', '吲哚美辛肠溶片', '消炎痛', '吲哚美辛', '25mg*100片', '北京双吉药业有限公司', '止痛药', '成分：吲哚美辛。适应症：用于关节炎、软组织疼痛，也可用于偏头痛、痛经等的治疗。用法用量：口服，成人一次25mg，一日2-3次。'),
+('国药准字H11021310', '吲哚美辛肠溶片', '消炎痛', '吲哚美辛', '25mg*100片', '北京双吉药业有限公司', '止痛药', '成分：吲哚美辛。适应症：用于关节炎、软组织疼痛，也可用于偏头痛、痛经等的治疗。用法用量：口服，成人一次25mg，一日2-3次。'),
 
 -- =====================================================
 -- 消炎抗生素类 (10种)
@@ -101,7 +116,6 @@ REPLACE INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `comm
 -- =====================================================
 -- 心脑血管药类 (8种)
 -- =====================================================
-('国药准字H11021309', '阿司匹林肠溶片', '拜阿司匹灵', '阿司匹林', '100mg*30片', '拜耳医药保健有限公司', '心脑血管药', '成分：阿司匹林。适应症：用于预防心肌梗死、脑梗死的发生。用法用量：口服，成人一次1片，一日1次。'),
 ('国药准字H20056478', '硫酸氢氯吡格雷片', '波立维', '氯吡格雷', '75mg*7片', '赛诺菲制药有限公司', '心脑血管药', '成分：硫酸氢氯吡格雷。适应症：用于预防动脉粥样硬化血栓形成事件。用法用量：口服，成人一次1片，一日1次。'),
 ('国药准字H20051408', '阿托伐他汀钙片', '立普妥', '阿托伐他汀', '20mg*7片', '辉瑞制药有限公司', '心脑血管药', '成分：阿托伐他汀钙。适应症：用于高脂血症的治疗。用法用量：口服，成人一次10-20mg，一日1次。'),
 ('国药准字Z20028001', '银杏叶片', '银杏叶片', '银杏叶', '9.6mg*60片', '贵州益佰制药股份有限公司', '心脑血管药', '成分：银杏叶提取物。适应症：用于瘀血阻络引起的胸痹心痛、中风、半身不遂、舌强语蹇。用法用量：口服，成人一次2片，一日3次。'),
@@ -109,7 +123,7 @@ REPLACE INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `comm
 ('国药准字H20046712', '辛伐他汀片', '舒降之', '辛伐他汀', '20mg*7片', '默沙东制药有限公司', '心脑血管药', '成分：辛伐他汀。适应症：用于高脂血症的治疗。用法用量：口服，成人一次20mg，一日1次。'),
 ('国药准字H20050879', '瑞舒伐他汀钙片', '可特', '瑞舒伐他汀', '10mg*7片', '阿斯利康制药有限公司', '心脑血管药', '成分：瑞舒伐他汀钙。适应症：用于高脂血症的治疗。用法用量：口服，成人一次10mg，一日1次。'),
 ('国药准字Z20027012', '血塞通软胶囊', '血塞通', '三七总皂苷', '100mg*30粒', '昆药集团股份有限公司', '心脑血管药', '成分：三七总皂苷。适应症：用于瘀血闭脉络证引起的中风偏瘫、胸痹心痛。用法用量：口服，成人一次1-2粒，一日3次。'),
-('国药准字H11021309', '华法林钠片', '华法林', '华法林钠', '2.5mg*100片', '上海信谊药厂有限公司', '抗凝药', '成分：华法林钠。适应症：用于防治血栓栓塞性疾病，如心房颤动、心脏瓣膜病、人工心脏瓣膜置换术后、深静脉血栓形成、肺栓塞等。用法用量：口服，初始剂量通常为每日2.5-5mg，根据凝血功能(INR值)调整剂量。注意：与多种药物存在相互作用，使用前请咨询医生。'),
+('国药准字H31022158', '华法林钠片', '华法林', '华法林钠', '2.5mg*100片', '上海信谊药厂有限公司', '抗凝药', '成分：华法林钠。适应症：用于防治血栓栓塞性疾病，如心房颤动、心脏瓣膜病、人工心脏瓣膜置换术后、深静脉血栓形成、肺栓塞等。用法用量：口服，初始剂量通常为每日2.5-5mg，根据凝血功能(INR值)调整剂量。注意：与多种药物存在相互作用，使用前请咨询医生。'),
 
 -- =====================================================
 -- 止咳化痰药类 (6种)
@@ -167,12 +181,71 @@ REPLACE INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `comm
 ('国药准字Z10944081', '板蓝根颗粒', '白云山', '板蓝根', '10g*20袋', '广州白云山和记黄埔中药有限公司', '清热解毒药', '成分：板蓝根。适应症：清热解毒，凉血，利咽。用于肺胃热盛所致的咽喉肿痛、口咽干燥。用法用量：口服，一次5-10g，一日3-4次。'),
 ('国药准字Z10970025', '清开灵颗粒', '清开灵', '清开灵', '5g*6袋', '哈尔滨一洲制药有限公司', '清热解毒药', '成分：胆酸、珍珠母、猪去氧胆酸、栀子、水牛角、板蓝根、黄芩苷、金银花。适应症：清热解毒，镇静安神。用于外感风热所致发热、烦躁不安。用法用量：口服，一次3-6g，一日2-3次。');
 
+-- 先插入测试数据，再启用外键检查
+-- 注意：测试数据中的子查询依赖 drug_base 表已有数据
+
+-- ==================== 依赖 drug_id 的测试数据 ====================
+-- 使用子查询通过 approval_number 查找 drug_id，避免硬编码 AUTO_INCREMENT 值
+-- 这样无论药品插入顺序如何，测试数据都能正确关联
+
+-- ---------------- 家庭药箱测试数据 ----------------
+INSERT INTO `user_medicine_box` (`user_id`, `drug_id`, `dosage`, `frequency`, `start_date`, `expiry_date`, `total_quantity`, `remaining_quantity`, `note`, `status`) VALUES
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), '1片', '每日2次', '2024-01-01', '2025-06-30', 60, 45, '血压控制', 'active'),
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字H11021309'), '1片', '每日1次', '2024-01-01', '2025-12-31', 30, 20, '预防心梗', 'active'),
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字Z44021856'), '1袋', '发热时服用', '2024-02-01', '2025-02-01', 9, 6, '感冒灵备用', 'active'),
+(3, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), '1片', '每日2次', '2023-06-01', '2025-06-01', 60, 15, '冠心病用药', 'active');
+
+-- ---------------- OCR识别记录测试数据 ----------------
+INSERT INTO `ocr_record` (`user_id`, `image_url`, `raw_text`, `matched_drug_id`, `match_score`, `status`, `created_at`) VALUES
+(1, '/uploads/ocr/20240101_abc123.jpg', '阿司匹林肠溶片 拜耳医药 100mg', (SELECT id FROM drug_base WHERE approval_number='国药准字H11021309'), 0.9523, 'matched', '2024-01-15 10:30:00'),
+(1, '/uploads/ocr/20240102_def456.jpg', '硝苯地平缓释片', (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), 0.8856, 'matched', '2024-01-16 14:20:00'),
+(3, '/uploads/ocr/20240103_ghi789.jpg', '未知药片 XYZ药厂', NULL, 0.1234, 'unmatched', '2024-01-17 09:15:00');
+
+-- ---------------- 药品识别日志测试数据 ----------------
+INSERT INTO `drug_recognition_log` (`ocr_record_id`, `user_id`, `raw_text`, `normalized_name`, `matched_drug_id`, `matched_drug_name`, `match_score`, `matched`, `status`) VALUES
+(1, 1, '阿司匹林肠溶片 拜耳医药 100mg', '阿司匹林肠溶片', (SELECT id FROM drug_base WHERE approval_number='国药准字H11021309'), '阿司匹林肠溶片', 0.9523, 1, '识别成功'),
+(2, 1, '硝苯地平缓释片', '硝苯地平缓释片', (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), '硝苯地平缓释片', 0.8856, 1, '识别成功');
+
+-- ---------------- AI对话记录测试数据 ----------------
+INSERT INTO `ai_conversation_log` (`user_id`, `query_type`, `user_input`, `ai_output`, `safety_check_passed`) VALUES
+(1, 'drug_search', '感冒了吃什么药好', '根据您的症状描述，建议您可以使用以下药品：\n1. 感冒灵颗粒 - 用于感冒引起的头痛、发热、鼻塞等症状\n2. 布洛芬缓释胶囊 - 用于缓解发热和疼痛\n\n注意事项：\n- 如果症状持续或加重，请及时就医\n- 服用药物时请仔细阅读说明书', 1),
+(1, 'drug_search', '阿司匹林的副作用', '阿司匹林可能的副作用包括：\n1. 胃肠道不适：如恶心、呕吐、腹痛\n2. 出血风险：可能增加出血倾向\n3. 过敏反应：少数人可能出现皮疹、哮喘\n\n如果出现严重不适，请立即停药并就医。', 1);
+
+-- ---------------- 用药计划测试数据 ----------------
+INSERT INTO `medication_plan` (`user_id`, `drug_id`, `plan_date`, `time_slot`, `dosage_at_time`, `status`, `remind_before`) VALUES
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), CURDATE(), 'morning', '1片', 'pending', 15),
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), CURDATE(), 'afternoon', '1片', 'pending', 15),
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), CURDATE(), 'evening', '1片', 'pending', 15),
+(1, (SELECT id FROM drug_base WHERE approval_number='国药准字H11021309'), CURDATE(), 'morning', '1片', 'pending', 15),
+(3, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), CURDATE(), 'morning', '1片', 'pending', 20),
+(3, (SELECT id FROM drug_base WHERE approval_number='国药准字H10930005'), CURDATE(), 'evening', '1片', 'pending', 20);
+
+-- ---------------- 服药确认记录测试数据 ----------------
+INSERT INTO `medication_log` (`plan_id`, `user_id`, `status`, `confirmed_at`, `note`) VALUES
+(1, 1, 'taken', DATE_SUB(NOW(), INTERVAL 4 HOUR), '早餐后服用'),
+(4, 1, 'taken', DATE_SUB(NOW(), INTERVAL 8 HOUR), '早餐后服用');
+
+-- ---------------- 提醒通知记录测试数据 ----------------
+INSERT INTO `reminder_log` (`user_id`, `plan_id`, `remind_type`, `content`, `channel`, `status`) VALUES
+(1, 1, 'medication_reminder', '王阿姨您好，您有一个服药提醒：硝苯地平缓释片 1片', 'app', 'sent'),
+(1, 4, 'medication_reminder', '王阿姨您好，您有一个服药提醒：阿司匹林肠溶片 1片', 'app', 'sent'),
+(3, 5, 'medication_reminder', '李大爷您好，您有一个服药提醒：硝苯地平缓释片 1片', 'app', 'sent');
+
+-- ---------------- 药品冲突规则测试数据 ----------------
+INSERT INTO `drug_conflict_rules` (`drug_a_id`, `drug_b_id`, `conflict_level`, `conflict_reason`, `conflict_reason_plain`, `source`) VALUES
+((SELECT id FROM drug_base WHERE approval_number='国药准字H11021309'), (SELECT id FROM drug_base WHERE approval_number='国药准字H19991323'), 'high', '阿司匹林与布洛芬合用可能增加胃肠道出血风险', '阿司匹林和布洛芬都是非甾体抗炎药，一起吃可能会让胃不舒服，严重的话可能会胃出血', '临床用药指南'),
+((SELECT id FROM drug_base WHERE approval_number='国药准字H19993038'), (SELECT id FROM drug_base WHERE approval_number='国药准字H19991323'), 'medium', '阿莫西林与布洛芬合用可能增加肾毒性风险', '阿莫西林和布洛芬一起用可能会对肾脏造成负担', '药物相互作用数据库'),
+((SELECT id FROM drug_base WHERE approval_number='国药准字H10910058'), (SELECT id FROM drug_base WHERE approval_number='国药准字H10910085'), 'low', '奥美拉唑可能影响二甲双胍的吸收', '胃药可能会影响糖尿病药物的效果，必要时请错开服用时间', '临床经验');
+
 -- 重新启用外键检查
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- 输出插入结果
 SELECT '药品数据插入完成！' AS result;
-SELECT COUNT(*) AS total_drugs FROM drug_base;
+SELECT COUNT(*) AS '药品总数' FROM drug_base;
 
 -- 按类别统计药品数量
-SELECT category AS '药品类别', COUNT(*) AS '药品数量' FROM drug_base GROUP BY category ORDER BY COUNT(*) DESC;
+SELECT category AS '药品类别', COUNT(*) AS '药品数量'
+FROM drug_base
+GROUP BY category
+ORDER BY COUNT(*) DESC;

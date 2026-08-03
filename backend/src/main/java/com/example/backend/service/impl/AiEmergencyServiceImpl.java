@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -34,18 +35,21 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
     @Value("${deepseek.model:deepseek-chat}")
     private String model;
 
-    @Value("${deepseek.timeout:30000}")
-    private int timeout;
-
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final AiConversationLogService conversationLogService;
 
-    // 紧急关键词列表
+    // 紧急关键词列表（排除泛化词如"快""马上"，避免日常用语误判）
     private static final Set<String> EMERGENCY_KEYWORDS = Set.of(
             "紧急", "救命", "晕倒", "昏迷", "心跳", "呼吸", "出血", "车祸", "摔倒", "骨折",
             "中风", "心梗", "胸痛", "窒息", "中毒", "溺水", "触电", "烧伤", "烫伤", "休克",
-            "抽搐", "发作", "危险", "快", "马上", "立刻", "急救"
+            "抽搐", "发作", "危险", "立刻", "急救"
+    );
+
+    // 否定场景关键词（出现这些词时，即使包含紧急关键词也不判定为紧急）
+    private static final Set<String> NEGATIVE_KEYWORDS = Set.of(
+            "不急", "没事", "不要紧", "没关系", "不用担心", "不严重", "不紧急",
+            "不是紧急", "不是急", "虚惊", "误报", "已经好了", "已经没事"
     );
 
     // 问题分类标签
@@ -99,7 +103,7 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
         OFFLINE_RESPONSES.put("救命", "请立即拨打120！同时保持患者呼吸道通畅，尽量提供急救帮助。");
     }
 
-    public AiEmergencyServiceImpl(RestTemplate restTemplate, ObjectMapper objectMapper,
+    public AiEmergencyServiceImpl(@Qualifier("aiRestTemplate") RestTemplate restTemplate, ObjectMapper objectMapper,
                                   AiConversationLogService conversationLogService) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
@@ -136,6 +140,23 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
         return ResponseResult.success(response);
     }
 
+    // 对话历史最大保留轮数
+    private static final int MAX_HISTORY_ROUNDS = 10;
+
+    /**
+     * 截断对话历史，只保留最近N轮（1轮=1条user+1条assistant）
+     * 如果历史超出限制，丢弃最旧的消息
+     */
+    private List<Map<String, String>> truncateHistory(List<Map<String, String>> history) {
+        if (history == null || history.size() <= MAX_HISTORY_ROUNDS * 2) {
+            return history;
+        }
+        // 保留最近10轮（20条消息）
+        int keepCount = MAX_HISTORY_ROUNDS * 2;
+        logger.info("对话历史超出{}轮限制，截断前{}条 -> 保留最近{}条", MAX_HISTORY_ROUNDS, history.size(), keepCount);
+        return history.subList(history.size() - keepCount, history.size());
+    }
+
     /**
      * 调用DeepSeek AI处理紧急问题
      */
@@ -167,9 +188,10 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
             systemMessage.put("content", systemPrompt);
             messages.add(systemMessage);
 
-            // 2. 历史对话
-            if (history != null && !history.isEmpty()) {
-                for (Map<String, String> hist : history) {
+            // 2. 历史对话（截断保留最近10轮）
+            List<Map<String, String>> truncatedHistory = truncateHistory(history);
+            if (truncatedHistory != null && !truncatedHistory.isEmpty()) {
+                for (Map<String, String> hist : truncatedHistory) {
                     Map<String, String> histMessage = new HashMap<>();
                     histMessage.put("role", hist.getOrDefault("role", "user"));
                     histMessage.put("content", hist.getOrDefault("content", ""));
@@ -299,6 +321,15 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
         }
 
         String lowerQuestion = question.toLowerCase();
+
+        // 先检查否定场景，如果包含否定关键词则不判定为紧急
+        for (String negKeyword : NEGATIVE_KEYWORDS) {
+            if (lowerQuestion.contains(negKeyword)) {
+                return false;
+            }
+        }
+
+        // 再检查紧急关键词
         for (String keyword : EMERGENCY_KEYWORDS) {
             if (lowerQuestion.contains(keyword)) {
                 return true;

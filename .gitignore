@@ -41,7 +41,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 yarn.lock
-package-lock.json
+!frontend/package-lock.json
 .pnpm-store/
 
 # Frontend - React
@@ -61,6 +61,7 @@ dist/
 *.db
 *.sqlite
 *.sqlite3
+db_backups/
 
 # Spring Boot Local Config
 backend/src/main/resources/application-local.properties
@@ -70,4 +71,3 @@ backend/src/main/resources/application-local.yml
 # OS
 Thumbs.db
 Desktop.ini
-backend/uploads/

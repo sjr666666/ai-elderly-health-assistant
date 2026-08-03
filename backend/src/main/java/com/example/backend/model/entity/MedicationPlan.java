@@ -78,6 +78,14 @@ public class MedicationPlan extends BaseEntity {
     private Integer remindBefore;
 
     /**
+     * 提醒阶段
+     * none（未触发）/ pre_remind（提前提醒）/ due_now（到时提醒）/ overdue（超时提醒）/ notify_family（已通知家属）
+     * 默认值：none
+     */
+    @TableField("reminder_stage")
+    private String reminderStage;
+
+    /**
      * 时段枚举
      */
     public enum TimeSlot {
@@ -119,7 +127,9 @@ public class MedicationPlan extends BaseEntity {
         PENDING("pending", "待服用"),
         TAKEN("taken", "已服用"),
         MISSED("missed", "已错过"),
-        SKIPPED("skipped", "已跳过");
+        SKIPPED("skipped", "已跳过"),
+        COMPLETED("completed", "已完成"),
+        CANCELLED("cancelled", "已取消");
 
         private final String code;
         private final String description;

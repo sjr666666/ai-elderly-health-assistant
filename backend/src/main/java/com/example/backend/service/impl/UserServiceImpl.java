@@ -1,6 +1,8 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.common.BusinessException;
 import com.example.backend.common.util.SnowflakeIdGenerator;
+import com.example.backend.config.JwtUtils;
 import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.dto.UserLoginRequest;
 import com.example.backend.model.dto.UserLoginResponse;
@@ -10,42 +12,57 @@ import com.example.backend.model.dto.UserRegisterRequest;
 import com.example.backend.model.dto.UserRegisterResponse;
 import com.example.backend.model.entity.SysUser;
 import com.example.backend.service.UserService;
+import com.example.backend.service.RefreshTokenService;
+import com.example.backend.service.ElderNotificationService;
+import com.example.backend.mapper.GuardianElderRelationMapper;
+import com.example.backend.model.entity.GuardianElderRelation;
+import com.example.backend.model.enums.EventType;
+import com.example.backend.model.enums.RelationStatus;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
+@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
     private static final Logger logger = LoggerFactory.getLogger(UserServiceImpl.class);
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
-
-    @Autowired
-    public UserServiceImpl(UserMapper userMapper, PasswordEncoder passwordEncoder) {
-        this.userMapper = userMapper;
-        this.passwordEncoder = passwordEncoder;
-    }
+    private final JwtUtils jwtUtils;
+    private final ElderNotificationService elderNotificationService;
+    private final GuardianElderRelationMapper guardianElderRelationMapper;
+    private final RefreshTokenService refreshTokenService;
 
     @Override
     public UserRegisterResponse register(UserRegisterRequest request) {
+        String username = request.getUsername().trim();
+        String realName = request.getRealName().trim();
+        String role = request.getRole().trim().toLowerCase();
+        String phone = request.getPhone() == null ? "" : request.getPhone().trim();
+        if (SysUser.Role.FAMILY.getCode().equals(role) && !phone.matches("^1[3-9]\\d{9}$")) {
+            throw new IllegalArgumentException("家属账号必须填写有效的手机号");
+        }
+
         LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(SysUser::getUsername, request.getUsername());
+        queryWrapper.eq(SysUser::getUsername, username);
         Long count = userMapper.selectCount(queryWrapper);
         if (count > 0) {
-            throw new RuntimeException("用户名已存在");
+            throw new BusinessException("用户名已存在");
         }
 
         SysUser user = new SysUser();
         // 生成雪花算法ID作为userId
         user.setUserId(SnowflakeIdGenerator.getInstance().nextId());
-        user.setUsername(request.getUsername());
+        user.setUsername(username);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRealName(request.getRealName());
+        user.setRealName(realName);
         user.setAge(request.getAge());
         user.setGender(request.getGender());
         user.setHeight(request.getHeight());
@@ -58,7 +75,13 @@ public class UserServiceImpl implements UserService {
         user.setIsBreastfeeding(request.getIsBreastfeeding());
         user.setIsSmoking(request.getIsSmoking());
         user.setIsDrinking(request.getIsDrinking());
-        user.setRole(SysUser.Role.ELDER.getCode());
+        user.setPhone(phone.isEmpty() ? null : phone);
+        // 根据请求设置角色，仅允许 elder 或 family
+        if (SysUser.Role.FAMILY.getCode().equals(role)) {
+            user.setRole(SysUser.Role.FAMILY.getCode());
+        } else {
+            user.setRole(SysUser.Role.ELDER.getCode());
+        }
 
         userMapper.insert(user);
 
@@ -83,6 +106,11 @@ public class UserServiceImpl implements UserService {
             return null;
         }
 
+        // 生成JWT令牌
+        String token = jwtUtils.generateToken(user.getId(), user.getUsername(), user.getRole());
+        String refreshToken = refreshTokenService.issue(user.getId(), user.getUsername(), user.getRole());
+        logger.info("用户登录成功 - userId: {}, username: {}, role: {}", user.getId(), user.getUsername(), user.getRole());
+
         return UserLoginResponse.builder()
                 .id(user.getId())  // 添加数据库主键ID
                 .userId(String.valueOf(user.getUserId()))  // 转换为 String
@@ -101,16 +129,17 @@ public class UserServiceImpl implements UserService {
                 .isSmoking(user.getIsSmoking())
                 .isDrinking(user.getIsDrinking())
                 .role(user.getRole())
+                .token(token)  // 返回JWT令牌
+                .refreshToken(refreshToken)
                 .build();
     }
 
     @Override
     public UserProfileResponse getUserProfile(Long userId) {
-        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(SysUser::getUserId, userId);
-        SysUser user = userMapper.selectOne(queryWrapper);
+        // userId 为数据库主键 id（由 SecurityContext 提供）
+        SysUser user = userMapper.selectById(userId);
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         return UserProfileResponse.builder()
@@ -129,6 +158,7 @@ public class UserServiceImpl implements UserService {
                 .isSmoking(user.getIsSmoking())
                 .isDrinking(user.getIsDrinking())
                 .role(user.getRole())
+                .phone(user.getPhone())
                 .build();
     }
 
@@ -144,12 +174,11 @@ public class UserServiceImpl implements UserService {
                 request.getIsPregnant(), request.getIsBreastfeeding(),
                 request.getIsSmoking(), request.getIsDrinking());
 
-        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(SysUser::getUserId, userId);
-        SysUser user = userMapper.selectOne(queryWrapper);
+        // userId 为数据库主键 id（由 SecurityContext 提供）
+        SysUser user = userMapper.selectById(userId);
         if (user == null) {
             logger.error("用户不存在 - userId: {}", userId);
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         // 更新称呼（realName）
@@ -176,9 +205,9 @@ public class UserServiceImpl implements UserService {
         if (request.getAllergyHistory() != null) {
             user.setAllergyHistory(request.getAllergyHistory());
         }
-        // 更新慢性病史
+        // 更新慢性病史（允许空字符串清空）
         if (request.getChronicDiseases() != null) {
-            user.setChronicDiseases(request.getChronicDiseases());
+            user.setChronicDiseases(request.getChronicDiseases().trim().isEmpty() ? null : request.getChronicDiseases());
         }
         // 更新肾功能状态
         if (request.getKidneyFunction() != null && !request.getKidneyFunction().trim().isEmpty()) {
@@ -204,8 +233,65 @@ public class UserServiceImpl implements UserService {
         if (request.getIsDrinking() != null) {
             user.setIsDrinking(request.getIsDrinking());
         }
+        // 更新联系电话
+        if (request.getPhone() != null && !request.getPhone().trim().isEmpty()) {
+            String oldPhone = user.getPhone();
+            user.setPhone(request.getPhone().trim());
+            // 家属修改电话时，通知绑定的老人
+            if ("family".equals(user.getRole()) && !request.getPhone().trim().equals(oldPhone)) {
+                notifyEldersPhoneChanged(user, oldPhone, request.getPhone().trim());
+            }
+        }
 
         int result = userMapper.updateById(user);
         logger.info("用户档案更新结果 - userId: {}, 影响行数: {}", userId, result);
+    }
+
+    @Override
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        // userId 为数据库主键 id（由 SecurityContext 提供）
+        SysUser user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+            throw new BusinessException("旧密码错误");
+        }
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new BusinessException("新密码长度不能少于6位");
+        }
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userMapper.updateById(user);
+        refreshTokenService.revokeAllForUser(userId);
+        logger.info("用户密码修改成功 - userId: {}", userId);
+    }
+
+    /**
+     * 家属电话变更时通知绑定的老人
+     */
+    private void notifyEldersPhoneChanged(SysUser guardian, String oldPhone, String newPhone) {
+        try {
+            LambdaQueryWrapper<GuardianElderRelation> query = new LambdaQueryWrapper<>();
+            query.eq(GuardianElderRelation::getGuardianId, guardian.getId())
+                    .eq(GuardianElderRelation::getStatus, RelationStatus.ACTIVE.getCode());
+            List<GuardianElderRelation> bindings = guardianElderRelationMapper.selectList(query);
+            for (GuardianElderRelation binding : bindings) {
+                String extraData = String.format(
+                        "{\"guardianId\":%d,\"guardianName\":\"%s\",\"oldPhone\":\"%s\",\"newPhone\":\"%s\",\"relationship\":\"%s\"}",
+                        guardian.getId(), guardian.getRealName(),
+                        oldPhone != null ? oldPhone : "",
+                        newPhone,
+                        binding.getRelationType() != null ? binding.getRelationType() : "");
+                elderNotificationService.createNotification(
+                        binding.getElderId(),
+                        EventType.PHONE_UPDATE.getCode(),
+                        "联系电话变更",
+                        guardian.getRealName() + "的联系电话已变更为" + newPhone + "，是否更新紧急联系人电话？",
+                        extraData
+                );
+            }
+        } catch (Exception e) {
+            logger.warn("通知老人电话变更失败 - guardianId: {}, error: {}", guardian.getUserId(), e.getMessage());
+        }
     }
 }

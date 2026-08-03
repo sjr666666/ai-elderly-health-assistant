@@ -1,16 +1,30 @@
 -- =====================================================
 -- 老年人用药管理系统 - 数据库初始化脚本
 -- =====================================================
--- 版本: 2.0
--- 更新内容: 补充完整测试数据，支持所有功能模块
+-- 版本: 2.2
+-- 更新内容:
+--   1. sys_user 建表语句补充 phone 字段（与 add_col_if_missing 保持一致）
+--   2. drug_category_keywords/drug_aliases 改用 CREATE TABLE IF NOT EXISTS
+--      配合 INSERT IGNORE 实现脚本幂等（可重复执行不报错）
+--   3. 保留原有的 add_col_if_missing 存储过程兼容老库
+--   4. 其余业务表仍使用 DROP+CREATE，确保数据干净
+-- =====================================================
+-- 执行方式:
+--   MySQL 命令行: source /path/to/init_database.sql
+--   Navicat:      打开脚本 → 运行（已自动处理 DELIMITER）
+--   DBeaver:      右键脚本 → Execute → 勾选 "Ignore DELIMITER"
+--   注意: 必须按顺序执行: 1.init_database.sql → 2.init_drug_data.sql → 3.init_guardian_tables.sql
 -- =====================================================
 
 -- 创建数据库（如果不存在）
-CREATE DATABASE IF NOT EXISTS `elderly_medication` 
-  DEFAULT CHARACTER SET utf8mb4 
+CREATE DATABASE IF NOT EXISTS `elderly_medication`
+  DEFAULT CHARACTER SET utf8mb4
   DEFAULT COLLATE utf8mb4_unicode_ci;
 
 USE `elderly_medication`;
+
+-- 设置客户端字符集
+SET NAMES utf8mb4;
 
 -- 关闭外键检查
 SET FOREIGN_KEY_CHECKS = 0;
@@ -22,6 +36,7 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
   `username` varchar(50) NOT NULL UNIQUE COMMENT '登录名',
   `password` varchar(255) NOT NULL COMMENT '加密密码',
   `real_name` varchar(50) NOT NULL COMMENT '真实姓名/称呼',
+  `phone` varchar(20) NULL COMMENT '手机号',
   `age` tinyint NULL COMMENT '年龄',
   `gender` varchar(10) NULL COMMENT '性别：male/female',
   `height` decimal(5,1) NULL COMMENT '身高（cm）',
@@ -35,6 +50,7 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
   `is_smoking` tinyint NOT NULL DEFAULT 0 COMMENT '是否吸烟：0否/1是',
   `is_drinking` tinyint NOT NULL DEFAULT 0 COMMENT '是否饮酒：0否/1是',
   `role` varchar(20) NOT NULL DEFAULT 'elder' COMMENT '角色：elder/family',
+  `last_active_time` datetime NULL COMMENT '最后活跃时间',
   `bind_elder_id` bigint NULL COMMENT '家属绑定的老人ID',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -76,7 +92,9 @@ CALL add_col_if_missing('sys_user', 'liver_function', "varchar(50) NULL COMMENT 
 CALL add_col_if_missing('sys_user', 'is_pregnant',    "tinyint NOT NULL DEFAULT 0 COMMENT '是否孕期' AFTER `liver_function`");
 CALL add_col_if_missing('sys_user', 'is_breastfeeding',"tinyint NOT NULL DEFAULT 0 COMMENT '是否哺乳期' AFTER `is_pregnant`");
 CALL add_col_if_missing('sys_user', 'is_smoking',     "tinyint NOT NULL DEFAULT 0 COMMENT '是否吸烟' AFTER `is_breastfeeding`");
+CALL add_col_if_missing('sys_user', 'phone',          "varchar(20) NULL COMMENT '手机号' AFTER `real_name`");
 CALL add_col_if_missing('sys_user', 'is_drinking',    "tinyint NOT NULL DEFAULT 0 COMMENT '是否饮酒' AFTER `is_smoking`");
+CALL add_col_if_missing('sys_user', 'last_active_time',"datetime NULL COMMENT '最后活跃时间' AFTER `role`");
 
 DROP PROCEDURE add_col_if_missing;
 
@@ -110,8 +128,8 @@ CREATE TABLE `user_medicine_box` (
   `start_date` date NULL COMMENT '开始服用日期',
   `end_date` date NULL COMMENT '预计结束日期',
   `expiry_date` date NULL COMMENT '药品有效期',
-  `total_quantity` int NULL COMMENT '总数量',
-  `remaining_quantity` int NULL COMMENT '剩余数量',
+  `total_quantity` decimal(12,3) NULL COMMENT '总数量',
+  `remaining_quantity` decimal(12,3) NULL COMMENT '剩余数量',
   `note` varchar(500) NULL COMMENT '用户备注',
   `status` varchar(20) NOT NULL DEFAULT 'active' COMMENT '状态：active/stopped',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '添加时间',
@@ -185,6 +203,7 @@ CREATE TABLE `medication_plan` (
   `dosage_at_time` varchar(50) NOT NULL COMMENT '该时段用量',
   `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT '状态',
   `remind_before` int NULL DEFAULT 15 COMMENT '提前提醒分钟数',
+  `reminder_stage` varchar(20) NOT NULL DEFAULT 'none' COMMENT '提醒阶段: none/pre_remind/due_now/overdue/notify_family',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除标记',
@@ -260,8 +279,7 @@ CREATE TABLE `drug_conflict_rules` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='药品冲突规则表';
 
 -- ==================== 药品类别关键词表 ====================
-DROP TABLE IF EXISTS `drug_category_keywords`;
-CREATE TABLE `drug_category_keywords` (
+CREATE TABLE IF NOT EXISTS `drug_category_keywords` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
   `category` varchar(100) NOT NULL COMMENT '药品类别',
   `keyword` varchar(100) NOT NULL COMMENT '搜索关键词',
@@ -275,8 +293,7 @@ CREATE TABLE `drug_category_keywords` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='药品类别关键词表';
 
 -- ==================== 药品别名映射表 ====================
-DROP TABLE IF EXISTS `drug_aliases`;
-CREATE TABLE `drug_aliases` (
+CREATE TABLE IF NOT EXISTS `drug_aliases` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
   `alias_name` varchar(200) NOT NULL COMMENT '药品别名',
   `generic_name` varchar(200) NOT NULL COMMENT '对应的通用名',
@@ -289,34 +306,64 @@ CREATE TABLE `drug_aliases` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='药品别名映射表';
 
 -- =============== 添加外键约束 ===============
-ALTER TABLE `user_medicine_box`
-ADD CONSTRAINT `fk_box_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE,
-ADD CONSTRAINT `fk_box_drug` FOREIGN KEY (`drug_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE;
+-- 使用存储过程安全添加外键（避免重复执行报错）
+DROP PROCEDURE IF EXISTS add_fk_if_not_exists;
+DELIMITER $$
+CREATE PROCEDURE add_fk_if_not_exists(
+    IN p_table VARCHAR(64),
+    IN p_constraint VARCHAR(64),
+    IN p_definition TEXT
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = p_table
+          AND CONSTRAINT_NAME = p_constraint
+    ) THEN
+        SET @sql = CONCAT('ALTER TABLE `', p_table, '` ADD CONSTRAINT `', p_constraint, '` ', p_definition);
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END$$
+DELIMITER ;
 
-ALTER TABLE `ocr_record`
-ADD CONSTRAINT `fk_ocr_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE,
-ADD CONSTRAINT `fk_ocr_drug` FOREIGN KEY (`matched_drug_id`) REFERENCES `drug_base`(`id`) ON DELETE SET NULL;
+CALL add_fk_if_not_exists('user_medicine_box', 'fk_box_user', 'FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('user_medicine_box', 'fk_box_drug', 'FOREIGN KEY (`drug_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('ocr_record', 'fk_ocr_user', 'FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('ocr_record', 'fk_ocr_drug', 'FOREIGN KEY (`matched_drug_id`) REFERENCES `drug_base`(`id`) ON DELETE SET NULL');
+CALL add_fk_if_not_exists('drug_recognition_log', 'fk_rec_log_ocr', 'FOREIGN KEY (`ocr_record_id`) REFERENCES `ocr_record`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('medication_plan', 'fk_plan_user', 'FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('medication_plan', 'fk_plan_drug', 'FOREIGN KEY (`drug_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('medication_log', 'fk_log_plan', 'FOREIGN KEY (`plan_id`) REFERENCES `medication_plan`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('medication_log', 'fk_log_user', 'FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('reminder_log', 'fk_remind_user', 'FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('emergency_contact', 'fk_contact_elder', 'FOREIGN KEY (`elder_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('drug_conflict_rules', 'fk_conflict_drug_a', 'FOREIGN KEY (`drug_a_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE');
+CALL add_fk_if_not_exists('drug_conflict_rules', 'fk_conflict_drug_b', 'FOREIGN KEY (`drug_b_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE');
 
-ALTER TABLE `drug_recognition_log`
-ADD CONSTRAINT `fk_rec_log_ocr` FOREIGN KEY (`ocr_record_id`) REFERENCES `ocr_record`(`id`) ON DELETE CASCADE;
+-- ==================== 今日一课-慢病科普表 ====================
+CREATE TABLE IF NOT EXISTS `daily_lesson` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '自增主键ID',
+  `user_id` bigint NOT NULL COMMENT '用户ID（关联sys_user.id）',
+  `lesson_date` date NOT NULL COMMENT '推送日期',
+  `chronic_disease` varchar(100) NULL COMMENT '本次科普针对的慢病名称',
+  `title` varchar(200) NULL COMMENT '科普标题',
+  `content` text NULL COMMENT '科普正文（200-350字）',
+  `is_generated` tinyint NOT NULL DEFAULT 0 COMMENT '0-未生成或生成失败 1-已生成',
+  `error_msg` varchar(500) NULL COMMENT 'AI生成失败时的错误信息',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除标记',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_date` (`user_id`, `lesson_date`),
+  INDEX `idx_lesson_date` (`lesson_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='今日一课-慢病科普表';
 
-ALTER TABLE `medication_plan`
-ADD CONSTRAINT `fk_plan_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE,
-ADD CONSTRAINT `fk_plan_drug` FOREIGN KEY (`drug_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE;
+CALL add_fk_if_not_exists('daily_lesson', 'fk_daily_lesson_user', 'FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE');
 
-ALTER TABLE `medication_log`
-ADD CONSTRAINT `fk_log_plan` FOREIGN KEY (`plan_id`) REFERENCES `medication_plan`(`id`) ON DELETE CASCADE,
-ADD CONSTRAINT `fk_log_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE;
-
-ALTER TABLE `reminder_log`
-ADD CONSTRAINT `fk_remind_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE;
-
-ALTER TABLE `emergency_contact`
-ADD CONSTRAINT `fk_contact_elder` FOREIGN KEY (`elder_id`) REFERENCES `sys_user`(`id`) ON DELETE CASCADE;
-
-ALTER TABLE `drug_conflict_rules`
-ADD CONSTRAINT `fk_conflict_drug_a` FOREIGN KEY (`drug_a_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE,
-ADD CONSTRAINT `fk_conflict_drug_b` FOREIGN KEY (`drug_b_id`) REFERENCES `drug_base`(`id`) ON DELETE CASCADE;
+DROP PROCEDURE IF EXISTS add_fk_if_not_exists;
 
 -- 重新启用外键检查
 SET FOREIGN_KEY_CHECKS = 1;
@@ -324,75 +371,20 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- =============== 插入测试数据 ===============
 
 -- ---------------- 用户测试数据 ----------------
-INSERT INTO `sys_user` (`user_id`, `username`, `password`, `real_name`, `age`, `gender`, `height`, `weight`, `allergy_history`, `chronic_diseases`, `kidney_function`, `liver_function`, `is_pregnant`, `is_breastfeeding`, `is_smoking`, `is_drinking`, `role`) VALUES
-(10001, 'laowang', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '王阿姨', 68, 'female', 160.0, 62.5, '无药物过敏史', '高血压、糖尿病', 'mild_impairment', 'normal', 0, 0, 0, 0, 'elder'),
-(10002, 'zhangsan', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '张三', 35, 'male', 175.0, 72.0, NULL, NULL, 'normal', 'normal', 0, 0, 0, 1, 'family'),
-(10003, 'laoli', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '李大爷', 72, 'male', 168.0, 68.0, '青霉素过敏', '冠心病、脑梗死后遗症', 'moderate_impairment', 'mild_impairment', 0, 0, 1, 0, 'elder'),
-(10004, 'zhaosi', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '赵四', 42, 'male', 178.0, 80.0, NULL, NULL, 'normal', 'normal', 0, 0, 0, 0, 'family'),
-(10005, 'xiaomei', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', '小美', 28, 'female', 165.0, 55.0, '磺胺过敏', NULL, 'normal', 'normal', 1, 0, 0, 0, 'family');
+-- 密码统一为: 123456 (BCrypt 哈希，$2a$ 10 轮)
+-- 使用 INSERT IGNORE 避免 sys_user 已存在时 UNIQUE(user_id)/UNIQUE(username) 冲突
+-- 这样脚本可重复执行不报错：首次插入，重复执行时跳过已存在的用户
+INSERT IGNORE INTO `sys_user` (`user_id`, `username`, `password`, `real_name`, `age`, `gender`, `height`, `weight`, `allergy_history`, `chronic_diseases`, `kidney_function`, `liver_function`, `is_pregnant`, `is_breastfeeding`, `is_smoking`, `is_drinking`, `role`) VALUES
+(10001, 'laowang', '$2a$10$VCrz02JzMVmFN2p56zcxR.gSlItx/Cn4kgx817j1q1UXrUJXDOHfu', '王阿姨', 68, 'female', 160.0, 62.5, '无药物过敏史', '高血压、糖尿病', 'mild_impairment', 'normal', 0, 0, 0, 0, 'elder'),
+(10002, 'zhangsan', '$2a$10$VCrz02JzMVmFN2p56zcxR.gSlItx/Cn4kgx817j1q1UXrUJXDOHfu', '张三', 35, 'male', 175.0, 72.0, NULL, NULL, 'normal', 'normal', 0, 0, 0, 1, 'family'),
+(10003, 'laoli', '$2a$10$VCrz02JzMVmFN2p56zcxR.gSlItx/Cn4kgx817j1q1UXrUJXDOHfu', '李大爷', 72, 'male', 168.0, 68.0, '青霉素过敏', '冠心病、脑梗死后遗症', 'moderate_impairment', 'mild_impairment', 0, 0, 1, 0, 'elder'),
+(10004, 'zhaosi', '$2a$10$VCrz02JzMVmFN2p56zcxR.gSlItx/Cn4kgx817j1q1UXrUJXDOHfu', '赵四', 42, 'male', 178.0, 80.0, NULL, NULL, 'normal', 'normal', 0, 0, 0, 0, 'family'),
+(10005, 'xiaomei', '$2a$10$VCrz02JzMVmFN2p56zcxR.gSlItx/Cn4kgx817j1q1UXrUJXDOHfu', '小美', 28, 'female', 165.0, 55.0, '磺胺过敏', NULL, 'normal', 'normal', 1, 0, 0, 0, 'family');
 
--- ---------------- 药品基础数据（完整版84种） ----------------
--- 注意：实际生产中应通过 init_drug_data.sql 导入完整药品数据
--- 此处仅保留少量代表性药品作为基础数据
-INSERT INTO `drug_base` (`approval_number`, `generic_name`, `trade_name`, `common_name`, `specification`, `manufacturer`, `category`, `description`) VALUES
-('国药准字Z44021856', '感冒灵颗粒', '999感冒灵', '三九感冒灵', '10g*9袋', '华润三九医药股份有限公司', '感冒药', '成分：三叉苦、金盏银盘、野菊花、岗梅、咖啡因、对乙酰氨基酚、马来酸氯苯那敏、薄荷油。适应症：解热镇痛。用于感冒引起的头痛、发热、鼻塞、流涕、咽痛。用法用量：开水冲服，一次1袋，一日3次。'),
-('国药准字H10910052', '硝苯地平缓释片', '伲福达', '硝苯地平', '20mg*30片', '青岛黄海制药有限责任公司', '降压药', '成分：硝苯地平。适应症：用于治疗高血压、心绞痛。用法用量：口服，一次1片，一日2次。'),
-('国药准字H11021309', '阿司匹林肠溶片', '拜阿司匹灵', '阿司匹林', '100mg*30片', '拜耳医药保健有限公司', '心脑血管药', '成分：阿司匹林。适应症：用于抑制血小板聚集，预防心肌梗死、脑梗死。用法用量：口服，一次1片，一日1次。'),
-('国药准字H44021524', '阿莫西林胶囊', '阿莫仙', '阿莫西林', '0.5g*24粒', '珠海联邦制药股份有限公司', '消炎药', '成分：阿莫西林。适应症：用于敏感菌所致的呼吸道、泌尿生殖道感染。用法用量：口服，一次0.5g，每6-8小时1次。'),
-('国药准字Z44023485', '板蓝根颗粒', '白云山', '板蓝根', '10g*20袋', '广州白云山和记黄埔中药有限公司', '清热解毒药', '成分：板蓝根。适应症：清热解毒，凉血，利咽。用法用量：口服，一次5-10g，一日3-4次。'),
-('国药准字H10970418', '氯雷他定片', '开瑞坦', '氯雷他定', '10mg*6片', '上海先灵葆雅制药有限公司', '抗过敏药', '成分：氯雷他定。适应症：用于缓解过敏性鼻炎症状。用法用量：口服，一次1片，一日1次。'),
-('国药准字Z11020377', '藿香正气水', '同仁堂', '藿香正气', '10ml*10支', '北京同仁堂科技发展股份有限公司制药厂', '胃药', '成分：苍术、陈皮、厚朴、白芷、茯苓、大腹皮、生半夏、甘草浸膏、广藿香油、紫苏叶油。适应症：解表化湿，理气和中。用法用量：口服，一次5-10ml，一日2次。'),
-('国药准字H11021600', '葡萄糖酸钙片', '双鹤', '钙片', '0.5g*100片', '北京双鹤药业股份有限公司', '维生素矿物质', '成分：葡萄糖酸钙。适应症：用于预防和治疗钙缺乏症。用法用量：口服，成人一次1-4片，一日3次。'),
-('国药准字H19991323', '布洛芬缓释胶囊', '芬必得', '芬必得', '300mg*20粒', '中美天津史克制药有限公司', '感冒药', '成分：布洛芬。适应症：用于缓解轻至中度疼痛如头痛、关节痛、偏头痛、牙痛、肌肉痛、神经痛、痛经。也用于普通感冒或流行性感冒引起的发热。用法用量：口服，成人一次1粒，一日2次。'),
-('国药准字H10910058', '奥美拉唑肠溶胶囊', '洛赛克', '奥美拉唑', '20mg*14粒', '阿斯利康制药有限公司', '胃药', '成分：奥美拉唑。适应症：用于胃溃疡、十二指肠溃疡、应激性溃疡、反流性食管炎和卓-艾综合征。用法用量：口服，一次1粒，一日1-2次。'),
-('国药准字H10950010', '苯磺酸氨氯地平片', '络活喜', '氨氯地平', '5mg*7片', '辉瑞制药有限公司', '降压药', '成分：苯磺酸氨氯地平。适应症：用于高血压的治疗，以及冠心病心绞痛的治疗。用法用量：口服，初始剂量为5mg，一日1次。'),
-('国药准字H10910085', '盐酸二甲双胍肠溶片', '格华止', '二甲双胍', '500mg*48片', '中美上海施贵宝制药有限公司', '降糖药', '成分：盐酸二甲双胍。适应症：用于单纯饮食控制不满意的2型糖尿病患者。用法用量：口服，成人一次500mg，一日2-3次。'),
-('国药准字H19991358', '氯雷他定片', '开瑞坦', '氯雷他定', '10mg*6片', '上海先灵葆雅制药有限公司', '抗过敏药', '成分：氯雷他定。适应症：用于缓解过敏性鼻炎有关的症状。用法用量：口服，成人一次1片，一日1次。'),
-('国药准字Z53020609', '云南白药气雾剂', '云南白药', '白药气雾剂', '60g+60g', '云南白药集团股份有限公司', '跌打损伤药', '成分：三七等中药提取物。适应症：活血散瘀，消肿止痛。用于跌打损伤，瘀血肿痛，肌肉酸痛及风湿疼痛。用法用量：外用，喷于伤患处，一日3-5次。'),
-('国药准字H20093817', '盐酸氨溴索口服溶液', '沐舒坦', '氨溴索', '100ml:0.6g', '勃林格殷格翰制药有限公司', '止咳化痰药', '成分：盐酸氨溴索。适应症：用于急、慢性支气管炎引起的痰液粘稠、咳痰困难。用法用量：口服，成人一次10ml，一日3次。');
-
--- ---------------- 家庭药箱测试数据 ----------------
-INSERT INTO `user_medicine_box` (`user_id`, `drug_id`, `dosage`, `frequency`, `start_date`, `expiry_date`, `total_quantity`, `remaining_quantity`, `note`, `status`) VALUES
-(1, 2, '1片', '每日2次', '2024-01-01', '2025-06-30', 60, 45, '血压控制', 'active'),
-(1, 3, '1片', '每日1次', '2024-01-01', '2025-12-31', 30, 20, '预防心梗', 'active'),
-(1, 13, '1袋', '发热时服用', '2024-02-01', '2025-02-01', 9, 6, '感冒灵备用', 'active'),
-(3, 2, '1片', '每日2次', '2023-06-01', '2025-06-01', 60, 15, '冠心病用药', 'active');
-
--- ---------------- OCR识别记录测试数据 ----------------
-INSERT INTO `ocr_record` (`user_id`, `image_url`, `raw_text`, `matched_drug_id`, `match_score`, `status`, `created_at`) VALUES
-(1, '/uploads/ocr/20240101_abc123.jpg', '阿司匹林肠溶片 拜耳医药 100mg', 3, 0.9523, 'matched', '2024-01-15 10:30:00'),
-(1, '/uploads/ocr/20240102_def456.jpg', '硝苯地平缓释片', 2, 0.8856, 'matched', '2024-01-16 14:20:00'),
-(3, '/uploads/ocr/20240103_ghi789.jpg', '未知药片 XYZ药厂', NULL, 0.1234, 'unmatched', '2024-01-17 09:15:00');
-
--- ---------------- 药品识别日志测试数据 ----------------
-INSERT INTO `drug_recognition_log` (`ocr_record_id`, `user_id`, `raw_text`, `normalized_name`, `matched_drug_id`, `matched_drug_name`, `match_score`, `matched`, `status`) VALUES
-(1, 1, '阿司匹林肠溶片 拜耳医药 100mg', '阿司匹林肠溶片', 3, '阿司匹林肠溶片', 0.9523, 1, '识别成功'),
-(2, 1, '硝苯地平缓释片', '硝苯地平缓释片', 2, '硝苯地平缓释片', 0.8856, 1, '识别成功');
-
--- ---------------- AI对话记录测试数据 ----------------
-INSERT INTO `ai_conversation_log` (`user_id`, `query_type`, `user_input`, `ai_output`, `safety_check_passed`) VALUES
-(1, 'drug_search', '感冒了吃什么药好', '根据您的症状描述，建议您可以使用以下药品：\n1. 感冒灵颗粒 - 用于感冒引起的头痛、发热、鼻塞等症状\n2. 布洛芬缓释胶囊 - 用于缓解发热和疼痛\n\n注意事项：\n- 如果症状持续或加重，请及时就医\n- 服用药物时请仔细阅读说明书', 1),
-(1, 'drug_search', '阿司匹林的副作用', '阿司匹林可能的副作用包括：\n1. 胃肠道不适：如恶心、呕吐、腹痛\n2. 出血风险：可能增加出血倾向\n3. 过敏反应：少数人可能出现皮疹、哮喘\n\n如果出现严重不适，请立即停药并就医。', 1);
-
--- ---------------- 用药计划测试数据 ----------------
-INSERT INTO `medication_plan` (`user_id`, `drug_id`, `plan_date`, `time_slot`, `dosage_at_time`, `status`, `remind_before`) VALUES
-(1, 2, CURDATE(), 'morning', '1片', 'pending', 15),
-(1, 2, CURDATE(), 'afternoon', '1片', 'pending', 15),
-(1, 2, CURDATE(), 'evening', '1片', 'pending', 15),
-(1, 3, CURDATE(), 'morning', '1片', 'pending', 15),
-(3, 2, CURDATE(), 'morning', '1片', 'pending', 20),
-(3, 2, CURDATE(), 'evening', '1片', 'pending', 20);
-
--- ---------------- 服药确认记录测试数据 ----------------
-INSERT INTO `medication_log` (`plan_id`, `user_id`, `status`, `confirmed_at`, `note`) VALUES
-(1, 1, 'taken', DATE_SUB(NOW(), INTERVAL 4 HOUR), '早餐后服用'),
-(4, 1, 'taken', DATE_SUB(NOW(), INTERVAL 8 HOUR), '早餐后服用');
-
--- ---------------- 提醒通知记录测试数据 ----------------
-INSERT INTO `reminder_log` (`user_id`, `plan_id`, `remind_type`, `content`, `channel`, `status`) VALUES
-(1, 1, 'medication_reminder', '王阿姨您好，您有一个服药提醒：硝苯地平缓释片 1片', 'app', 'sent'),
-(1, 4, 'medication_reminder', '王阿姨您好，您有一个服药提醒：阿司匹林肠溶片 1片', 'app', 'sent'),
-(3, 5, 'medication_reminder', '李大爷您好，您有一个服药提醒：硝苯地平缓释片 1片', 'app', 'sent');
+-- ---------------- 药品基础数据 ----------------
+-- 注意：完整药品数据通过 init_drug_data.sql 导入（必须在此脚本之后执行）
+-- 此处不再插入药品数据，避免与 init_drug_data.sql 产生重复记录
+-- 依赖 drug_id 的测试数据（药箱/OCR/识别日志/用药计划/冲突规则）也移至 init_drug_data.sql
 
 -- ---------------- 紧急联系人测试数据 ----------------
 INSERT INTO `emergency_contact` (`elder_id`, `name`, `phone`, `relationship`, `is_primary`) VALUES
@@ -400,14 +392,10 @@ INSERT INTO `emergency_contact` (`elder_id`, `name`, `phone`, `relationship`, `i
 (1, '王小红', '13800138002', '女儿', 0),
 (3, '赵六', '13900139001', '儿子', 1);
 
--- ---------------- 药品冲突规则测试数据 ----------------
-INSERT INTO `drug_conflict_rules` (`drug_a_id`, `drug_b_id`, `conflict_level`, `conflict_reason`, `conflict_reason_plain`, `source`) VALUES
-(3, 11, 'high', '阿司匹林与布洛芬合用可能增加胃肠道出血风险', '阿司匹林和布洛芬都是非甾体抗炎药，一起吃可能会让胃不舒服，严重的话可能会胃出血', '临床用药指南'),
-(4, 9, 'medium', '阿莫西林与布洛芬合用可能增加肾毒性风险', '阿莫西林和布洛芬一起用可能会对肾脏造成负担', '药物相互作用数据库'),
-(10, 12, 'low', '奥美拉唑可能影响二甲双胍的吸收', '胃药可能会影响糖尿病药物的效果，必要时请错开服用时间', '临床经验');
-
 -- ---------------- 药品类别关键词数据 ----------------
-INSERT INTO `drug_category_keywords` (`category`, `keyword`) VALUES
+-- 使用 INSERT IGNORE：drug_category_keywords 在该脚本中用 CREATE TABLE IF NOT EXISTS 创建，
+-- 重复执行时 UNIQUE(category,keyword) 冲突会被静默跳过，保证幂等性
+INSERT IGNORE INTO `drug_category_keywords` (`category`, `keyword`) VALUES
 -- 感冒药类
 ('感冒药', '感冒'), ('感冒药', '流感'), ('感冒药', '发烧'), ('感冒药', '咳嗽'), ('感冒药', '鼻塞'), ('感冒药', '流涕'), ('感冒药', '咽痛'), ('感冒药', '打喷嚏'), ('感冒药', '风寒'), ('感冒药', '风热'), ('感冒药', '感冒灵'),
 -- 退烧药类
@@ -444,7 +432,9 @@ INSERT INTO `drug_category_keywords` (`category`, `keyword`) VALUES
 ('晕车药', '晕车'), ('晕车药', '晕船'), ('晕车药', '晕机'), ('晕车药', '恶心'), ('晕车药', '眩晕');
 
 -- ---------------- 药品别名映射数据 ----------------
-INSERT INTO `drug_aliases` (`alias_name`, `generic_name`) VALUES
+-- 使用 INSERT IGNORE：drug_aliases 在该脚本中用 CREATE TABLE IF NOT EXISTS 创建，
+-- 重复执行时 UNIQUE(alias_name) 冲突会被静默跳过，保证幂等性
+INSERT IGNORE INTO `drug_aliases` (`alias_name`, `generic_name`) VALUES
 -- 对乙酰氨基酚
 ('扑热息痛', '对乙酰氨基酚'), ('泰诺', '对乙酰氨基酚'), ('泰诺林', '对乙酰氨基酚'), ('百服宁', '对乙酰氨基酚'), ('必理通', '对乙酰氨基酚'),
 -- 布洛芬

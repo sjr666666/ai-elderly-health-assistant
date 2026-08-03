@@ -1,0 +1,1205 @@
+/* ============ 家属端移动端样式 ============ */
+.g-app * { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --primary: #155E75;
+  --primary-light: #DDF4F1;
+  --primary-dark: #0F4658;
+  --bg: #F4F7F5;
+  --card: #FFFFFF;
+  --text: #17313B;
+  --text-sub: #587078;
+  --text-hint: #8A9BA0;
+  --border: #DCE8E5;
+  --danger: #C94B4B;
+  --danger-light: #FFF0EE;
+  --warn: #C9872E;
+  --warn-light: #FFF7E8;
+  --success: #2F866D;
+  --success-light: #EAF7F0;
+  --radius: 16px;
+  --border-light: #EDF3F1;
+  --bg-muted: #EAF1EF;
+  --bg-input: #F8FBFA;
+  --danger-border: #F0C9C4;
+  --success-border: #BFE0D2;
+  --warn-border: #EFD5A8;
+  --warn-bg: #FFF1D7;
+  --warn-dark: #99621C;
+  --read-border: #CBD8D5;
+  --event-pending-border: #E9B8B2;
+}
+
+/* 全屏App容器 */
+.g-app {
+  max-width: 560px;
+  margin: 0 auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ 顶部导航栏 ============ */
+.g-header {
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+  color: white;
+  padding: 18px 20px 16px;
+  box-shadow: 0 8px 22px rgba(15, 70, 88, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.g-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.g-header-icon { font-size: 20px; }
+
+.g-header-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.g-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.g-header-user {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.g-header-logout {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ============ 底部Tab栏 ============ */
+.g-tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  background: white;
+  display: flex;
+  border-top: 1px solid var(--border);
+  padding: 4px 0 env(safe-area-inset-bottom, 6px);
+  z-index: 100;
+}
+
+.g-tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-hint);
+  font-size: 10px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.g-tab-item svg { width: 22px; height: 22px; }
+
+.g-tab-item.active { color: var(--primary); }
+
+.g-tab-item:focus-visible,
+.g-btn:focus-visible,
+.g-bind-btn:focus-visible,
+.g-elder-card:focus-visible,
+.g-header-logout:focus-visible {
+  outline: 3px solid rgba(201, 135, 46, 0.55);
+  outline-offset: 3px;
+}
+
+.g-tab-item span { font-weight: 500; }
+
+/* 通知红点 */
+.g-tab-badge {
+  position: absolute;
+  top: 2px;
+  right: 50%;
+  margin-right: -20px;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--danger);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ============ 主内容区 ============ */
+.g-body {
+  flex: 1;
+  padding: 20px 18px 84px;
+  padding-bottom: 64px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ============ 登录页（移动端专用） ============ */
+.g-login {
+  min-height: 100vh;
+  min-height: 100dvh; /* iOS 适配动态视口 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, var(--primary) 0%, var(--primary-dark) 100%);
+  padding: 24px 20px;
+  /* iOS Safari 安全区域 */
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+.g-login-card {
+  background: white;
+  border-radius: 20px;
+  padding: 36px 24px 28px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  animation: g-login-in 0.4s ease-out;
+}
+
+@keyframes g-login-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.g-login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.g-login-logo {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 16px;
+  background: var(--primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px rgba(58, 123, 200, 0.3);
+}
+
+.g-login-icon { font-size: 48px; margin-bottom: 12px; }
+
+.g-login-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 6px;
+  letter-spacing: 1px;
+}
+
+.g-login-header p {
+  font-size: 13px;
+  color: var(--text-hint);
+  margin: 0;
+}
+
+.g-form-group { margin-bottom: 18px; }
+
+.g-field-error {
+  margin-top: 6px;
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.g-register-input-wrap {
+  position: relative;
+}
+
+.g-form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-sub);
+  margin-bottom: 8px;
+}
+
+.g-required { color: var(--danger); }
+
+/* 带图标的输入框容器 */
+.g-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.g-input-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-hint);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.g-form-group input {
+  width: 100%;
+  /* 触控友好：高度 ≥ 44px (iOS HIG) / 48dp (Material) */
+  padding: 12px 14px 12px 40px;
+  font-size: 16px; /* ≥16px 防止 iOS Safari 自动缩放 */
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  outline: none;
+  background: var(--bg-input);
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+  -webkit-appearance: none; /* 移除 iOS 默认样式 */
+  appearance: none;
+}
+
+.g-form-group input:focus {
+  border-color: var(--primary);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(58, 123, 200, 0.1);
+}
+
+.g-form-group input:disabled {
+  background: var(--bg-muted);
+  color: var(--text-hint);
+}
+
+.g-pwd-wrapper { position: relative; }
+.g-pwd-wrapper input { padding-right: 44px; }
+
+.g-pwd-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-hint);
+  border-radius: 6px;
+  transition: color 0.15s;
+  z-index: 1;
+}
+
+.g-pwd-toggle:active { color: var(--primary); }
+
+/* 忘记密码链接 */
+.g-login-forgot {
+  text-align: right;
+  margin: -4px 0 20px;
+}
+
+.g-login-forgot button {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: inherit;
+}
+
+.g-login-forgot button:active {
+  opacity: 0.7;
+}
+
+.g-error-tip {
+  background: var(--danger-light);
+  color: var(--danger);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+  border: 1px solid var(--danger-border);
+}
+
+/* 登录按钮 */
+.g-login-submit {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  margin-top: 4px;
+  /* 触控友好高度 */
+  min-height: 48px;
+  letter-spacing: 2px;
+  box-shadow: 0 4px 12px rgba(58, 123, 200, 0.25);
+}
+
+.g-login-submit:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 2px 6px rgba(58, 123, 200, 0.2);
+}
+
+/* 登录加载动画 */
+.g-login-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: g-spin 0.7s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+/* 切换登录端入口 */
+.g-login-switch {
+  text-align: center;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.g-login-switch button {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px 16px;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.g-login-switch button:hover {
+  color: var(--primary-dark);
+  transform: scale(1.05);
+  text-decoration: none;
+}
+
+.g-login-switch button:active {
+  color: var(--primary-dark);
+  transform: scale(0.98);
+}
+
+/* ============ 按钮 ============ */
+.g-btn {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: opacity 0.15s;
+  font-family: inherit;
+}
+
+.g-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.g-btn-primary {
+  background: var(--primary);
+  color: white;
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  border-radius: 10px;
+}
+
+.g-btn-primary:active:not(:disabled) { opacity: 0.85; }
+
+.g-btn-danger {
+  background: var(--danger);
+  color: white;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 6px;
+}
+
+.g-btn-sm {
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.g-btn-text {
+  background: transparent;
+  color: var(--text-hint);
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+.g-btn-back {
+  background: white;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  padding: 7px 14px;
+  font-size: 13px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+/* ============ 加载/错误/空状态 ============ */
+.g-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 20px;
+  color: var(--text-hint);
+  font-size: 14px;
+}
+
+.g-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: g-spin 0.7s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes g-spin { to { transform: rotate(360deg); } }
+
+.g-error {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--danger);
+  font-size: 14px;
+}
+
+.g-error p { margin-bottom: 12px; }
+
+.g-empty {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--text-hint);
+}
+
+.g-empty-icon { font-size: 40px; margin-bottom: 10px; }
+.g-empty p { font-size: 15px; margin-bottom: 4px; }
+.g-empty-desc { font-size: 13px; color: var(--text-hint); }
+
+.g-empty-sm {
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--text-hint);
+  font-size: 13px;
+}
+
+/* ============ 仪表盘 ============ */
+.g-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.g-stat-card {
+  background: linear-gradient(150deg, #fff, #F8FBFA);
+  border-radius: var(--radius);
+  padding: 17px 8px 14px;
+  text-align: center;
+  border: 1px solid var(--border-light);
+  box-shadow: 0 6px 18px rgba(27, 66, 75, 0.06);
+}
+
+.g-stat-num {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1.2;
+}
+
+.g-stat-label {
+  font-size: 11px;
+  color: var(--text-hint);
+  margin-top: 2px;
+}
+
+.g-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 0 2px;
+}
+
+.g-action-bar h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.g-bind-btn {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ============ 绑定表单 ============ */
+.g-bind-form {
+  background: white;
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 14px;
+  border: 1px solid #B9DED8;
+  box-shadow: 0 8px 20px rgba(21, 94, 117, 0.08);
+}
+
+.g-bind-form h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.g-bind-form-desc {
+  font-size: 12px;
+  color: var(--text-hint);
+  margin-bottom: 10px;
+}
+
+.g-bind-input {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.g-bind-input input {
+  flex: 1;
+  padding: 9px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  font-family: inherit;
+}
+
+.g-bind-input input:focus { border-color: var(--primary); }
+
+.g-bind-input .g-btn-primary {
+  width: auto;
+  padding: 9px 14px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ============ 老人卡片 ============ */
+.g-elder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.g-elder-card {
+  background: white;
+  border-radius: var(--radius);
+  padding: 17px;
+  cursor: pointer;
+  border: 1px solid var(--border-light);
+  box-shadow: 0 8px 22px rgba(27, 66, 75, 0.06);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.g-elder-card:hover { transform: translateY(-2px); border-color: #B9DED8; box-shadow: 0 12px 26px rgba(27, 66, 75, 0.11); }
+.g-elder-card:active { transform: translateY(0); border-color: var(--primary); }
+
+.g-elder-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.g-elder-avatar { font-size: 32px; flex-shrink: 0; }
+
+.g-elder-info h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 1px;
+}
+
+.g-elder-info p { font-size: 12px; color: var(--text-hint); }
+
+.g-elder-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.g-elder-rows {
+  border-top: 1px solid var(--border-light);
+  padding-top: 8px;
+}
+
+.g-elder-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.g-elder-label { font-size: 12px; color: var(--text-hint); }
+
+.g-elder-value { font-size: 12px; font-weight: 500; color: var(--text-sub); }
+
+.g-elder-footer {
+  text-align: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-light);
+  margin-top: 6px;
+  color: var(--primary-dark);
+  font-weight: 500;
+  font-size: 13px;
+}
+
+/* 状态颜色 */
+.s-ok { color: var(--success); }
+.s-warn { color: var(--warn); }
+.s-err { color: var(--danger); }
+
+/* ============ 老人详情 ============ */
+.g-detail-card {
+  background: white;
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.g-detail-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.g-detail-avatar { font-size: 40px; }
+
+.g-detail-info h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 1px;
+}
+
+.g-detail-info p { font-size: 12px; color: var(--text-hint); margin-bottom: 1px; }
+
+.g-detail-top .g-btn-danger { margin-left: auto; flex-shrink: 0; }
+
+.g-section {
+  background: white;
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.g-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+/* ============ 今日用药计划 ============ */
+.g-med-progress-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.g-med-progress-bar-wrap {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.g-med-progress-bar {
+  height: 100%;
+  background: var(--success);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.g-med-progress-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-sub);
+  margin-top: 6px;
+}
+
+.g-med-progress-stats strong {
+  color: var(--text);
+}
+
+.g-med-progress-detail {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.g-med-stat {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.g-med-stat-ok { background: var(--success-light); color: var(--success); }
+.g-med-stat-pending { background: var(--warn-light); color: var(--warn); }
+.g-med-stat-miss { background: var(--danger-light); color: var(--danger); }
+
+.g-med-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.g-med-plan-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.g-med-plan-left {
+  flex-shrink: 0;
+}
+
+.g-med-plan-slot {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--primary-light);
+  padding: 2px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.g-med-plan-center {
+  flex: 1;
+  min-width: 0;
+}
+
+.g-med-plan-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.g-med-plan-spec {
+  display: block;
+  font-size: 12px;
+  color: var(--text-hint);
+  margin-top: 2px;
+}
+
+.g-med-plan-status {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+/* ============ 确认弹窗 ============ */
+.g-confirm-mask {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.g-confirm-box {
+  background: white;
+  border-radius: 16px;
+  padding: 22px;
+  max-width: 300px;
+  width: 100%;
+}
+
+/* ============ 个人中心 ============ */
+.g-profile {
+  padding: 0 16px 24px;
+}
+
+.g-profile-loading {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--text-hint);
+}
+
+.g-profile-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 0 24px;
+}
+
+.g-profile-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.g-profile-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.g-profile-role {
+  font-size: 12px;
+  color: var(--text-hint);
+  margin-top: 4px;
+}
+
+.g-profile-section {
+  background: var(--card);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.g-profile-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.g-profile-item:last-child {
+  border-bottom: none;
+}
+
+.g-profile-item-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.g-profile-value {
+  font-size: 14px;
+  color: var(--text-sub);
+}
+
+.g-profile-item-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.g-profile-edit-btn {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.g-profile-inline-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.g-profile-inline-edit input {
+  width: 120px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+}
+
+.g-profile-inline-edit input:focus {
+  border-color: var(--primary);
+}
+
+.g-profile-btn-sm {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-sub);
+}
+
+.g-profile-btn-primary {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.g-profile-pwd-form {
+  padding: 12px 16px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.g-profile-pwd-form input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+}
+
+.g-profile-pwd-form input:focus {
+  border-color: var(--primary);
+}
+
+.g-profile-btn-block {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.g-profile-logout {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: var(--radius);
+  background: white;
+  color: var(--danger);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.g-confirm-box h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.g-confirm-box p {
+  font-size: 14px;
+  color: var(--text-sub);
+  margin-bottom: 18px;
+  line-height: 1.6;
+}
+
+.g-confirm-actions { display: flex; gap: 10px; }
+
+.g-confirm-actions .g-btn {
+  flex: 1;
+  padding: 10px;
+  font-size: 14px;
+}
+
+/* ============ 紧急事件 ============ */
+.g-event-list { display: flex; flex-direction: column; gap: 8px; }
+
+.g-event-item {
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid;
+}
+
+.g-event-pending { background: var(--danger-light); border-color: var(--event-pending-border); }
+.g-event-resolved { background: var(--success-light); border-color: var(--success-border); }
+
+.g-event-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.g-event-type { font-size: 14px; font-weight: 600; color: var(--text); }
+
+.g-event-status {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 8px;
+}
+
+.g-event-body p { font-size: 12px; color: var(--text-sub); margin-bottom: 2px; }
+.g-event-time { font-size: 11px; color: var(--text-hint); }
+
+/* ============ 临期药品 ============ */
+.g-drug-list { display: flex; flex-direction: column; gap: 8px; }
+
+.g-drug-item {
+  background: var(--warn-light);
+  border: 1px solid var(--warn-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.g-drug-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.g-drug-name { font-size: 14px; font-weight: 600; color: var(--text); }
+
+.g-drug-tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 8px;
+}
+
+.g-tag-warn { background: var(--warn-bg); color: var(--warn-dark); }
+.g-tag-err { background: var(--danger-light); color: var(--danger); }
+
+.g-drug-body p { font-size: 12px; color: var(--text-sub); margin-bottom: 1px; }
+.g-drug-body strong { color: var(--danger); }
+
+/* ============ 通知记录 ============ */
+.g-notif-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.g-notif-header h2 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.g-notif-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.g-notif-list { display: flex; flex-direction: column; gap: 8px; }
+
+.g-notif-item {
+  background: white;
+  border-radius: var(--radius);
+  padding: 12px;
+  border-left: 4px solid var(--primary);
+  border-top: 1px solid var(--border-light);
+  border-right: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+  box-shadow: 0 6px 18px rgba(27, 66, 75, 0.05);
+  transition: opacity 0.2s, border-color 0.2s;
+}
+
+/* 已读通知视觉弱化 */
+.g-notif-item-read {
+  border-left-color: var(--read-border);
+  opacity: 0.6;
+}
+
+.g-notif-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.g-notif-type { font-size: 13px; font-weight: 600; color: var(--text); }
+.g-notif-send { font-size: 11px; font-weight: 500; }
+
+.g-notif-msg {
+  font-size: 13px;
+  color: var(--text-sub);
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.g-notif-time { font-size: 11px; color: var(--text-hint); }
+
+@media (min-width: 768px) {
+  .g-app { margin: 24px auto; min-height: calc(100vh - 48px); border-radius: 24px; overflow: hidden; box-shadow: 0 18px 50px rgba(23, 49, 59, 0.12); }
+  .g-tab-bar { bottom: 24px; border-radius: 0 0 24px 24px; }
+}
+
+@media (max-width: 380px) {
+  .g-body { padding-left: 14px; padding-right: 14px; }
+  .g-stat-num { font-size: 26px; }
+  .g-stat-label { font-size: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}

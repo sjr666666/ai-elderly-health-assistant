@@ -50,6 +50,12 @@ public class SysUser extends BaseEntity {
     private String realName;
 
     /**
+     * 手机号
+     */
+    @TableField("phone")
+    private String phone;
+
+    /**
      * 年龄
      * 用户年龄，可选字段
      */
@@ -135,6 +141,13 @@ public class SysUser extends BaseEntity {
      */
     @TableField("role")
     private String role;
+
+    /**
+     * 最后活跃时间
+     * 记录用户最后一次操作的时间，用于家属端展示"最近活跃"
+     */
+    @TableField("last_active_time")
+    private LocalDateTime lastActiveTime;
 
     /**
      * 家属绑定的老人ID（自关联）

@@ -2,6 +2,8 @@ package com.example.backend.model.dto;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 @Data
 public class TodayPlanItemDTO {
     private Long planId;
@@ -14,6 +16,12 @@ public class TodayPlanItemDTO {
     private Integer remindBefore;
 
     /**
+     * 提醒阶段
+     * none/pre_remind/due_now/overdue/notify_family
+     */
+    private String reminderStage;
+
+    /**
      * 药箱条目ID（用于更新剩余数量）
      */
     private Long boxItemId;
@@ -21,7 +29,7 @@ public class TodayPlanItemDTO {
     /**
      * 当前剩余数量
      */
-    private Integer remainingQuantity;
+    private BigDecimal remainingQuantity;
 
     /**
      * 药箱中的药品名称（商品名/俗名）

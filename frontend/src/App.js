@@ -1,25 +1,48 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import html2canvas from 'html2canvas';
+import DOMPurify from 'dompurify';
 import './App.css';
-import Login from './components/Login';
-import Register from './components/Register';
+import AuthGate from './components/AuthGate';
 import ProfileModal from './components/ProfileModal';
 import ProfileEdit from './components/ProfileEdit';
 import EmergencyContacts from './components/EmergencyContacts';
+import MyGuardiansModal from './components/MyGuardiansModal';
 import AddDrugModal from './components/AddDrugModal';
 import EditDrugModal from './components/EditDrugModal';
 import ConfirmDeleteModal from './components/ConfirmDeleteModal';
 import ManualDrugSearch from './components/ManualDrugSearch';
-import EmergencyAssistant from './components/EmergencyAssistant';
 import AddToPlanModal from './components/AddToPlanModal';
 import ConfirmDrugModal from './components/ConfirmDrugModal';
 import MedicationReminderModal from './components/MedicationReminderModal';
+import DrugManagementTab from './components/DrugManagementTab';
+import DailyLessonCard from './components/DailyLessonCard';
+import GuardianApp from './components/guardian/GuardianApp';
+import ElderNotificationPanel from './components/ElderNotificationPanel';
+import WeeklyReport from './components/WeeklyReport';
+import EmergencyTab from './components/EmergencyTab';
 import { useToast } from './components/Toast';
+import FloatingMicButton from './components/FloatingMicButton';
+import { clearAuth, getToken } from './utils/elderApi';
+import { formatDateTime } from './utils/timeUtils';
+import { useTTS } from './hooks/useTTS';
+import RecognitionHistoryModal from './components/RecognitionHistoryModal';
 
 function App() {
   const { showToast } = useToast();
+
+  // 语音播报 Hook（百度TTS + 浏览器原生语音）
+  const {
+    isSpeaking, speechRate, setSpeechRate,
+    isFollowUpSpeaking, speakingFollowUpIdx,
+    audioRef, followUpAudioRef, followUpMessagesRef, speakRef,
+    setAuthFetch,
+    speak, stopSpeaking, stopFollowUpSpeaking, toggleFollowUpSpeech,
+  } = useTTS({ showToast });
+  const loadWeeklyMedicationRef = useRef(null);
+  const recognitionHistoryModalRef = useRef(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [loginMode, setLoginMode] = useState('elder'); // 'elder' | 'guardian'
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
@@ -30,8 +53,6 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredDrugList, setFilteredDrugList] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [speechRate, setSpeechRate] = useState(1);
   const [reminders, setReminders] = useState([
     { id: 1, time: '08:00', period: '早上', drug: '硝苯地平缓释片', taken: true, missed: false },
     { id: 2, time: '12:00', period: '中午', drug: '二甲双胍片', taken: true, missed: false },
@@ -42,6 +63,7 @@ function App() {
   const [calendarViewMode, setCalendarViewMode] = useState('today'); // 用药日历视图模式：today/week
   const [weeklyMedicationData, setWeeklyMedicationData] = useState(null); // 一周用药数据
   const [selectedWeekDay, setSelectedWeekDay] = useState(null); // 周视图中就地展开的某天（YYYY-MM-DD）
+  const [showWeeklyReport, setShowWeeklyReport] = useState(false); // AI周报显示状态
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false); // 添加到用药日历弹窗
   const [selectedDrugForPlan, setSelectedDrugForPlan] = useState(null); // 选中的要添加到计划的药品
   const [showCelebration, setShowCelebration] = useState(false);
@@ -52,6 +74,7 @@ function App() {
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [emergencyContacts, setEmergencyContacts] = useState([]);
   const [showAddContact, setShowAddContact] = useState(false);
+  const [showMyGuardians, setShowMyGuardians] = useState(false);
   const [showAddDrugModal, setShowAddDrugModal] = useState(false);
   const [showEditDrugModal, setShowEditDrugModal] = useState(false); // 编辑药品弹窗
   const [showConfirmDelete, setShowConfirmDelete] = useState(false); // 确认删除弹窗
@@ -60,25 +83,48 @@ function App() {
   const [pendingDrugInfo, setPendingDrugInfo] = useState(null); // 待确认的药品信息
   const [showDrugDetailModal, setShowDrugDetailModal] = useState(false); // 药品详情弹窗
   const [selectedDrug, setSelectedDrug] = useState(null); // 选中的药品
-  const [drugsWithPlan, setDrugsWithPlan] = useState(new Set()); // 已设置用药计划的药品ID集合
+  const [, setDrugsWithPlan] = useState(new Set()); // 已设置用药计划的药品ID集合
   const [showExpiringDrugsModal, setShowExpiringDrugsModal] = useState(false); // 过期药品弹窗
+  const [showExpiredDrugModal, setShowExpiredDrugModal] = useState(false); // 添加药品时发现过期的弹窗
+  const [expiredDrugInfo, setExpiredDrugInfo] = useState(null); // 过期药品信息
+  const [showTodayExpiredModal, setShowTodayExpiredModal] = useState(false); // 已过期且未丢弃药品弹窗
+  const [todayExpiredDrugs, setTodayExpiredDrugs] = useState([]); // 已过期且未丢弃药品列表
   const [showUndoConfirmModal, setShowUndoConfirmModal] = useState(false); // 撤销确认弹窗
   const [pendingUndoId, setPendingUndoId] = useState(null); // 待撤销的计划ID
   const [showMedicationReminder, setShowMedicationReminder] = useState(false); // 用药提醒弹窗
   const [missedReminders, setMissedReminders] = useState([]); // 超时未服用的用药计划
-  const lastCheckedTimeRef = useRef(null); // 上次检查的时间，避免重复提醒
   const lastReminderTimeRef = useRef(null); // 上次弹窗提醒的时间，避免频繁提醒
+  const lastShownStageRef = useRef(null); // 上次已展示的最高阶段，只有阶段升级才再次提醒
+  // 获取本地日期 key（YYYY-MM-DD），避免 toISOString() 返回 UTC 日期导致凌晨跨日判断错误
+  const getLocalDateKey = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const lastDateRef = useRef(getLocalDateKey()); // 跨日检测：记录当前日期(YYYY-MM-DD)
+  const loadCalendarPlansRef = useRef(null); // 跨日检测：持有最新的 loadCalendarPlans 引用，避免闭包陈旧
   
   // 药品冲突检测相关状态
   const [conflictReport, setConflictReport] = useState(null); // 冲突检测报告
   const [isCheckingConflicts, setIsCheckingConflicts] = useState(false); // 是否正在检测冲突
   const [conflictError, setConflictError] = useState(null); // 冲突检测错误
   const [showConflictReport, setShowConflictReport] = useState(false); // 是否显示冲突报告卡片
+
+  // 综合冲突场景化选项状态
+  const [selectedScenarios, setSelectedScenarios] = useState([]); // 已选场景标签
+  const [customFoodInput, setCustomFoodInput] = useState(''); // 自定义食物输入
+  const [scenarioConflictReport, setScenarioConflictReport] = useState(null); // 综合冲突报告
+  const [isCheckingScenario, setIsCheckingScenario] = useState(false); // 综合冲突检测中
+  const [showScenarioPanel, setShowScenarioPanel] = useState(false); // 综合冲突面板折叠状态
+  const [showOriginalText, setShowOriginalText] = useState(false); // 医学原文折叠状态
   
   // 新药入箱冲突检测弹窗相关状态
   const [showConflictAlert, setShowConflictAlert] = useState(false); // 新药入箱冲突检测结果弹窗
   const [conflictAlertResult, setConflictAlertResult] = useState(null); // 新药入箱冲突检测结果
   const [conflictNeedsRecheck, setConflictNeedsRecheck] = useState(false); // 冲突检测页面是否需要重新检测
+
+  // 自动快速检测相关状态（进入页面时自动本地规则检测）
+  const [autoCheckResult, setAutoCheckResult] = useState(null); // 自动快速检测结果
+  const [isAutoChecking, setIsAutoChecking] = useState(false); // 是否正在自动检测
   
   // 批量识别相关状态
   const [batchRecognizeItems, setBatchRecognizeItems] = useState([]); // 批量识别的图片列表
@@ -86,10 +132,31 @@ function App() {
   const [isBatchAdding, setIsBatchAdding] = useState(false); // 是否正在添加到药箱
   const batchFileInputRef = useRef(null); // 批量文件输入引用
   
+  // 批量确认弹窗相关状态
+  const [showBatchConfirmModal, setShowBatchConfirmModal] = useState(false); // 批量确认弹窗
+  const [batchDrugIndex, setBatchDrugIndex] = useState(0); // 当前正在确认的药品索引
+  const [batchConfirmedDrugs, setBatchConfirmedDrugs] = useState([]); // 已确认的药品信息列表
+  const [, setIsBatchAddingAll] = useState(false); // 是否正在批量添加所有药品
+  const batchConfirmModalRef = useRef(null); // 批量确认弹窗容器引用
+  
   const fileInputRef = useRef(null);
   const conflictReportRef = useRef(null); // 冲突报告卡片引用（用于弹窗显示）
   const screenshotContainerRef = useRef(null); // 隐藏的截图容器引用
   const [showScreenshotContainer, setShowScreenshotContainer] = useState(false); // 控制隐藏截图容器显示
+
+  // 今日一课相关状态
+  const [dailyLesson, setDailyLesson] = useState(null);
+  const [dailyLessonLoading, setDailyLessonLoading] = useState(false);
+
+  // 缺药预警相关状态
+  const [shortageWarnings, setShortageWarnings] = useState([]); // 缺药预警列表
+  const [showShortageDetail, setShowShortageDetail] = useState(false); // 缺药预警详情弹窗
+
+  // 老人端通知相关状态
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const [wsConnected, setWsConnected] = useState(false); // WebSocket连接状态
+  const wsRef = useRef(null); // WebSocket引用
 
   const expiringDrugsResult = useMemo(() => {
     const today = new Date();
@@ -110,7 +177,8 @@ function App() {
             daysUntilExpiry,
             isExpired: true
           });
-        } else if (daysUntilExpiry <= 30) {
+        } else if (daysUntilExpiry <= 7) {
+          // 临期药：当前时间距离有效期7天以内
           expiringDrugs.push({
             ...drug,
             daysUntilExpiry,
@@ -128,20 +196,55 @@ function App() {
 
   const handleRegister = (registerData) => {
     setShowRegister(false);
+    if (registerData) {
+      setLoginMode(registerData.role === 'family' ? 'guardian' : 'elder');
+      handleLogin(registerData);
+    }
   };
+
+  // 带认证的fetch helper - 自动添加JWT token到请求头
+  const authFetch = async (url, options = {}) => {
+    const token = getToken();
+    const headers = {
+      ...options.headers,
+      'Content-Type': 'application/json;charset=UTF-8',
+      'Accept': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const controller = options.signal ? null : new AbortController();
+    const timeoutId = controller ? window.setTimeout(() => controller.abort(), 15000) : null;
+    let response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+        ...(controller ? { signal: controller.signal } : {})
+      });
+    } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
+    }
+    const data = await response.json();
+    // 处理401认证失败
+    if (response.status === 401 || data.code === 401 || data.message?.includes('Access Denied')) {
+      clearAuth();
+      window.dispatchEvent(new CustomEvent('elder-auth-expired'));
+      throw new Error('认证已过期');
+    }
+    return { response, data };
+  };
+
+  // 将 authFetch 注入 useTTS（hook 在组件顶部声明，此处动态绑定避免顺序耦合）
+  setAuthFetch(authFetch);
 
   // 从数据库加载药箱列表
   const loadMedicineBoxList = async (userId) => {
     if (!userId) return;
     
     try {
-      const response = await fetch(`/api/v1/box/list?userId=${userId}`);
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/box/list`);
       
-      console.log('=== 药箱列表响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
       
       if (response.ok && data.code === 200) {
         // 转换后端数据格式为前端需要的格式
@@ -173,19 +276,63 @@ function App() {
     }
   };
 
+  // 加载缺药预警列表
+  const loadShortageWarnings = async (userId) => {
+    if (!userId) return;
+    try {
+      const { response, data } = await authFetch(`/api/v1/box/shortage-warnings`);
+      if (response.ok && data.code === 200) {
+        setShortageWarnings(data.data || []);
+      } else {
+        console.error('获取缺药预警失败:', data.message);
+      }
+    } catch (err) {
+      console.error('获取缺药预警异常:', err);
+    }
+  };
+
+  // 加载今日一课
+  const fetchDailyLesson = async (overrideUserId) => {
+    const userId = overrideUserId || user?.id;
+    if (!userId) return;
+    setDailyLessonLoading(true);
+    try {
+      const { response, data } = await authFetch(`/api/v1/daily-lesson/today?userId=${userId}`);
+      if (response.ok && data.code === 200) {
+        setDailyLesson(data.data);
+      } else {
+        console.error('获取今日一课失败:', data.message);
+      }
+    } catch (err) {
+      console.error('获取今日一课异常:', err);
+    } finally {
+      setDailyLessonLoading(false);
+    }
+  };
+
+  // 重新生成本日一课（换一篇）
+  const handleDailyLessonRefresh = async () => {
+    if (!user?.id) return;
+    try {
+      const { response, data } = await authFetch(`/api/v1/daily-lesson/regenerate?userId=${user.id}`, { method: 'POST' });
+      if (response.ok && data.code === 200) {
+        setDailyLesson(data.data);
+      } else {
+        console.error('重新生成今日一课失败:', data.message);
+      }
+    } catch (err) {
+      console.error('重新生成今日一课异常:', err);
+    }
+  };
+
   // 从数据库加载紧急联系人列表
   const loadEmergencyContacts = async (elderId) => {
     if (!elderId) return;
-    
+
     try {
-      const response = await fetch(`/api/emergency/v1/contacts?elderId=${elderId}`);
-      const data = await response.json();
-      
-      console.log('=== 紧急联系人列表响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
-      
+      const { response, data } = await authFetch(`/api/emergency/v1/contacts?elderId=${elderId}`);
+
+
       if (response.ok && data.code === 200) {
         setEmergencyContacts(data.data);
       } else {
@@ -204,8 +351,29 @@ function App() {
     try {
       const cached = localStorage.getItem(TODAY_PLANS_CACHE_KEY);
       if (cached) {
-        const { plans, timestamp } = JSON.parse(cached);
-        console.log('从本地缓存加载用药计划，缓存时间:', new Date(timestamp).toLocaleString());
+        let { plans } = JSON.parse(cached);
+        
+        // 过滤掉已过期药品的用药计划
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        plans = plans.filter(plan => {
+          const drug = drugList.find(d => d.boxItemId === plan.boxItemId);
+          if (!drug) return true;
+          
+          if (drug.expiryDate) {
+            const expiryDate = new Date(drug.expiryDate);
+            expiryDate.setHours(0, 0, 0, 0);
+            const isExpired = expiryDate < today;
+            
+            if (isExpired) {
+              console.warn(`缓存中的药品已过期，已过滤 - 药品: ${drug.name}, 有效期: ${drug.expiryDate}`);
+              return false;
+            }
+          }
+          
+          return true;
+        });
         
         // 合并本地服药状态
         const plansWithStatus = mergeLocalMedicationStatus(plans);
@@ -226,23 +394,23 @@ function App() {
   };
 
   // 从后端加载今日用药计划（根据家庭药箱自动生成）
-  const loadCalendarPlans = async () => {
-    if (!user || !user.userId) {
+  // userIdOverride: 可选，登录时直接传入 userId，避免等待 setUser 异步更新
+  // This loader is intentionally recreated with the current auth state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const loadCalendarPlans = async (userIdOverride) => {
+    const effectiveUserId = userIdOverride || (user && user.userId);
+    if (!effectiveUserId) {
       console.warn('用户未登录，无法加载用药计划');
       setCalendarPlans([]);
+      setIsLoadingCalendar(false);
       return;
     }
     
     setIsLoadingCalendar(true);
     
     try {
-      const response = await fetch(`/api/v1/plan/generate-today?userId=${user.userId}`);
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/plan/generate-today?userId=${effectiveUserId}`);
       
-      console.log('=== 用药计划响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
       
       if (response.ok && data.code === 200 && data.data) {
         // 转换后端数据格式为前端需要的格式
@@ -259,25 +427,49 @@ function App() {
           status: item.status,
           boxItemId: item.boxItemId,
           remainingQuantity: item.remainingQuantity,
-          boxDrugName: item.boxDrugName
+          boxDrugName: item.boxDrugName,
+          remindBefore: item.remindBefore,
+          reminderStage: item.reminderStage || 'none'
         }));
 
-        // 合并 localStorage 中保存的本地服药状态
-        plans = mergeLocalMedicationStatus(plans);
+        // 过滤掉已过期药品的用药计划（二次检查，确保数据安全）
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
         
-        setCalendarPlans(plans);
+        let validPlans = plans.filter(plan => {
+          // 如果有boxItemId，在drugList中查找对应药品
+          const drug = drugList.find(d => d.boxItemId === plan.boxItemId);
+          if (!drug) return true; // 找不到药品信息，保留该计划
+          
+          // 检查药品是否过期
+          if (drug.expiryDate) {
+            const expiryDate = new Date(drug.expiryDate);
+            expiryDate.setHours(0, 0, 0, 0);
+            const isExpired = expiryDate < today;
+            
+            if (isExpired) {
+              console.warn(`用药计划中的药品已过期，已过滤 - 药品: ${drug.name}, 有效期: ${drug.expiryDate}`);
+              return false; // 已过期，过滤掉
+            }
+          }
+          
+          return true; // 未过期，保留
+        });
+
+        // 合并 localStorage 中保存的本地服药状态
+        validPlans = mergeLocalMedicationStatus(validPlans);
+        
+        setCalendarPlans(validPlans);
         // 更新已设置用药计划的药品ID集合
-        const drugIds = new Set(plans.map(p => p.drugId).filter(Boolean));
+        const drugIds = new Set(validPlans.map(p => p.drugId).filter(Boolean));
         setDrugsWithPlan(drugIds);
-        console.log('用药计划已更新，共', plans.length, '条记录');
         
         // 保存到本地缓存（用于断网可读）
         try {
           localStorage.setItem(TODAY_PLANS_CACHE_KEY, JSON.stringify({
-            plans: plans,
+            plans: validPlans,
             timestamp: Date.now()
           }));
-          console.log('今日用药计划已缓存');
         } catch (cacheErr) {
           console.error('缓存用药计划失败:', cacheErr);
         }
@@ -295,9 +487,14 @@ function App() {
     }
   };
 
+  // 保持 ref 始终指向最新的 loadCalendarPlans，供跨日检测使用
+  loadCalendarPlansRef.current = loadCalendarPlans;
+
   // 从后端加载一周用药记录（包括已删除但在查询范围内的记录）
+  // This loader is intentionally recreated with the current auth state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const loadWeeklyMedication = async () => {
-    if (!user || !user.userId) {
+    if (!user) {
       console.warn('用户未登录，无法加载用药记录');
       setWeeklyMedicationData(null);
       return;
@@ -306,13 +503,8 @@ function App() {
     setIsLoadingCalendar(true);
 
     try {
-      const response = await fetch(`/api/v1/plan/weekly?userId=${user.userId}`);
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/plan/weekly`);
 
-      console.log('=== 一周用药记录响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
 
       if (response.ok && data.code === 200 && data.data) {
         setWeeklyMedicationData(data.data);
@@ -347,7 +539,6 @@ function App() {
         };
       }
       localStorage.setItem(key, JSON.stringify(savedStatus));
-      console.log(`已保存本地服药状态: planId=${planId}, status=${status}`);
     } catch (err) {
       console.error('保存本地服药状态失败:', err);
     }
@@ -360,7 +551,6 @@ function App() {
       const savedStatus = JSON.parse(localStorage.getItem(key) || '{}');
       
       if (Object.keys(savedStatus).length > 0) {
-        console.log('发现本地保存的服药状态，正在合并...', savedStatus);
         
         return plans.map(plan => {
           const localStatus = savedStatus[plan.id] || savedStatus[plan.planId];
@@ -433,23 +623,14 @@ function App() {
     }
 
     try {
-      const response = await fetch('/api/v1/plan/add-from-box', {
+      const { response, data } = await authFetch('/api/v1/plan/add-from-box', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
-          userId: user.userId,
           boxItemId: selectedDrugForPlan.boxItemId,
           timeSlots: selectedTimeSlots
         })
       });
 
-      const data = await response.json();
-
-      console.log('=== 添加到用药计划响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
 
       if (response.ok && data.code === 200) {
         // 关闭弹窗
@@ -481,89 +662,51 @@ function App() {
       ...loginData
     });
     setIsLoggedIn(true);
-    
-    // 保存登录状态到 localStorage
-    localStorage.setItem('user', JSON.stringify({
-      username: loginData.username,
-      ...loginData
-    }));
-    
+
+    // 用户信息仅保存在React state中，不存localStorage
+
+    // 家属角色直接跳转家属端，不加载老人端数据
+    if (loginData.role === 'family') {
+      return;
+    }
+
     // 登录成功后加载药箱列表和紧急联系人
     if (loginData.userId) {
       loadMedicineBoxList(loginData.userId);
-      // 不在登录时预加载日历，避免阻塞其他页面
-      // 只有当用户真正切换到日历页面时才加载
+      loadShortageWarnings(loginData.userId);
+      // 登录后立即加载今日用药计划，传入userId避免等待setUser异步更新
+      loadCalendarPlans(loginData.userId);
+
+      // 检查已过期且未丢弃的药品
+      setTimeout(() => {
+        checkTodayExpiredMedicines(loginData.userId);
+      }, 500);
     }
     if (loginData.id) {
       loadEmergencyContacts(loginData.id);
     }
-    
+
+    // 加载今日一课
+    if (loginData.role !== 'family' && loginData.id) {
+      fetchDailyLesson(loginData.id);
+    }
+
     if (loginData.needProfile) {
       setShowProfileModal(true);
     }
   };
 
   const handleProfileComplete = (profileData) => {
-    setUser(prev => ({
-      ...prev,
-      ...profileData
-    }));
+    setUser(prev => ({ ...prev, ...profileData }));
     setShowProfileModal(false);
   };
 
   const handleProfileUpdate = (profileData) => {
-    setUser(prev => ({
-      ...prev,
-      ...profileData
-    }));
+    setUser(prev => ({ ...prev, ...profileData }));
     setShowProfileEdit(false);
-    
+
     // 显示成功提示弹窗
     showToast('个人信息已更新！', 'success');
-  };
-
-  // 手动触发用药提醒（用于调试）
-  const handleTriggerReminderManually = () => {
-    console.log('手动触发用药提醒');
-    
-    // 获取当前超时的用药计划
-    if (!calendarPlans || calendarPlans.length === 0) {
-      showToast('当前没有用药计划', 'warning');
-      return;
-    }
-
-    const now = new Date();
-    const currentHours = now.getHours();
-    const currentMinutes = now.getMinutes();
-    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
-
-    // 找出所有超时需要服用但还未服用的用药计划
-    const missed = calendarPlans.filter(reminder => {
-      if (reminder.taken || reminder.missed) {
-        return false;
-      }
-      const [hours, minutes] = reminder.time.split(':').map(Number);
-      const reminderTimeInMinutes = hours * 60 + minutes;
-      const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
-      return timeDiff >= 0;
-    });
-
-    if (missed.length === 0) {
-      showToast('当前没有需要服用的药物', 'info');
-      // 显示所有待服用的药物，即使还没超时
-      const pending = calendarPlans.filter(reminder => !reminder.taken && !reminder.missed);
-      if (pending.length > 0) {
-        setMissedReminders(pending);
-        setShowMedicationReminder(true);
-        lastReminderTimeRef.current = Date.now();
-      }
-      return;
-    }
-
-    setMissedReminders(missed);
-    setShowMedicationReminder(true);
-    lastReminderTimeRef.current = Date.now();
-    console.log('手动触发用药提醒:', missed);
   };
 
   const handleAddContact = async () => {
@@ -578,10 +721,9 @@ function App() {
   const handleDeleteContact = async (contactId) => {
     if (user && user.id) {
       try {
-        const response = await fetch(`/api/emergency/v1/contacts/${contactId}`, {
+        const { data: result } = await authFetch(`/api/emergency/v1/contacts/${contactId}`, {
           method: 'DELETE'
         });
-        const result = await response.json();
         
         if (result.code === 200) {
           await loadEmergencyContacts(user.id);
@@ -633,6 +775,7 @@ function App() {
     // 重新加载列表（后台刷新，不影响当前详情显示）
     if (user && user.userId) {
       await loadMedicineBoxList(user.userId);
+      loadShortageWarnings(user.userId);
     }
   };
 
@@ -648,13 +791,8 @@ function App() {
     if (!pendingDeleteDrug) return;
     
     try {
-      const response = await fetch(`/api/v1/box/${pendingDeleteDrug.boxItemId}?userId=${user.userId}`, { method: 'DELETE' });
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/box/${pendingDeleteDrug.boxItemId}`, { method: 'DELETE' });
       
-      console.log('=== 删除药品响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
       
       if (response.ok && data.code === 200) {
         // 关闭确认弹窗
@@ -697,12 +835,10 @@ function App() {
       
       // 只检测新药与药箱中其他药品的冲突
       const drugNames = [newDrugName, ...otherDrugs.map(drug => drug.name)];
-      const response = await fetch('/api/conflict/check', {
+      const { data } = await authFetch('/api/conflict/check', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(drugNames)
       });
-      const data = await response.json();
       if (data.code === 200 && data.data) {
         // 过滤出只与新药相关的冲突
         const newDrugConflicts = data.data.conflicts?.filter(
@@ -733,8 +869,21 @@ function App() {
     return null;
   };
 
+  // 添加药品到药箱（由 AddDrugModal 组件内部调用 API）
   const handleAddDrug = async (drugData) => {
-    // 构造新药数据
+    // 检查是否是过期药品
+    if (drugData.expired) {
+      // 显示过期弹窗
+      setExpiredDrugInfo({
+        drugName: drugData.drugName || drugData.genericName || '未知药品',
+        expiryDate: drugData.expiryDate || '未知日期'
+      });
+      setShowExpiredDrugModal(true);
+      setShowAddDrugModal(false);
+      return;
+    }
+    
+    // 构造新药数据（用于冲突检测）
     const newDrug = {
       boxItemId: drugData.boxItemId,
       drugId: drugData.drugId,
@@ -747,24 +896,26 @@ function App() {
       endDate: drugData.endDate,
       expiryDate: drugData.expiryDate,
       totalQuantity: drugData.totalQuantity,
-      remaining: drugData.totalQuantity, // 初始时剩余数量等于总数量
+      remaining: drugData.totalQuantity,
       note: drugData.note
     };
     
     setShowAddDrugModal(false);
     
-    // 显示自定义成功提示
+    // 显示成功提示
     showToast('药品添加成功！', 'success');
     
-    // 添加成功后重新加载药箱列表（从数据库获取最新数据）
+    // 重新加载药箱列表
     if (user && user.userId) {
       await loadMedicineBoxList(user.userId);
+      loadShortageWarnings(user.userId);
+      
       // 如果当前在用药日历页面，同时刷新用药计划
       if (activeTab === 'calendar') {
         loadCalendarPlans();
       }
       
-      // 新药入箱后自动触发冲突检测（传入当前药箱列表）
+      // 新药入箱后自动触发冲突检测
       const conflictResult = await checkConflictsForNewDrug(newDrug.name, drugList);
       if (conflictResult) {
         if (conflictResult.noConflict) {
@@ -775,21 +926,34 @@ function App() {
           setShowConflictAlert(true);
         }
       }
-      // 标记冲突检测页面需要重新检测
       setConflictNeedsRecheck(true);
-      setConflictReport(null); // 清除之前的检测结果
+      setConflictReport(null);
     }
   };
 
   // 关闭用药提醒弹窗
+  // This handler closes over the current reminder list.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleCloseMedicationReminder = () => {
     // 关闭弹窗时自动停止播报
     stopSpeaking();
     // 重置提醒ID，允许下次打开时重新播报
     lastReminderIdRef.current = null;
+    // 记录当前已展示的最高阶段，下次只有阶段升级才再次提醒
+    // （避免关闭 pre_remind 后1分钟又弹同一阶段）
+    if (missedReminders.length > 0) {
+      const stageOrder = ['pre_remind', 'due_now', 'overdue', 'notify_family'];
+      let highestIdx = -1;
+      missedReminders.forEach(r => {
+        const idx = stageOrder.indexOf(r.reminderStage);
+        if (idx > highestIdx) highestIdx = idx;
+      });
+      if (highestIdx >= 0) {
+        lastShownStageRef.current = stageOrder[highestIdx];
+      }
+    }
     setShowMedicationReminder(false);
     setMissedReminders([]);
-    // 不重置 lastReminderTimeRef，确保下次提醒要等3分钟后
   };
 
   // 从提醒弹窗中标记为已服用
@@ -816,24 +980,22 @@ function App() {
         })()
       );
       
-      console.log('刷新弹窗 - 剩余未服用的药物数量:', remainingMissed.length);
       
       // 如果还有未服用的药物，重新打开弹窗
       if (remainingMissed.length > 0) {
-        console.log('还有未服用的药物，重新打开弹窗:', remainingMissed);
         setMissedReminders(remainingMissed);
         setShowMedicationReminder(true);
         lastReminderTimeRef.current = Date.now();
       } else {
         // 所有药物都已服用，关闭弹窗
-        console.log('所有药物都已服用，关闭弹窗');
+        // 重置阶段记录，下次有新药品时从 pre_remind 开始正常提醒
+        lastShownStageRef.current = null;
         handleCloseMedicationReminder();
       }
     }
-  }, [calendarPlans, shouldRefreshReminder]);
+  }, [calendarPlans, shouldRefreshReminder, handleCloseMedicationReminder]);
 
   const handleMarkAsTakenFromReminder = async (reminder) => {
-    console.log('标记为已服用:', reminder);
 
     // markAsTaken 内部已经 await API + reload 两个视图，这里不再重复 reload
     await markAsTaken(reminder.id, null);
@@ -848,8 +1010,8 @@ function App() {
     setShowProfileModal(false);
     setActiveTab('home');
     
-    // 清除 localStorage 中的登录状态
-    localStorage.removeItem('user');
+    // 清除登录状态和JWT token
+    clearAuth();
   };
 
   // 打开过期药品弹窗
@@ -862,6 +1024,37 @@ function App() {
     setShowExpiringDrugsModal(false);
   };
 
+  // 关闭添加药品时发现过期的弹窗
+  const handleCloseExpiredDrugModal = () => {
+    setShowExpiredDrugModal(false);
+    setExpiredDrugInfo(null);
+  };
+
+  // 关闭已过期且未丢弃药品弹窗
+  const handleCloseTodayExpiredModal = () => {
+    setShowTodayExpiredModal(false);
+    setTodayExpiredDrugs([]);
+  };
+
+  // 检查所有已过期且未丢弃的药品（status=active）
+  const checkTodayExpiredMedicines = async (userId) => {
+    if (!userId) return;
+    
+    try {
+      const { response, data } = await authFetch(`/api/v1/box/expired/today`);
+      
+      
+      if (response.ok && data.code === 200 && data.data && data.data.length > 0) {
+        // 有已过期且未丢弃的药品，显示弹窗
+        setTodayExpiredDrugs(data.data);
+        setShowTodayExpiredModal(true);
+      }
+    } catch (error) {
+      console.error('检查已过期药品失败:', error);
+      // 不显示错误提示，避免影响用户体验
+    }
+  };
+
   // 点击过期药品查看详情
   const handleExpiringDrugClick = (drug) => {
     setSelectedDrug(drug);
@@ -869,10 +1062,92 @@ function App() {
     setShowDrugDetailModal(true);
   };
 
+  // 处理丢弃临期/过期药品
+  // eslint-disable-next-line no-unused-vars
+  const handleDiscardDrug = async () => {
+    if (!selectedDrug || !selectedDrug.boxItemId) {
+      showToast('缺少必要参数，无法丢弃', 'error');
+      return;
+    }
+
+    // 从 React state 获取用户ID
+    const currentUserId = user?.userId || user?.id;
+
+    if (!currentUserId) {
+      showToast('用户信息异常，请重新登录', 'error');
+      return;
+    }
+
+    try {
+      // 调用后端API更新status为stopped
+      const { response, data } = await authFetch(`/api/v1/box/${selectedDrug.boxItemId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: 'stopped'
+        })
+      });
+
+      if (response.ok && data.code === 200) {
+        showToast('已标记为丢弃，药品已移除', 'success');
+        // 关闭详情弹窗
+        setShowDrugDetailModal(false);
+        // 重新加载药箱列表
+        await loadMedicineBoxList(currentUserId);
+      } else {
+        showToast(data.message || '丢弃失败', 'error');
+      }
+    } catch (error) {
+      console.error('丢弃药品失败:', error);
+      showToast('丢弃失败，请稍后重试', 'error');
+    }
+  };
+
+  // 处理从药箱卡片直接丢弃药品
+  const handleDiscardDrugFromCard = async (drug) => {
+    if (!drug || !drug.boxItemId) {
+      showToast('缺少必要参数，无法丢弃', 'error');
+      return;
+    }
+
+    // 从 React state 获取用户ID
+    const currentUserId = user?.userId || user?.id;
+
+    if (!currentUserId) {
+      showToast('用户信息异常，请重新登录', 'error');
+      return;
+    }
+
+    try {
+      // 调用后端API更新status为stopped
+      const { response, data } = await authFetch(`/api/v1/box/${drug.boxItemId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: 'stopped'
+        })
+      });
+
+      if (response.ok && data.code === 200) {
+        showToast('已标记为丢弃，药品已移除', 'success');
+        // 重新加载药箱列表
+        await loadMedicineBoxList(currentUserId);
+      } else {
+        showToast(data.message || '丢弃失败', 'error');
+      }
+    } catch (error) {
+      console.error('丢弃药品失败:', error);
+      showToast('丢弃失败，请稍后重试', 'error');
+    }
+  };
+
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      console.log('文件选择:', file.name, file.type);
       const reader = new FileReader();
       reader.onload = (e) => {
         setImagePreview(e.target.result);
@@ -920,7 +1195,6 @@ function App() {
         dt.items.add(file);
         fileInputRef.current.files = dt.files;
         
-        console.log('拖拽文件已设置:', file.name, file.type);
         
         // 自动开始识别
         setTimeout(() => {
@@ -943,27 +1217,169 @@ function App() {
     setIsDragging(true);
   };
 
-  // 应用初始化时检查 localStorage 中的登录状态
+  // 监听认证过期事件，自动跳转到登录页
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      try {
-        const userData = JSON.parse(savedUser);
-        if (userData && userData.userId) {
-          setUser(userData);
-          setIsLoggedIn(true);
-          // 自动加载药箱列表和紧急联系人
-          loadMedicineBoxList(userData.userId);
-          if (userData.id) {
-            loadEmergencyContacts(userData.id);
+    const handleAuthExpired = () => {
+      setIsLoggedIn(false);
+      setUser(null);
+      showToast('认证已过期，请重新登录', 'error');
+    };
+    window.addEventListener('elder-auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('elder-auth-expired', handleAuthExpired);
+  }, [showToast]);
+
+  // 页面加载时恢复登录状态：家属端 token 优先，否则检查老人端 token
+  // 用户信息通过API获取，不依赖localStorage
+  // 自动恢复登录逻辑已禁用 - 用户每次需要手动登录
+  /*
+  useEffect(() => {
+    // 家属端恢复
+    if (isGuardianAuthenticated()) {
+      const guardianToken = getGuardianToken();
+      if (guardianToken) {
+        // 通过API获取家属用户信息
+        fetch('/api/v1/user/profile', {
+          headers: { 'Authorization': `Bearer ${guardianToken}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.code === 200 && data.data && data.data.role === 'family') {
+            // 不自动切换loginMode，保持当前状态（默认elder）
+            // setLoginMode('guardian');  // 注释掉自动切换逻辑
+            setUser(data.data);
+            setIsLoggedIn(true);
+          } else {
+            // token无效，清除并跳登录
+            clearAuth();
           }
-        }
-      } catch (e) {
-        console.error('解析用户数据失败:', e);
-        localStorage.removeItem('user');
+        })
+        .catch(() => {
+          clearAuth();
+        });
+        return;
       }
     }
+
+    // 老人端恢复
+    if (isAuthenticated()) {
+      const elderToken = getToken();
+      if (elderToken) {
+        fetch('/api/v1/user/profile', {
+          headers: { 'Authorization': `Bearer ${elderToken}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.code === 200 && data.data && data.data.role && data.data.role !== 'family') {
+            const userData = data.data;
+            setUser(userData);
+            setIsLoggedIn(true);
+
+            // 加载老人端数据
+            if (userData.id) {
+              loadMedicineBoxList(userData.userId);
+              loadShortageWarnings(userData.userId);
+              loadCalendarPlans(userData.userId);
+              loadEmergencyContacts(userData.id);
+              fetchDailyLesson(userData.id);
+            }
+          } else {
+            // token无效或角色不对，清除并跳登录
+            clearAuth();
+          }
+        })
+        .catch(() => {
+          clearAuth();
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  */
+
+  // Token过期事件监听 - 自动跳转到对应登录页
+  useEffect(() => {
+    const handleElderAuthExpired = () => {
+      setUser(null);
+      setIsLoggedIn(false);
+      setLoginMode('elder'); // 跳转到老人端登录
+    };
+
+    const handleGuardianAuthExpired = () => {
+      setUser(null);
+      setIsLoggedIn(false);
+      setLoginMode('guardian'); // 跳转到家属端登录
+    };
+
+    window.addEventListener('elder-auth-expired', handleElderAuthExpired);
+    window.addEventListener('guardian-auth-expired', handleGuardianAuthExpired);
+
+    return () => {
+      window.removeEventListener('elder-auth-expired', handleElderAuthExpired);
+      window.removeEventListener('guardian-auth-expired', handleGuardianAuthExpired);
+    };
+  }, []);
+
+  // WebSocket 连接管理 - 老人端实时通知
+  useEffect(() => {
+    if (!user || user.role === 'family' || !user.id) return;
+
+    const connectWebSocket = () => {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      // 后端 WebSocket 地址（开发环境直接连 8080；token 通过查询参数传递，
+      // 因为浏览器 WebSocket API 无法自定义请求头，后端拦截器同时支持两种方式）
+      const host = window.location.hostname;
+      const token = getToken();
+      const wsUrl = `${wsProtocol}//${host}:8080/ws/notifications?token=${encodeURIComponent(token || '')}&elderId=${user.id}`;
+      try {
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          setWsConnected(true);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'new_notification') {
+              // 收到新通知，更新未读数
+              setNotificationUnreadCount(prev => prev + 1);
+            }
+          } catch (e) {
+            // 忽略解析错误
+          }
+        };
+
+        ws.onclose = () => {
+          wsRef.current = null;
+          setWsConnected(false);
+          // 5秒后重连
+          setTimeout(() => {
+            if (user && user.role !== 'family' && user.id) {
+              connectWebSocket();
+            }
+          }, 5000);
+        };
+
+        ws.onerror = (error) => {
+          console.warn('WebSocket连接错误');
+          ws.close();
+        };
+      } catch (e) {
+        console.warn('WebSocket连接失败，将使用轮询模式');
+        setWsConnected(false);
+      }
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [user, user?.id, user?.role]);
 
   // 全局阻止拖拽默认行为，防止文件被浏览器打开
   useEffect(() => {
@@ -988,23 +1404,23 @@ function App() {
   // 将语音播报方法绑定到 window 对象，供 MedicationReminderModal 使用
   useEffect(() => {
     window.speakMedicationReminder = (text) => {
-      speak(text);
+      speakRef.current?.(text);
     };
     
     return () => {
       delete window.speakMedicationReminder;
     };
-  }, []); // 空依赖数组，只执行一次
+  }, [speakRef]);
 
-  // 用药提醒：每3分钟检查一次是否有超时需要服用的药
+  // 用药提醒：每分钟检查一次，支持渐进式提醒
   useEffect(() => {
-    // 只要用户登录就启用提醒（不再限制在用药日历页面）
     if (!isLoggedIn) {
       return;
     }
 
-    // 检查是否有超时需要服用的用药计划
-    const checkMissedReminders = () => {
+    // 渐进式提醒检查：提前15min → 到时 → 超时10min通知家属
+    // 触发策略：只在"阶段升级"时弹窗，避免关闭后1分钟又弹同一阶段
+    const checkProgressiveReminders = () => {
       if (!calendarPlans || calendarPlans.length === 0) {
         return;
       }
@@ -1014,65 +1430,117 @@ function App() {
       const currentMinutes = now.getMinutes();
       const currentTimeInMinutes = currentHours * 60 + currentMinutes;
 
-      // 找出所有超时需要服用但还未服用的用药计划
-      const missed = calendarPlans.filter(reminder => {
-        // 跳过已经服用或标记为漏服的
+      // 找出需要提醒的用药计划（提前15分钟、到时、超时10分钟通知家属）
+      const needRemind = calendarPlans.filter(reminder => {
         if (reminder.taken || reminder.missed) {
           return false;
         }
 
-        // 解析用药时间
         const [hours, minutes] = reminder.time.split(':').map(Number);
         const reminderTimeInMinutes = hours * 60 + minutes;
-
-        // 如果当前时间超过用药时间，视为超时
+        const remindBefore = reminder.remindBefore || 15;
         const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
-        return timeDiff >= 0;
+
+        // 提前15分钟提醒（使用后端的reminderStage或前端计算）
+        const stage = reminder.reminderStage;
+        if (stage && stage !== 'none') {
+          return true; // 后端已推进阶段，需要提醒
+        }
+
+        // 前端兜底：提前remindBefore分钟也开始提醒
+        return timeDiff >= -remindBefore;
+      }).map(reminder => {
+        // 为每个提醒计算前端阶段（后端阶段优先）
+        const [hours, minutes] = reminder.time.split(':').map(Number);
+        const reminderTimeInMinutes = hours * 60 + minutes;
+        const remindBefore = reminder.remindBefore || 15;
+        const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
+
+        let stage = reminder.reminderStage;
+        if (!stage || stage === 'none') {
+          // 阶段简化：pre_remind → due_now → notify_family（超时10分钟）
+          // 原 overdue 阶段已合并，到时提醒后10分钟内保持 due_now，不再反复打扰
+          if (timeDiff >= 10) {
+            stage = 'notify_family';
+          } else if (timeDiff >= 0) {
+            stage = 'due_now';
+          } else if (timeDiff >= -remindBefore) {
+            stage = 'pre_remind';
+          }
+        }
+
+        return { ...reminder, reminderStage: stage };
       });
 
-      // 如果有超时药物，且距离上次提醒已经超过3分钟，才再次提醒
-      if (missed.length > 0) {
-        const now = Date.now();
-        const shouldRemind = !lastReminderTimeRef.current || 
-                            (now - lastReminderTimeRef.current) >= 3 * 60 * 1000; // 3分钟间隔
-        
+      if (needRemind.length > 0) {
+        // 计算当前最高阶段
+        const stageOrder = ['pre_remind', 'due_now', 'overdue', 'notify_family'];
+        let currentHighestIdx = -1;
+        needRemind.forEach(r => {
+          const idx = stageOrder.indexOf(r.reminderStage);
+          if (idx > currentHighestIdx) currentHighestIdx = idx;
+        });
+
+        // 只有阶段升级时才再次提醒（避免关闭后1分钟又弹同一阶段）
+        const lastShownStage = lastShownStageRef.current;
+        const shouldRemind = currentHighestIdx >= 0 && (
+          !lastShownStage ||
+          currentHighestIdx > stageOrder.indexOf(lastShownStage)
+        );
+
         if (shouldRemind) {
-          setMissedReminders(missed);
+          setMissedReminders(needRemind);
           setShowMedicationReminder(true);
-          lastReminderTimeRef.current = now; // 记录本次提醒时间
-          console.log('触发用药提醒:', missed);
+          lastReminderTimeRef.current = Date.now();
         }
       }
     };
 
-    // 立即检查一次
-    checkMissedReminders();
-
-    // 每3分钟检查一次并触发提醒（从60秒改为180秒）
-    const intervalId = setInterval(checkMissedReminders, 3 * 60 * 1000);
+    checkProgressiveReminders();
+    const intervalId = setInterval(checkProgressiveReminders, 60 * 1000); // 每分钟检查
 
     return () => {
       clearInterval(intervalId);
     };
   }, [isLoggedIn, calendarPlans]);
 
+  // 跨日检测：页面长时间不刷新时，发现日期变化则自动刷新今日用药计划
+  // 解决"昨天开着页面到今天，日历仍是昨天数据"的问题
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const checkDateChange = () => {
+      const todayKey = getLocalDateKey();
+      if (lastDateRef.current && lastDateRef.current !== todayKey) {
+        lastDateRef.current = todayKey;
+        // 清空昨日缓存，避免断网时误读昨天的计划
+        localStorage.removeItem(TODAY_PLANS_CACHE_KEY);
+        // 重新加载今日用药计划（通过 ref 调用最新版本，避免闭包陈旧）
+        if (loadCalendarPlansRef.current) {
+          loadCalendarPlansRef.current();
+        }
+      } else if (!lastDateRef.current) {
+        lastDateRef.current = todayKey;
+      }
+    };
+
+    const intervalId = setInterval(checkDateChange, 60 * 1000); // 每分钟检查一次
+    return () => clearInterval(intervalId);
+  }, [isLoggedIn]);
+
   // 监听弹窗显示，自动播报（只在弹窗首次打开时播报一次）
   const lastReminderIdRef = useRef(null);
   
   useEffect(() => {
     if (showMedicationReminder && missedReminders.length > 0) {
-      // 使用第一个提醒的ID作为标识，避免重复播报
       const firstReminderId = missedReminders[0]?.id;
       
-      // 如果是同一组提醒，不重复播报
       if (lastReminderIdRef.current === firstReminderId) {
         return;
       }
       
-      // 记录本次提醒ID
       lastReminderIdRef.current = firstReminderId;
       
-      // 弹窗打开时，延迟500ms后自动播报
       const timer = setTimeout(() => {
         const reminderTexts = missedReminders.map(reminder => {
           const drugName = reminder.drug || reminder.drugName || '未知药品';
@@ -1080,114 +1548,84 @@ function App() {
           const dosage = reminder.dosage ? `，用量${reminder.dosage}` : '';
           return `${time}的${drugName}${dosage}`;
         });
-        
-        const speakText = `用药提醒！您有以下药物还没有服用：${reminderTexts.join('；')}。请及时服用。`;
-        speak(speakText);
+
+        // 根据最高阶段播报不同内容
+        const stageOrder = ['pre_remind', 'due_now', 'overdue', 'notify_family'];
+        let highestIndex = -1;
+        missedReminders.forEach(r => {
+          const idx = stageOrder.indexOf(r.reminderStage);
+          if (idx > highestIndex) highestIndex = idx;
+        });
+        const highestStage = highestIndex >= 0 ? stageOrder[highestIndex] : 'due_now';
+
+        let speakText;
+        switch (highestStage) {
+          case 'pre_remind':
+            speakText = `用药提醒！以下药物将在15分钟后需要服用：${reminderTexts.join('；')}。请做好准备。`;
+            break;
+          case 'due_now':
+            speakText = `用药提醒！该服药了！您有以下药物需要服用：${reminderTexts.join('；')}。请及时服用。`;
+            break;
+          case 'overdue':
+            speakText = `紧急提醒！您有以下药物已超时未服用：${reminderTexts.join('；')}。请尽快服药！`;
+            break;
+          case 'notify_family':
+            speakText = `紧急提醒！您有以下药物超时较久未服用，已通知您的家属：${reminderTexts.join('；')}。请尽快服药！`;
+            break;
+          default:
+            speakText = `用药提醒！您有以下药物还没有服用：${reminderTexts.join('；')}。请及时服用。`;
+        }
+        speakRef.current?.(speakText);
       }, 500);
       
       return () => clearTimeout(timer);
     }
-  }, [showMedicationReminder, missedReminders]);
+  }, [showMedicationReminder, missedReminders, speakRef]);
 
-  const audioRef = useRef(null);
 
-  const speak = async (text, rate = speechRate) => {
-    if (!text || text.trim() === '') {
-      console.log('没有可播放的内容');
-      return;
-    }
+  // 调用后端追问API
+  const handleAskFollowUp = async () => {
+    if (!followUpQuestion.trim() || isFollowUpLoading) return;
 
-    // 先停止当前播放，避免中断错误
-    stopSpeaking();
+    const userMessage = { role: 'user', content: followUpQuestion.trim() };
+    const newMessages = [...followUpMessages, userMessage];
+    setFollowUpMessages(newMessages);
+    setFollowUpQuestion('');
+    setIsFollowUpLoading(true);
 
-    // 优先尝试调用百度TTS API
     try {
-      setIsSpeaking(true);
-
-      // 将前端语速(0.6-1)映射到百度TTS语速(3-5)
-      const baiduRate = rate === 0.6 ? 3 : 5;
-      const response = await fetch(`/api/ai/tts?text=${encodeURIComponent(text)}&speechRate=${baiduRate}`);
-
-      if (response.ok) {
-        const result = await response.json();
-
-        if (result.code === 200 && result.data) {
-          // 播放百度返回的音频
-          if (audioRef.current) {
-            audioRef.current.src = result.data;
-            // 添加错误处理，避免播放中断错误
-            audioRef.current.play().catch(err => {
-              console.error('音频播放失败:', err);
-              setIsSpeaking(false);
-            });
-            return; // 成功则返回
-          }
-        }
-      }
-
-      // 如果百度TTS失败，使用浏览器原生语音（备用方案）
-      console.warn('百度TTS不可用，使用浏览器原生语音');
-      speakWithBrowser(text, rate);
-
-    } catch (error) {
-      console.error('百度TTS调用失败，使用备用方案:', error);
-      speakWithBrowser(text, rate);
-    }
-  };
-
-  // 浏览器原生语音（备用方案）
-  const speakWithBrowser = (text, rate) => {
-    if ('speechSynthesis' in window) {
-      // 停止当前播放
-      window.speechSynthesis.cancel();
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-CN';
-      utterance.rate = rate;
-      utterance.volume = 1;
-
-      // 尝试选择最好的中文语音
-      const voices = window.speechSynthesis.getVoices();
-      const chineseVoice = voices.find(v => v.lang.includes('zh') && v.name.includes('Female'));
-      if (chineseVoice) {
-        utterance.voice = chineseVoice;
-      }
-
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => {
-        console.error('浏览器语音播放失败');
-        setIsSpeaking(false);
+      // 构造药品详细信息对象
+      const drugDetail = {
+        genericName: selectedDrug.name,
+        tradeName: selectedDrug.tradeName || '',
+        specification: selectedDrug.spec || selectedDrug.specification || '',
+        manufacturer: selectedDrug.manufacturer || '',
+        ingredient: selectedDrug.ingredient || '',
+        indications: selectedDrug.indications || '',
+        usage: selectedDrug.usage || selectedDrug.dosage || '',
+        precautions: selectedDrug.precautions || '',
+        adverseReactions: selectedDrug.adverseReactions || ''
       };
 
-      window.speechSynthesis.speak(utterance);
-    } else {
-      showToast('您的浏览器不支持语音播报功能', 'error');
-      setIsSpeaking(false);
+      const { data } = await authFetch('/api/ai/follow-up-question', {
+        method: 'POST',
+        body: JSON.stringify({
+          drugDetail,
+          question: userMessage.content,
+          conversationHistory: newMessages.slice(-12).map(m => ({ role: m.role, content: m.content }))
+        })
+      });
+      if (data.code === 200 && data.data) {
+        setFollowUpMessages(prev => [...prev, { role: 'assistant', content: data.data }]);
+      } else {
+        setFollowUpMessages(prev => [...prev, { role: 'assistant', content: '抱歉，我暂时无法回答这个问题，请稍后再试。' }]);
+      }
+    } catch (error) {
+      setFollowUpMessages(prev => [...prev, { role: 'assistant', content: '网络异常，请检查网络连接后重试。' }]);
+    } finally {
+      setIsFollowUpLoading(false);
     }
   };
-
-  const stopSpeaking = () => {
-    // 停止百度TTS
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-    // 停止浏览器语音
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    setIsSpeaking(false);
-  };
-
-  // 监听音频播放结束
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (audio) {
-      const handleEnded = () => setIsSpeaking(false);
-      audio.addEventListener('ended', handleEnded);
-      return () => audio.removeEventListener('ended', handleEnded);
-    }
-  }, []);
 
   // 监听activeTab变化，离开上传页面时清除图片
   useEffect(() => {
@@ -1203,27 +1641,67 @@ function App() {
     if (activeTab === 'calendar' && isLoggedIn) {
       // 如果已经有数据，不重新加载，提升用户体验
       if (calendarViewMode === 'today' && calendarPlans.length === 0) {
-        loadCalendarPlans();
+        loadCalendarPlansRef.current?.();
       } else if (calendarViewMode === 'week' && !weeklyMedicationData) {
-        loadWeeklyMedication();
+        loadWeeklyMedicationRef.current?.();
       }
     }
-  }, [activeTab, isLoggedIn]); // 移除calendarViewMode依赖，避免切换视图时重复触发
+
+    // 切换到冲突检测页面时，自动调用本地规则快速检测
+    if (activeTab === 'conflict' && drugList.length >= 2) {
+      const doAutoCheck = async () => {
+        setIsAutoChecking(true);
+        setAutoCheckResult(null);
+        try {
+          const drugNames = drugList.map(d => d.name);
+          const { data } = await authFetch('/api/conflict/quick-check-local', {
+            method: 'POST',
+            body: JSON.stringify(drugNames)
+          });
+          if (data.code === 200 && data.data) {
+            setAutoCheckResult(data.data);
+          }
+        } catch (err) {
+          console.error('自动快速检测失败:', err);
+        } finally {
+          setIsAutoChecking(false);
+        }
+      };
+      doAutoCheck();
+    } else if (activeTab === 'conflict') {
+      // 药品不足2种，清除之前的自动检测结果
+      setAutoCheckResult(null);
+    }
+  }, [activeTab, isLoggedIn, calendarPlans.length, calendarViewMode, drugList, weeklyMedicationData]);
 
   const [ocrTaskId, setOcrTaskId] = useState(null);
   const [ocrPolling, setOcrPolling] = useState(false);
   const [elderlyGuide, setElderlyGuide] = useState(''); // 老年友好用药指导
   const [isLoadingGuide, setIsLoadingGuide] = useState(false); // 是否正在加载AI指导
+  const [followUpMessages, setFollowUpMessages] = useState([]); // 追问对话消息列表
+  const [followUpQuestion, setFollowUpQuestion] = useState(''); // 当前追问输入
+  const [isFollowUpLoading, setIsFollowUpLoading] = useState(false); // 追问加载中
+
+  // 追问消息变化时自动滚动到底部（用户发送新问题后跳到最下方）
+  useEffect(() => {
+    if (followUpMessagesRef.current) {
+      followUpMessagesRef.current.scrollTop = followUpMessagesRef.current.scrollHeight;
+    }
+  }, [followUpMessages, isFollowUpLoading, followUpMessagesRef]);
 
   // 当selectedDrug变化时，自动调用AI生成老年友好指导
   useEffect(() => {
     if (selectedDrug && selectedDrug.name) {
       fetchElderlyGuide(selectedDrug);
     }
+    // 切换药品时清空追问消息和播放状态
+    setFollowUpMessages([]);
+    setFollowUpQuestion('');
+    stopFollowUpSpeaking();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDrug?.name, selectedDrug?.usage, selectedDrug?.precautions]);
 
-  // 调用AI生成老年友好用药指导
+  // 调用AI生成老年友好用药指导（三层保障策略）
   const fetchElderlyGuide = async (drugInfo) => {
     if (!drugInfo || !drugInfo.name) return;
     
@@ -1246,75 +1724,330 @@ function App() {
         description: drugInfo.description || ''
       };
 
-      const response = await fetch('/api/ai/elderly-guide', {
+      
+      // 第一层：尝试调用后端 AI 服务
+      const { data } = await authFetch('/api/ai/elderly-guide', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(drugDetail)
       });
-
-      const data = await response.json();
       
       if (data.code === 200 && data.data) {
         // 将<br/>标签替换为换行符，方便阅读
         const guideText = data.data.replace(/<br\/>/g, '\n');
         setElderlyGuide(guideText);
-        console.log('老年友好用药指导生成成功:', guideText);
+        return; // 成功则直接返回
       } else {
-        console.error('生成老年友好指导失败:', data.message);
-        // 生成默认指导
-        setElderlyGuide(generateFallbackGuide(drugInfo));
+        console.error('❌ 后端 AI 服务失败:', data.message);
+        throw new Error(data.message || '后端 AI 服务异常');
       }
     } catch (error) {
-      console.error('调用AI服务失败:', error);
-      // 生成默认指导
-      setElderlyGuide(generateFallbackGuide(drugInfo));
+      console.error('️ 后端 AI 服务异常，尝试 DeepSeek 兜底:', error);
+      
+      // 第二层：使用 DeepSeek API 作为兜底
+      try {
+        await callDeepSeekForGuide(drugInfo);
+        return;
+      } catch (deepseekError) {
+        console.error('❌ DeepSeek 兜底也失败，使用本地规则集:', deepseekError);
+        
+        // 第三层：使用本地扩充的规则集生成
+        const fallbackGuide = generateFallbackGuide(drugInfo);
+        setElderlyGuide(fallbackGuide);
+        showToast('已使用本地用药指导（AI服务暂时不可用）', 'info');
+      }
     } finally {
       setIsLoadingGuide(false);
     }
   };
 
+  // DeepSeek 兜底函数
+  const callDeepSeekForGuide = async (drugInfo) => {
+    try {
+      const prompt = `你是一位专业的药师，专门为老年人提供用药指导。请用通俗易懂、温暖亲切的语言，为一位老年患者解释以下药品的使用方法。
+
+药品信息：
+- 药品名称：${drugInfo.name}
+- 商品名：${drugInfo.tradeName || '无'}
+- 规格：${drugInfo.spec || drugInfo.specification || '无'}
+- 生产厂家：${drugInfo.manufacturer || '无'}
+- 药品类别：${drugInfo.category || '无'}
+- 主要成分：${drugInfo.ingredient || '无'}
+- 适应症：${drugInfo.indications || '无'}
+- 用法用量：${drugInfo.usage || drugInfo.dosage || '无'}
+- 注意事项：${drugInfo.precautions || '无'}
+- 不良反应：${drugInfo.adverseReactions || '无'}
+- 详细说明：${drugInfo.description || '无'}
+
+请按照以下格式生成用药指导（每个部分都要有）：
+
+1. 【这是什么药】：简单说明这个药是治什么病的
+2. 【怎么吃】：详细说明用法用量，用老年人能听懂的话
+3. 【什么时候吃】：说明最佳服用时间
+4. 【特别要注意】：列出重要的注意事项和禁忌
+5. 【可能出现的不舒服】：说明可能的不良反应，但要让老人不要过度担心
+6. 【保存方法】：如何正确保存药品
+7. 【温馨提醒】：给老人的贴心建议
+
+要求：
+- 语言要通俗易懂，避免专业术语
+- 语气要温暖亲切，像跟家里长辈说话一样
+- 重点内容要用强调的语气
+- 适当使用表情符号增加亲和力
+- 控制在500字以内
+- 用中文回答`;
+
+      
+      const { data } = await authFetch('/api/deepseek/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }],
+          model: 'deepseek-chat',
+          temperature: 0.7,
+          max_tokens: 800
+        })
+      });
+      
+      if (data.choices && data.choices[0]) {
+        const aiResponse = data.choices[0].message.content;
+        setElderlyGuide(aiResponse);
+      } else {
+        throw new Error('DeepSeek API 返回异常');
+      }
+    } catch (error) {
+      console.error('DeepSeek API 调用失败:', error);
+      throw error; // 向上抛出错误，让外层捕获并使用本地规则集
+    }
+  };
+
   // 生成备用老年友好指导（当AI不可用时使用）
+  // 采用三层保障策略：后端AI -> DeepSeek兜底 -> 本地规则集
   const generateFallbackGuide = (drugInfo) => {
+    // ========== 配置区域 ==========
+    
+    // 1. 药品分类关键词映射
+    const drugCategories = {
+      '降压药': ['硝苯地平', '氨氯地平', '沙坦', '厄贝沙坦', '卡托普利', '缬沙坦', '氯沙坦'],
+      '降糖药': ['二甲双', '格列美脲', '阿卡波糖', '胰岛素', '格列齐特', '罗格列酮'],
+      '抗生素': ['阿莫西林', '头孢', '罗红霉素', '左氧氟沙星', '青霉素', '阿奇霉素'],
+      '止痛药': ['布洛芬', '对乙酰氨基酚', '阿司匹林', '双氯芬酸', '塞来昔布'],
+      '感冒药': ['感康', '白加黑', '泰诺', '999感冒灵', '快克', '新康泰克'],
+      '胃药': ['奥美拉唑', '雷尼替丁', '铝碳酸镁', '多潘立酮', '泮托拉唑'],
+      '安眠药': ['艾司唑仑', '佐匹克隆', '劳拉西泮', '地西泮'],
+      '心脏病药': ['硝酸甘油', '速效救心丸', '地高辛', '单硝酸异山梨酯']
+    };
+    
+    // 2. 服用时间关键词规则
+    const timingRules = [
+      { keywords: ['空腹', '饭前1小时', '清晨'], text: '建议在早上起床后空腹吃，这样吸收效果最好' },
+      { keywords: ['饭前', '餐前', '吃饭前半小时'], text: '建议在吃饭前半个小时吃，这样药效会更好' },
+      { keywords: ['饭后', '餐后', '吃完饭'], text: '建议在吃完饭半小时后吃，这样可以减少对胃的刺激' },
+      { keywords: ['睡前', '临睡', '晚上睡觉前'], text: '建议在晚上睡觉前30分钟吃' },
+      { keywords: ['晨起', '早晨'], text: '建议在早上起床后吃' },
+      { keywords: ['中午', '午餐'], text: '建议在中午午饭后吃' }
+    ];
+    
+    // 3. 禁忌事项关键词库（扩展版）
+    const contraindications = {
+      '饮酒': {
+        keywords: ['酒', '酒精', '啤酒', '白酒', '红酒', '黄酒'],
+        warning: '服药期间千万不要喝酒，包括啤酒、白酒、红酒等所有含酒精的饮料',
+        severity: 'high'
+      },
+      '驾驶': {
+        keywords: ['开车', '驾驶', '操作机械', '高空作业'],
+        warning: '吃完药后最好不要开车或操作机器，因为可能会犯困或头晕',
+        severity: 'high'
+      },
+      '孕妇禁用': {
+        keywords: ['孕妇禁用', '妊娠禁用', '孕妇不宜'],
+        warning: '如果您怀孕了，这个药千万不能吃，一定要告诉医生',
+        severity: 'critical'
+      },
+      '哺乳期禁用': {
+        keywords: ['哺乳期禁用', '哺乳禁用'],
+        warning: '如果您正在喂奶，这个药不能吃，会影响宝宝',
+        severity: 'critical'
+      },
+      '肝肾功能': {
+        keywords: ['肝功能', '肾功能', '肝肾损害'],
+        warning: '如果您的肝脏或肾脏不好，吃这个药要小心，最好先问问医生',
+        severity: 'medium'
+      },
+      '过敏': {
+        keywords: ['过敏', '过敏反应'],
+        warning: '如果您对这种药或以前吃过类似的药有过敏反应，千万不能再吃',
+        severity: 'critical'
+      },
+      '儿童禁用': {
+        keywords: ['儿童禁用', '小儿禁用', '18岁以下禁用'],
+        warning: '这个药不适合小孩子吃，如果是给孩子用药一定要咨询医生',
+        severity: 'high'
+      },
+      '老人慎用': {
+        keywords: ['老年', '老人慎用', '65岁以上'],
+        warning: '年纪大了吃这个药要特别小心，剂量可能需要调整',
+        severity: 'medium'
+      },
+      '相互作用': {
+        keywords: ['药物相互作用', '不能同服', '避免合用'],
+        warning: '这个药不能和其他某些药一起吃，如果您同时在吃别的药，一定要告诉医生',
+        severity: 'high'
+      }
+    };
+    
+    // 4. 常见不良反应模板
+    const commonSideEffects = {
+      '胃肠道反应': ['恶心', '呕吐', '胃痛', '腹泻', '便秘', '腹胀'],
+      '神经系统': ['头晕', '头痛', '嗜睡', '失眠', '乏力'],
+      '皮肤反应': ['皮疹', '瘙痒', '红肿', '荨麻疹'],
+      '心血管': ['心慌', '心跳加快', '血压变化'],
+      '其他': ['口干', '口苦', '食欲下降', '体重变化']
+    };
+    
+    // ========== 生成逻辑 ==========
+    
     const usage = drugInfo.usage || drugInfo.dosage || '';
     const precautions = drugInfo.precautions || '';
     const adverseReactions = drugInfo.adverseReactions || '';
+    const indications = drugInfo.indications || '';
+    const category = drugInfo.category || '';
     
-    let guide = `您好，您查询的药品是${drugInfo.name}。\n\n`;
+    let guide = `您好，您查询的药品是【${drugInfo.name}】。\n\n`;
     
-    // 用法用量
+    // 1. 药品用途说明
+    if (indications) {
+      guide += `【治什么病】：${indications}\n\n`;
+    } else if (category) {
+      guide += `【药品类型】：这是${category}类药物\n\n`;
+    }
+    
+    // 2. 用法用量
     if (usage) {
-      guide += `【吃多少】：${usage}\n\n`;
-    }
-    
-    // 服用时间
-    if (usage.includes('饭前') || usage.includes('空腹')) {
-      guide += `【什么时候吃】：建议在饭前半个小时吃，这样药效会更好。\n\n`;
-    } else if (usage.includes('饭后')) {
-      guide += `【什么时候吃】：建议在吃完饭半小时后吃，这样可以减少对胃的刺激。\n\n`;
-    } else if (usage.includes('睡前')) {
-      guide += `【什么时候吃】：建议在晚上睡觉前吃。\n\n`;
+      guide += `【怎么吃】：${usage}\n\n`;
     } else {
-      guide += `【什么时候吃】：按照医生说的时间吃就好。\n\n`;
+      guide += `【怎么吃】：请按照医生说的剂量来吃，不要自己随便增减\n\n`;
     }
     
-    // 注意事项
-    if (precautions) {
-      const warnings = [];
-      if (precautions.includes('酒')) warnings.push('服药期间千万不要喝酒');
-      if (precautions.includes('开车')) warnings.push('吃完药后最好不要开车');
-      if (warnings.length > 0) {
-        guide += `【特别提醒您】：${warnings.join('；')}。\n\n`;
+    // 3. 服用时间智能判断
+    let timingFound = false;
+    for (const rule of timingRules) {
+      if (rule.keywords.some(kw => usage.includes(kw))) {
+        guide += `【什么时候吃】：${rule.text}\n\n`;
+        timingFound = true;
+        break;
+      }
+    }
+    if (!timingFound) {
+      guide += `【什么时候吃】：按照医生说的时间吃就好，一般是早中晚各一次\n\n`;
+    }
+    
+    // 4. 检测药品类别并给出针对性建议
+    let detectedCategory = null;
+    for (const [catName, keywords] of Object.entries(drugCategories)) {
+      if (keywords.some(kw => drugInfo.name.includes(kw) || (drugInfo.genericName && drugInfo.genericName.includes(kw)))) {
+        detectedCategory = catName;
+        break;
       }
     }
     
-    // 不良反应
-    if (adverseReactions && adverseReactions !== '暂无详细信息') {
-      guide += `【可能出现的不舒服】：有的人吃了这个药可能会有点${adverseReactions}，如果感觉很难受，一定要去找医生看看。\n\n`;
+    if (detectedCategory) {
+      guide += `【药品类别】：这是${detectedCategory}\n\n`;
+      
+      // 根据类别给出特殊提醒
+      // eslint-disable-next-line default-case
+      switch(detectedCategory) {
+        case '降压药':
+          guide += `【特别提醒】：降压药要坚持每天吃，不能随便停药。最好在固定时间吃，比如每天早上起床后。记得定期量血压哦。\n\n`;
+          break;
+        case '降糖药':
+          guide += `【特别提醒】：降糖药一定要按时吃，特别是饭前吃的药，要在吃饭前半小时就准备好。平时要注意监测血糖。\n\n`;
+          break;
+        case '抗生素':
+          guide += `【特别提醒】：抗生素要吃够疗程，即使症状好了也不能提前停药，否则容易复发。一般要吃5-7天。\n\n`;
+          break;
+        case '止痛药':
+          guide += `【特别提醒】：止痛药不要长期大量吃，连续吃超过3天就要去看医生了。饭后吃可以减少对胃的刺激。\n\n`;
+          break;
+        case '安眠药':
+          guide += `【特别提醒】：安眠药要在睡前30分钟吃，吃了之后就不要再做别的事情了，直接准备睡觉。第二天早上起来可能会觉得有点晕，这是正常的。\n\n`;
+          break;
+        case '心脏病药':
+          guide += `【特别提醒】：心脏病的药一定要随身携带，特别是硝酸甘油这类急救药。如果出现胸痛胸闷要立即含服。\n\n`;
+          break;
+      }
     }
     
-    guide += `请您一定按照医生说的剂量和时间来吃药。\n祝您早日康复！`;
+    // 5. 注意事项和禁忌（扩展版）
+    const importantWarnings = [];
+    const mediumWarnings = [];
+    const criticalWarnings = [];
+    
+    for (const [, data] of Object.entries(contraindications)) {
+      if (data.keywords.some(kw => precautions.includes(kw) || indications.includes(kw))) {
+        if (data.severity === 'critical') {
+          criticalWarnings.push(data.warning);
+        } else if (data.severity === 'high') {
+          importantWarnings.push(data.warning);
+        } else {
+          mediumWarnings.push(data.warning);
+        }
+      }
+    }
+    
+    if (criticalWarnings.length > 0) {
+      guide += `️ 【重要警告】：\n`;
+      criticalWarnings.forEach(w => guide += `• ${w}\n`);
+      guide += `\n`;
+    }
+    
+    if (importantWarnings.length > 0) {
+      guide += `【特别注意】：\n`;
+      importantWarnings.forEach(w => guide += `• ${w}\n`);
+      guide += `\n`;
+    }
+    
+    if (mediumWarnings.length > 0) {
+      guide += `【温馨提示】：\n`;
+      mediumWarnings.forEach(w => guide += `• ${w}\n`);
+      guide += `\n`;
+    }
+    
+    // 6. 不良反应说明（更友好）
+    if (adverseReactions && adverseReactions !== '暂无详细信息') {
+      guide += `【可能出现的不舒服】：\n`;
+      
+      // 尝试匹配常见不良反应
+      let matchedEffects = [];
+      for (const [catName, effects] of Object.entries(commonSideEffects)) {
+        const found = effects.filter(effect => adverseReactions.includes(effect));
+        if (found.length > 0) {
+          matchedEffects.push({ category: catName, effects: found });
+        }
+      }
+      
+      if (matchedEffects.length > 0) {
+        matchedEffects.forEach(({ category, effects }) => {
+          guide += `• ${category}：可能会有${effects.join('、')}等情况\n`;
+        });
+      } else {
+        guide += `${adverseReactions}\n`;
+      }
+      
+      guide += `\n如果出现这些情况不要太紧张，大多数都是轻微的。但如果感觉很难受或者持续不好转，一定要去找医生看看。\n\n`;
+    }
+    
+    // 7. 保存和丢弃提醒
+    guide += `【保存方法】：放在阴凉干燥的地方，避免阳光直射。注意看有效期，过期的药就不能吃了。\n\n`;
+    
+    // 8. 结尾关怀语
+    guide += `【最后提醒您】：\n`;
+    guide += `• 一定要按照医生说的剂量和时间来吃药\n`;
+    guide += `• 不要自己随便停药或换药\n`;
+    guide += `• 如果同时吃好几种药，要问清楚能不能一起吃\n`;
+    guide += `• 吃药后感觉不舒服要及时告诉家人或医生\n`;
+    guide += `• 定期去医院复查，让医生看看药效怎么样\n\n`;
+    
+    guide += `祝您早日康复，身体健康！🙏`;
     
     return guide;
   };
@@ -1322,25 +2055,18 @@ function App() {
   // 将图片转换为JPEG格式
   const convertToJpeg = (file) => {
     return new Promise((resolve) => {
-      console.log('=== 图片转换 ===');
-      console.log('原始文件名:', file.name);
-      console.log('原始文件类型:', file.type);
-      console.log('原始文件大小:', file.size);
       
       if (!file.type.startsWith('image/')) {
-        console.log('不是图片类型，直接返回');
         resolve(file);
         return;
       }
 
       // 如果不是WebP格式，直接返回
       if (!file.type.includes('webp') && !file.name.toLowerCase().endsWith('.webp')) {
-        console.log('不是WebP格式，直接返回');
         resolve(file);
         return;
       }
 
-      console.log('开始转换WebP到JPEG...');
       
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -1355,22 +2081,18 @@ function App() {
           canvas.toBlob((blob) => {
             if (blob) {
               const jpegFile = new File([blob], file.name.replace(/\.webp$/i, '.jpg'), { type: 'image/jpeg' });
-              console.log('转换成功，新文件大小:', jpegFile.size);
               resolve(jpegFile);
             } else {
-              console.log('转换失败，返回原始文件');
               resolve(file);
             }
           }, 'image/jpeg', 0.9);
         };
         img.onerror = () => {
-          console.log('图片加载失败，返回原始文件');
           resolve(file);
         };
         img.src = e.target.result;
       };
       reader.onerror = () => {
-        console.log('FileReader失败，返回原始文件');
         resolve(file);
       };
       reader.readAsDataURL(file);
@@ -1431,6 +2153,24 @@ function App() {
     e.target.value = '';
   };
 
+  // 移除单个图片
+  const removeImage = (imageId) => {
+    setBatchRecognizeItems(prev => {
+      const itemToRemove = prev.find(item => item.id === imageId);
+      if (itemToRemove?.previewUrl) {
+        URL.revokeObjectURL(itemToRemove.previewUrl); // 释放预览URL，避免内存泄漏
+      }
+      return prev.filter(item => item.id !== imageId);
+    });
+    
+    // 如果该图片已被选中，从选中列表中移除
+    setBatchSelectedForAdd(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(imageId);
+      return newSet;
+    });
+  };
+
   // 批量识别所有图片
   const handleBatchRecognize = async () => {
     if (batchRecognizeItems.length === 0) {
@@ -1438,6 +2178,9 @@ function App() {
       return;
     }
 
+    // 清空之前的选中状态
+    setBatchSelectedForAdd(new Set());
+    
     // 更新状态为识别中
     setBatchRecognizeItems(prev => prev.map(item => ({ ...item, status: 'recognizing' })));
 
@@ -1446,9 +2189,9 @@ function App() {
       const formData = new FormData();
       files.forEach(file => formData.append('files', file));
 
-      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/v1/drug/recognize/batch-upload`, {
+      const response = await fetch('/api/v1/drug/recognize/batch-upload', {
         method: 'POST',
-        headers: { 'X-User-Id': user?.userId || '1' },
+        headers: { 'Authorization': `Bearer ${getToken()}` },
         body: formData
       });
 
@@ -1479,7 +2222,8 @@ function App() {
         batchRecognizeItems.forEach((item, index) => {
           const result = results[index] || {};
           if (result.status === 'matched' && result.matchedDrugId) {
-            newSelected.add(item.id);
+            // 使用药品ID而不是图片ID
+            newSelected.add(result.matchedDrugId);
             matchedDrugs.push({
               id: result.matchedDrugId,
               name: result.matchedDrugName,
@@ -1511,6 +2255,7 @@ function App() {
   };
 
   // 批量添加到药箱
+  // eslint-disable-next-line no-unused-vars
   const handleBatchAddToMedicineBox = async () => {
     if (batchSelectedForAdd.size === 0) {
       showToast('请选择要添加到药箱的药品', 'warning');
@@ -1526,7 +2271,7 @@ function App() {
 
       for (const item of selectedItems) {
         try {
-          const response = await fetch(`/api/v1/box?userId=${user?.userId}`, {
+          const { response } = await authFetch(`/api/v1/box`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1569,14 +2314,59 @@ function App() {
   };
 
   const analyzeImage = async () => {
-    console.log('=== 分析图片 ===');
-    console.log('fileInputRef.current:', fileInputRef.current);
-    console.log('fileInputRef.current?.files:', fileInputRef.current?.files);
-    console.log('fileInputRef.current?.files[0]:', fileInputRef.current?.files[0]);
     
     if (!fileInputRef.current?.files[0]) {
       showToast('请先选择图片', 'warning');
       return;
+    }
+
+    const file = fileInputRef.current.files[0];
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    const MIN_PX = 15;
+    const MAX_PX = 4096;
+
+    if (file.size === 0) {
+      showToast('上传文件为空，请选择图片后再上传', 'error');
+      return;
+    }
+
+    if (file.size > MAX_SIZE) {
+      showToast('图片大小不能超过 10MB', 'error');
+      return;
+    }
+
+    let imgUrl = null;
+    try {
+      imgUrl = URL.createObjectURL(file);
+      const imgObj = new Image();
+      const sizeOk = await new Promise((resolve) => {
+        imgObj.onload = () => {
+          if (imgObj.width < MIN_PX || imgObj.height < MIN_PX) {
+            showToast('图片太小，无法识别（最小 15×15 像素）', 'error');
+            resolve(false);
+          } else if (imgObj.width > MAX_PX || imgObj.height > MAX_PX) {
+            showToast('图片尺寸过大，请使用不超过 4096×4096 像素的图片', 'error');
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        };
+        imgObj.onerror = () => {
+          showToast('无法读取图片，请换一张试试', 'error');
+          resolve(false);
+        };
+        imgObj.src = imgUrl;
+      });
+      if (!sizeOk) return;
+    } catch (e) {
+      console.error('图片校验失败', e);
+      showToast('图片校验失败，请换一张试试', 'error');
+      setIsLoading(false);
+      return;
+    } finally {
+      if (imgUrl) {
+        URL.revokeObjectURL(imgUrl);
+      }
     }
 
     setIsLoading(true);
@@ -1584,42 +2374,27 @@ function App() {
 
     try {
       // 将WebP图片转换为JPEG格式
-      const file = await convertToJpeg(fileInputRef.current.files[0]);
+      const convertedFile = await convertToJpeg(fileInputRef.current.files[0]);
       
-      console.log('=== 准备上传 ===');
-      console.log('文件名:', file.name);
-      console.log('文件类型:', file.type);
-      console.log('文件大小:', file.size);
       
       const formData = new FormData();
-      formData.append('file', file);
-      
-      // 调试：检查FormData内容
-      console.log('FormData内容:');
-      for (let pair of formData.entries()) {
-        console.log('  键:', pair[0], ', 值:', pair[1]);
-      }
+      formData.append('file', convertedFile);
 
       // 不设置Content-Type，让浏览器自动处理
-      // 直接调用后端API，绕过代理的multipart问题
-      const response = await fetch('http://localhost:8080/api/v1/drug/recognize/upload', {
+      // 通过代理转发到后端
+      const response = await fetch('/api/v1/drug/recognize/upload', {
         method: 'POST',
         headers: {
-          'X-User-Id': user?.userId || '1'
+          'Authorization': `Bearer ${getToken()}`
           // 注意：不要设置Content-Type，浏览器会自动设置multipart/form-data及boundary
         },
         body: formData
       });
       
       // 调试：查看实际发送的请求头
-      console.log('响应状态:', response.status);
-      console.log('响应头:', [...response.headers.entries()]);
 
       const data = await response.json();
 
-      console.log('=== 上传响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
 
       if (data.code === 200 && data.data?.taskId) {
         setOcrTaskId(data.data.taskId);
@@ -1642,10 +2417,8 @@ function App() {
 
     const poll = async () => {
       try {
-        const response = await fetch(`/api/v1/drug/recognize/result/${taskId}`);
-        const data = await response.json();
+        const { data } = await authFetch(`/api/v1/drug/recognize/result/${taskId}`);
 
-        console.log('查询结果:', data);
 
         if (data.code === 200 && data.data) {
           const result = data.data;
@@ -1675,7 +2448,6 @@ function App() {
                     // 只有在成功跳转到说明页面后，才清除加载状态
                     setIsLoading(false);
                     setShowComplete(false);
-                    console.log('药品信息获取完成，已跳转到说明页面');
                   }
                 });
               }, 1500);
@@ -1684,7 +2456,8 @@ function App() {
               showToast('未能识别出匹配的药品，请尝试手动输入', 'warning');
             } else if (result.status === 'failed') {
               setIsLoading(false);
-              showToast('识别失败，请重试', 'error');
+              const detail = result.rawText && result.rawText.trim() ? result.rawText : '识别失败，请重试';
+              showToast(detail, 'error');
             }
           } else if (pollingCount < maxPollingCount) {
             pollingCount++;
@@ -1718,8 +2491,7 @@ function App() {
 
     try {
       // 先查询药品基础库，获取药品ID和详细信息
-      const searchResponse = await fetch(`/api/v1/drug/list?keyword=${encodeURIComponent(drug.name)}`);
-      const searchData = await searchResponse.json();
+      const { data: searchData } = await authFetch(`/api/v1/drug/list?keyword=${encodeURIComponent(drug.name)}`);
       
       let drugId = null;
       let drugDetail = null;
@@ -1760,15 +2532,10 @@ function App() {
     showToast('正在添加药品...', 'info');
     
     try {
-      const addResponse = await fetch(`/api/v1/box?userId=${user.userId}`, {
+      const { response: addResponse, data: addData } = await authFetch(`/api/v1/box`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(drugData)
       });
-
-      const addData = await addResponse.json();
 
       if (addResponse.ok && addData.code === 200) {
         // 添加成功后重新加载药箱列表
@@ -1807,6 +2574,256 @@ function App() {
     } catch (error) {
       showToast('添加失败，请稍后重试', 'error');
       console.error('添加药品失败:', error);
+    }
+  };
+
+  // 批量添加所有确认的药品并检测冲突
+  // eslint-disable-next-line no-unused-vars
+  const handleBatchAddAllDrugs = async () => {
+    
+    if (batchConfirmedDrugs.length === 0) {
+      showToast('没有需要添加的药品', 'warning');
+      return;
+    }
+    
+    setIsBatchAddingAll(true);
+    
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const addedDrugNames = []; // 记录成功添加的药品名称
+      let lastAddedDrugName = null; // 记录最后添加成功的药品名称（用于冲突检测）
+      
+      // 逐个添加药品，每次添加后刷新药箱列表
+      for (let i = 0; i < batchConfirmedDrugs.length; i++) {
+        const drug = batchConfirmedDrugs[i];
+        
+        try {
+          const { response } = await authFetch(`/api/v1/box`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              drugId: drug.drugId,
+              dosage: drug.dosage,
+              frequency: drug.frequency,
+              startDate: drug.startDate,
+              endDate: drug.endDate,
+              expiryDate: drug.expiryDate,
+              totalQuantity: drug.totalQuantity,
+              status: drug.status
+            })
+          });
+          
+          const data = await response.json();
+          
+          if (data.code === 200) {
+            successCount++;
+            addedDrugNames.push(drug.name);
+            
+            // 立即刷新药箱列表，确保数据同步
+            await loadMedicineBoxList(user?.userId);
+            
+            // 记录最后添加成功的药品（用于后续冲突检测）
+            lastAddedDrugName = drug.name;
+          } else {
+            failCount++;
+            console.error(`❌ 第 ${i + 1} 个药品添加失败:`, data.message);
+            showToast(`第 ${i + 1} 个药品添加失败: ${data.message}`, 'error');
+          }
+        } catch (err) {
+          console.error(`❌ 第 ${i + 1} 个药品添加异常:`, err);
+          failCount++;
+          showToast(`第 ${i + 1} 个药品添加失败: ${err.message}`, 'error');
+        }
+      }
+      
+      
+      if (successCount > 0) {
+        showToast(`成功添加 ${successCount} 个药品到药箱`, 'success');
+        
+        // 只清空已确认的药品列表和索引，保留识别结果
+        setBatchConfirmedDrugs([]);
+        setBatchDrugIndex(0);
+        // 注意：不清空 recognizedDrugs 和 batchSelectedForAdd，让用户可以继续使用
+        
+        // 对最后添加的药品进行冲突检测
+        if (lastAddedDrugName && addedDrugNames.length > 0) {
+          showToast('正在进行冲突检测...', 'info');
+          
+          // 重要：重新获取最新的药箱列表，确保包含刚添加的所有药品
+          let latestDrugList = drugList;
+          try {
+            const { response, data } = await authFetch(`/api/v1/box/list`);
+            if (response.ok && data.code === 200) {
+              latestDrugList = data.data.map(item => ({
+                boxItemId: item.boxItemId,
+                drugId: item.drugId,
+                name: item.drugName,
+                genericName: item.genericName,
+                tradeName: item.tradeName,
+                commonName: item.commonName,
+                spec: item.specification,
+                dosage: item.dosage,
+                frequency: item.frequency,
+                startDate: item.startDate,
+                endDate: item.endDate,
+                expiryDate: item.expiryDate,
+                totalQuantity: item.totalQuantity,
+                remaining: item.remainingQuantity || item.totalQuantity,
+                note: item.note,
+                status: item.status,
+                createdAt: item.createdAt
+              }));
+            }
+          } catch (err) {
+            console.error('获取最新药箱列表失败:', err);
+          }
+          
+          
+          // 使用最新的药箱列表进行冲突检测
+          const conflictResult = await checkConflictsForNewDrug(lastAddedDrugName, latestDrugList);
+          
+          if (conflictResult && !conflictResult.noConflict) {
+            showToast(`检测到 ${conflictResult.conflicts?.length || 0} 条冲突警告`, 'warning');
+            setConflictAlertResult(conflictResult);
+            setShowConflictAlert(true);
+          } else {
+          }
+        }
+        
+        setConflictNeedsRecheck(true);
+        setConflictReport(null);
+      } else if (failCount > 0) {
+        showToast(`添加失败 ${failCount} 个药品`, 'error');
+      }
+    } catch (error) {
+      showToast('批量添加失败，请稍后重试', 'error');
+      console.error('批量添加药品失败:', error);
+    } finally {
+      setIsBatchAddingAll(false);
+    }
+  };
+
+  // 批量添加指定药品列表（不依赖状态）
+  const handleBatchAddAllDrugsWithList = async (drugList) => {
+    
+    if (!drugList || drugList.length === 0) {
+      showToast('没有需要添加的药品', 'warning');
+      return;
+    }
+    
+    setIsBatchAddingAll(true);
+    
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const addedDrugNames = []; // 记录成功添加的药品名称
+      let lastAddedDrugName = null; // 记录最后添加成功的药品名称（用于冲突检测）
+      
+      // 逐个添加药品，每次添加后刷新药箱列表
+      for (let i = 0; i < drugList.length; i++) {
+        const drug = drugList[i];
+        
+        try {
+          const { response } = await authFetch(`/api/v1/box`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              drugId: drug.drugId,
+              dosage: drug.dosage,
+              frequency: drug.frequency,
+              startDate: drug.startDate,
+              endDate: drug.endDate,
+              expiryDate: drug.expiryDate,
+              totalQuantity: drug.totalQuantity,
+              status: drug.status
+            })
+          });
+          
+          const data = await response.json();
+          
+          if (data.code === 200) {
+            successCount++;
+            addedDrugNames.push(drug.name);
+            
+            // 立即刷新药箱列表，确保数据同步
+            await loadMedicineBoxList(user?.userId);
+            
+            // 记录最后添加成功的药品（用于后续冲突检测）
+            lastAddedDrugName = drug.name;
+          } else {
+            failCount++;
+            console.error(`❌ 第 ${i + 1} 个药品添加失败:`, data.message);
+            showToast(`第 ${i + 1} 个药品添加失败: ${data.message}`, 'error');
+          }
+        } catch (err) {
+          console.error(`❌ 第 ${i + 1} 个药品添加异常:`, err);
+          failCount++;
+          showToast(`第 ${i + 1} 个药品添加失败: ${err.message}`, 'error');
+        }
+      }
+      
+      
+      if (successCount > 0) {
+        showToast(`成功添加 ${successCount} 个药品到药箱`, 'success');
+        
+        // 对最后添加的药品进行冲突检测
+        if (lastAddedDrugName && addedDrugNames.length > 0) {
+          showToast('正在进行冲突检测...', 'info');
+          
+          // 重要：重新获取最新的药箱列表，确保包含刚添加的所有药品
+          const latestDrugList = await authFetch(`/api/v1/box/list`)
+            .then(({ data }) => {
+              if (data.code === 200) {
+                return data.data.map(item => ({
+                  boxItemId: item.boxItemId,
+                  drugId: item.drugId,
+                  name: item.drugName,
+                  genericName: item.genericName,
+                  tradeName: item.tradeName,
+                  commonName: item.commonName,
+                  spec: item.specification,
+                  dosage: item.dosage,
+                  frequency: item.frequency,
+                  startDate: item.startDate,
+                  endDate: item.endDate,
+                  expiryDate: item.expiryDate,
+                  totalQuantity: item.totalQuantity,
+                  remaining: item.remainingQuantity || item.totalQuantity,
+                  note: item.note,
+                  status: item.status,
+                  createdAt: item.createdAt
+                }));
+              }
+              return [];
+            })
+            .catch(err => {
+              console.error('获取最新药箱列表失败:', err);
+              return drugList; // 如果失败，使用传入的 drugList
+            });
+          
+          
+          // 使用最新的药箱列表进行冲突检测
+          const conflictResult = await checkConflictsForNewDrug(lastAddedDrugName, latestDrugList);
+          
+          if (conflictResult && !conflictResult.noConflict) {
+            showToast(`检测到 ${conflictResult.conflicts?.length || 0} 条冲突警告`, 'warning');
+            setConflictAlertResult(conflictResult);
+            setShowConflictAlert(true);
+          } else {
+          }
+        }
+        
+        setConflictNeedsRecheck(true);
+        setConflictReport(null);
+      } else if (failCount > 0) {
+        showToast(`添加失败 ${failCount} 个药品`, 'error');
+      }
+    } catch (error) {
+      showToast('批量添加失败，请稍后重试', 'error');
+      console.error('批量添加药品失败:', error);
+    } finally {
+      setIsBatchAddingAll(false);
     }
   };
 
@@ -1854,18 +2871,7 @@ function App() {
         if (r.planId) {
           saveLocalMedicationStatus(r.planId, 'taken');
         }
-        if (r.boxItemId && r.remainingQuantity !== undefined) {
-          const amount = parseDosageToNumber(r.dosage);
-          const newRemaining = Math.max(0, (r.remainingQuantity || 0) - amount);
-          return { ...r, taken: true, missed: false, remainingQuantity: newRemaining };
-        }
         return { ...r, taken: true, missed: false };
-      }
-      // 同一药品的其他时间段同步扣减库存
-      if (r.boxItemId && targetPlan && r.boxItemId === targetPlan.boxItemId) {
-        const amount = parseDosageToNumber(targetPlan.dosage);
-        const newRemaining = Math.max(0, (r.remainingQuantity || 0) - amount);
-        return { ...r, remainingQuantity: newRemaining };
       }
       return r;
     }));
@@ -1876,7 +2882,7 @@ function App() {
     // 等后端真正接受这次操作，再用后端数据做一次校验，避免本地乐观更新和后端脱节
     if (targetPlanId && user?.userId) {
       try {
-        await executeMedicationActionWithAPI(targetPlanId, user.userId, 'confirm', targetDosage);
+        await executeMedicationActionWithAPI(targetPlanId, 'confirm', targetDosage);
       } catch (err) {
         // executeMedicationActionWithAPI 内部已经 toast 报错；继续 reload 让 UI 与后端对齐
         console.error('确认服药 API 调用异常:', err);
@@ -1889,33 +2895,28 @@ function App() {
       saveLocalMedicationStatus(targetPlanId, null);
     }
 
-    // 不论成功失败都拉后端做最终校验：今日 + 一周都刷
+    // 不论成功失败都拉后端做最终校验：今日 + 一周 + 药箱都刷
     // 成功时：本地就是 taken、后端也是 completed，状态对齐
     // 失败时：后端仍是 pending，reload 后 UI 自动回退到"待吃"，消除本地和后端的不一致
     await Promise.all([
       loadCalendarPlans(),
-      typeof loadWeeklyMedication === 'function' ? loadWeeklyMedication() : Promise.resolve()
+      typeof loadWeeklyMedication === 'function' ? loadWeeklyMedication() : Promise.resolve(),
+      user?.userId ? loadMedicineBoxList(user.userId) : Promise.resolve()
     ]);
+
+    // 服药后刷新缺药预警
+    if (user?.userId) {
+      loadShortageWarnings(user.userId);
+    }
   };
 
   // 调用后端统一幂等用药操作接口
-  const executeMedicationActionWithAPI = async (planId, userId, action, dosage = '') => {
-    if (!userId) {
-      return { success: false, error: '用户未登录' };
-    }
+  const executeMedicationActionWithAPI = async (planId, action, dosage = '') => {
     try {
-      const response = await fetch(`/api/v1/plan/${planId}/action`, {
+      const { response, data: result } = await authFetch(`/api/v1/plan/${planId}/action`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          userId,
-          action
-        })
+        body: JSON.stringify({ action })
       });
-
-      const result = await response.json();
 
       if (!response.ok || result.code !== 200) {
         const errorMsg = result.message || '操作失败';
@@ -1963,8 +2964,12 @@ function App() {
     }
     // 乐观更新：confirm 之后一定是 taken
     patchWeeklyItemStatus(date, item.planId, 'taken');
-    const result = await executeMedicationActionWithAPI(item.planId, user.userId, 'confirm');
-    if (!result.success) {
+    const result = await executeMedicationActionWithAPI(item.planId, 'confirm');
+    if (result.success) {
+      // 刷新药箱列表和缺药预警
+      loadMedicineBoxList(user.userId);
+      loadShortageWarnings(user.userId);
+    } else {
       // 回滚：重新拉一次
       loadWeeklyMedication();
     }
@@ -1981,10 +2986,13 @@ function App() {
       showToast('请先登录', 'warning');
       return;
     }
-    const result = await executeMedicationActionWithAPI(item.planId, user.userId, 'undo');
+    const result = await executeMedicationActionWithAPI(item.planId, 'undo');
     if (result.success) {
       // 重拉当周数据，让后端的真实状态覆盖本地
       loadWeeklyMedication();
+      // 刷新药箱列表和缺药预警
+      loadMedicineBoxList(user.userId);
+      loadShortageWarnings(user.userId);
       // 如果撤销的是今天那一格，顺便刷新今日视图数据
       const todayKey = toDateKey(new Date());
       if (date === todayKey) {
@@ -1999,6 +3007,7 @@ function App() {
   };
 
   // 更新药箱剩余数量（仅用于乐观更新 UI，实际由后端处理）
+  // eslint-disable-next-line no-unused-vars
   const updateMedicineBoxQuantity = async (boxItemId, currentRemaining, dosage, isRestore = false) => {
     if (!boxItemId || !user || !user.userId) {
       console.warn('缺少必要参数，无法更新药箱库存');
@@ -2043,18 +3052,7 @@ function App() {
     ));
     setCalendarPlans(calendarPlans.map(r => {
       if (r.id === id) {
-        if (r.boxItemId && r.remainingQuantity !== undefined) {
-          const amount = parseDosageToNumber(r.dosage);
-          const newRemaining = (r.remainingQuantity || 0) + amount;
-          updateMedicineBoxQuantity(r.boxItemId, r.remainingQuantity, r.dosage, true);
-          return { ...r, taken: false, remainingQuantity: newRemaining };
-        }
         return { ...r, taken: false };
-      }
-      if (r.boxItemId && targetPlan && r.boxItemId === targetPlan.boxItemId) {
-        const amount = parseDosageToNumber(targetPlan.dosage);
-        const newRemaining = (r.remainingQuantity || 0) + amount;
-        return { ...r, remainingQuantity: newRemaining };
       }
       return r;
     }));
@@ -2068,25 +3066,30 @@ function App() {
     // 等后端真正接受这次撤销操作
     if (targetPlanId && user?.userId) {
       try {
-        await executeMedicationActionWithAPI(targetPlanId, user.userId, 'undo', targetDosage);
+        await executeMedicationActionWithAPI(targetPlanId, 'undo', targetDosage);
       } catch (err) {
         console.error('撤销服药 API 调用异常:', err);
       }
     }
 
-    // 清掉 localStorage + reload 两个视图，让后端做最终校验
+    // 清掉 localStorage + reload 两个视图 + 药箱，让后端做最终校验
     if (targetPlanId) {
       saveLocalMedicationStatus(targetPlanId, null);
     }
     await Promise.all([
       loadCalendarPlans(),
-      typeof loadWeeklyMedication === 'function' ? loadWeeklyMedication() : Promise.resolve()
+      typeof loadWeeklyMedication === 'function' ? loadWeeklyMedication() : Promise.resolve(),
+      user?.userId ? loadMedicineBoxList(user.userId) : Promise.resolve()
     ]);
+
+    // 撤销服药后刷新缺药预警
+    if (user?.userId) {
+      loadShortageWarnings(user.userId);
+    }
   };
 
   const takenCount = calendarPlans.filter(r => r.taken).length;
   const totalCount = calendarPlans.length;
-  const progressPercent = totalCount > 0 ? (takenCount / totalCount) * 440 : 0;
   const isFullProgress = takenCount === totalCount && totalCount > 0;
 
   const renderHeader = () => (
@@ -2109,6 +3112,12 @@ function App() {
               <span className="btn-icon">📞</span>
               <span className="btn-label">紧急联系人</span>
             </button>
+            {user?.role !== 'family' && (
+              <button className="header-btn guardian-btn" onClick={() => setShowMyGuardians(true)}>
+                <span className="btn-icon">👨‍👩‍👧</span>
+                <span className="btn-label">我的家属</span>
+              </button>
+            )}
           </div>
           <span className="virtual-pharmacist">👨‍⚕️</span>
           <div className="user-greeting">
@@ -2116,12 +3125,83 @@ function App() {
             <button className="logout-btn" onClick={handleLogout}>退出登录</button>
           </div>
         </div>
+        <button className="notification-bell-btn" onClick={() => setShowNotificationPanel(true)}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+          {notificationUnreadCount > 0 && (
+            <span className="notification-bell-badge">
+              {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
+            </span>
+          )}
+        </button>
       </div>
+      {user?.role !== 'family' && (
+        <div className="header-sos-wrapper">
+          <button className="header-sos-btn" onClick={() => setActiveTab('emergency')}>
+            🚨 SOS 紧急求助
+          </button>
+        </div>
+      )}
     </header>
   );
 
   const renderHomeTab = () => (
     <div>
+      {/* 缺药预警横幅 */}
+      {shortageWarnings.length > 0 && (
+        <div className="shortage-warning-banner" onClick={() => setShowShortageDetail(true)}>
+          <div className="shortage-warning-header">
+            <span className="shortage-warning-icon">
+              {shortageWarnings.some(w => w.warningLevel === 'critical') ? '🚨' : '⚠️'}
+            </span>
+            <div className="shortage-warning-text">
+              <span className="shortage-warning-title">
+                {shortageWarnings.some(w => w.warningLevel === 'critical')
+                  ? `${shortageWarnings.filter(w => w.warningLevel === 'critical').length}种药品已用尽`
+                  : shortageWarnings.length === 1
+                    ? `${shortageWarnings[0].drugName}即将用尽`
+                    : `${shortageWarnings.length}种药品即将用尽`}
+              </span>
+              <span className="shortage-warning-subtitle">
+                {shortageWarnings.some(w => w.warningLevel === 'critical')
+                  ? '请尽快补充药品'
+                  : `最近${shortageWarnings[0].remainingDays}天将用完，建议提前购买`}
+              </span>
+            </div>
+          </div>
+          <div className="shortage-warning-actions">
+            <button
+              className="shortage-action-btn shortage-action-pharmacy"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveTab('drugs');
+              }}
+            >
+              🏪 去购药
+            </button>
+            <button
+              className="shortage-action-btn shortage-action-hospital"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveTab('emergency');
+              }}
+            >
+              🏥 在线问诊
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 今日一课 - 慢病科普卡片 */}
+      <DailyLessonCard
+        lesson={dailyLesson}
+        loading={dailyLessonLoading}
+        onRefresh={handleDailyLessonRefresh}
+        onGoProfile={() => setShowProfileEdit(true)}
+              />
+
       <div className="dashboard-grid">
         <div className="dashboard-card" onClick={() => setActiveTab('upload')}>
           <div className="upload-card-icon">
@@ -2140,31 +3220,34 @@ function App() {
           <h3 className="dashboard-card-title">今日用药</h3>
           <div className="dashboard-card-desc">
             {totalCount > 0 ? (
-              <div className="progress-ring-container">
-                <svg className="progress-ring" viewBox="0 0 180 180">
-                  <defs>
-                    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#4A90E2" />
-                      <stop offset="100%" stopColor="#98D4BB" />
-                    </linearGradient>
-                  </defs>
-                  <circle className="progress-ring-circle-bg" cx="90" cy="90" r="80" />
-                  {isFullProgress ? (
-                    <circle
-                      className="progress-ring-circle full"
-                      cx="90" cy="90" r="80"
-                    />
-                  ) : (
-                    <circle
-                      className="progress-ring-circle"
-                      cx="90" cy="90" r="80"
-                      strokeDasharray={`${progressPercent} 440`}
-                    />
-                  )}
-                </svg>
-                <div className="progress-ring-text">
-                  <div className="progress-ring-value">{takenCount}/{totalCount}</div>
-                  <div className="progress-ring-label">已完成</div>
+              <div className="progress-ring-wrapper">
+                <div className="progress-ring-container">
+                  <svg className="progress-ring" viewBox="0 0 180 180">
+                    <defs>
+                      <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#4A90E2" />
+                        <stop offset="100%" stopColor="#98D4BB" />
+                      </linearGradient>
+                    </defs>
+                    <circle className="progress-ring-circle-bg" cx="90" cy="90" r="80" />
+                    {takenCount > 0 && (
+                      <circle
+                        className={`progress-ring-circle${isFullProgress ? ' full' : ''}`}
+                        cx="90" cy="90" r="80"
+                        strokeDasharray="502.65"
+                        strokeDashoffset={502.65 - (takenCount / totalCount) * 502.65}
+                      />
+                    )}
+                  </svg>
+                  <div className="progress-ring-text">
+                    <div className="progress-ring-value">{takenCount}/{totalCount}</div>
+                    <div className="progress-ring-label">已完成</div>
+                  </div>
+                </div>
+                <div className="progress-ring-encourage">
+                  {isFullProgress ? '太棒了，今日用药已全部完成！' :
+                   takenCount === 0 ? '新的一天，记得按时用药哦～' :
+                   '继续加油，坚持就是胜利！'}
                 </div>
               </div>
             ) : (
@@ -2186,9 +3269,22 @@ function App() {
             </div>
             {(() => {
               const { expiredDrugs, expiringDrugs } = expiringDrugsResult;
-              const totalExpiring = expiredDrugs.length + expiringDrugs.length;
-              const isAllExpired = totalExpiring === expiredDrugs.length;
+              const expiredCount = expiredDrugs.length;
+              const expiringCount = expiringDrugs.length;
+              const totalExpiring = expiredCount + expiringCount;
+              
               if (totalExpiring > 0) {
+                // 生成提示文本
+                let alertText = '⚠️ ';
+                if (expiringCount > 0 && expiredCount > 0) {
+                  alertText += `${expiringCount}盒药品即将过期，${expiredCount}盒药品已过期，点击处理`;
+                } else if (expiringCount > 0) {
+                  alertText += `${expiringCount}盒药品即将过期，点击处理`;
+                } else {
+                  alertText += `${expiredCount}盒药品已过期，点击处理`;
+                }
+                
+                const isAllExpired = totalExpiring === expiredCount;
                 return (
                   <button
                     className="btn"
@@ -2211,10 +3307,11 @@ function App() {
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleOpenExpiringDrugsModal();
+                      // 直接跳转到药箱管理模块
+                      setActiveTab('drugs');
                     }}
                   >
-                    ⚠️ {totalExpiring}盒药品{isAllExpired ? '已过期' : '即将过期'}，点击处理
+                    {alertText}
                   </button>
                 );
               }
@@ -2226,9 +3323,22 @@ function App() {
 
       {(() => {
         const { expiredDrugs, expiringDrugs } = expiringDrugsResult;
-        const totalExpiring = expiredDrugs.length + expiringDrugs.length;
-        const isAllExpired = totalExpiring === expiredDrugs.length;
+        const expiredCount = expiredDrugs.length;
+        const expiringCount = expiringDrugs.length;
+        const totalExpiring = expiredCount + expiringCount;
+        
         if (totalExpiring > 0) {
+          // 生成提示文本
+          let alertText = ' 您有';
+          if (expiringCount > 0 && expiredCount > 0) {
+            alertText += `${expiringCount}盒药品即将过期，${expiredCount}盒药品已过期，点击查看详情`;
+          } else if (expiringCount > 0) {
+            alertText += `${expiringCount}盒药品即将过期，点击查看详情`;
+          } else {
+            alertText += `${expiredCount}盒药品已过期，点击查看详情`;
+          }
+          
+          const isAllExpired = totalExpiring === expiredCount;
           return (
             <div
               onClick={handleOpenExpiringDrugsModal}
@@ -2253,9 +3363,9 @@ function App() {
                 fontSize: '15px'
               }}
             >
-              <span style={{ fontSize: '20px' }}>🔔</span>
+              <span style={{ fontSize: '20px' }}>{alertText.includes('即将过期') && alertText.includes('已过期') ? '🔔' : alertText.includes('已过期') ? '⚠️' : '🔔'}</span>
               <span>
-                您有{totalExpiring}盒药品{isAllExpired ? '已过期' : '即将过期'}，点击查看详情
+                {alertText.replace('🔔 您有', '')}
               </span>
             </div>
           );
@@ -2267,10 +3377,31 @@ function App() {
 
   const renderUploadTab = () => (
     <div className="card">
-      <h2 className="card-title">
-        <span className="card-title-icon">📷</span>
-        上传药品照片
-      </h2>
+      <RecognitionHistoryModal
+        ref={recognitionHistoryModalRef}
+        authFetch={authFetch}
+        onJumpToRecognition={(drug) => {
+          setRecognizedDrugs([drug]);
+          setBatchSelectedForAdd(new Set([drug.id]));
+          setActiveTab('recognition');
+        }}
+      />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 className="card-title">
+          <span className="card-title-icon">📷</span>
+          上传药品照片
+        </h2>
+        <button
+          onClick={() => recognitionHistoryModalRef.current?.loadHistory()}
+          style={{
+            padding: '6px 14px', borderRadius: '8px', border: '1.5px solid #6366f1',
+            background: '#eef2ff', color: '#4f46e5', fontSize: '13px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: '4px'
+          }}
+        >
+          📋 识药历史
+        </button>
+      </div>
 
       {/* 批量识别区域 */}
       {batchRecognizeItems.length > 0 ? (
@@ -2279,78 +3410,104 @@ function App() {
             <h3 style={{ fontSize: '20px', color: '#4A90E2', margin: 0 }}>
               📸 批量识别结果 ({batchRecognizeItems.filter(i => i.status === 'success').length} 成功)
             </h3>
-            <button
-              onClick={() => {
-                setBatchRecognizeItems([]);
-                setBatchSelectedForAdd(new Set());
-              }}
-              style={{
-                padding: '8px 16px',
-                fontSize: '14px',
-                border: '2px solid #E0E0E0',
-                borderRadius: '8px',
-                background: 'white',
-                color: '#6B6B6B',
-                cursor: 'pointer'
-              }}
-            >
-              清空
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {/* 只有识别成功后才显示查看按钮 */}
+              {batchRecognizeItems.some(item => item.status === 'success') && (
+                <button
+                  onClick={() => setActiveTab('recognition')}
+                  style={{
+                    padding: '12px 24px',
+                    fontSize: '16px',
+                    border: '3px solid #FF6B35',
+                    borderRadius: '12px',
+                    background: '#FFF5F0',
+                    color: '#FF6B35',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    boxShadow: '0 2px 8px rgba(255, 107, 53, 0.2)',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = '#FF6B35';
+                    e.target.style.color = 'white';
+                    e.target.style.transform = 'scale(1.05)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = '#FFF5F0';
+                    e.target.style.color = '#FF6B35';
+                    e.target.style.transform = 'scale(1)';
+                  }}
+                >
+                  ️ 查看识别结果
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  // 释放所有预览URL，避免内存泄漏
+                  batchRecognizeItems.forEach(item => URL.revokeObjectURL(item.previewUrl));
+                  setBatchRecognizeItems([]);
+                  setBatchSelectedForAdd(new Set());
+                }}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '14px',
+                  border: '2px solid #E0E0E0',
+                  borderRadius: '8px',
+                  background: 'white',
+                  color: '#6B6B6B',
+                  cursor: 'pointer'
+                }}
+              >
+                清空
+              </button>
+            </div>
           </div>
 
           <div className="batch-preview-grid">
             {batchRecognizeItems.map((item) => (
               <div
                 key={item.id}
-                className={`batch-preview-item ${item.status === 'success' ? 'success' : item.status === 'failed' ? 'failed' : 'pending'} ${item.status === 'success' && item.result?.drugId && batchSelectedForAdd.has(item.id) ? 'selected' : ''}`}
-                onClick={() => {
-                  if (item.status === 'success' && item.result?.drugId) {
-                    setBatchSelectedForAdd(prev => {
-                      const newSet = new Set(prev);
-                      if (newSet.has(item.id)) {
-                        newSet.delete(item.id);
-                      } else {
-                        newSet.add(item.id);
-                      }
-                      return newSet;
-                    });
-                  }
-                }}
+                className={`batch-preview-item ${item.status === 'success' ? 'success' : item.status === 'failed' ? 'failed' : 'pending'}`}
               >
                 <img src={item.previewUrl} alt="预览" className="batch-preview-image" />
-                <div className="batch-preview-status">
-                  {item.status === 'success' ? '✓' : item.status === 'failed' ? '✗' : '⏳'}
-                </div>
-                {item.result?.drugName && (
-                  <div className="batch-preview-name">{item.result.drugName}</div>
+                {/* 状态标签 - 左上角 */}
+                {item.status === 'recognizing' && (
+                  <div className="batch-preview-status-label recognizing">
+                    识别中
+                  </div>
                 )}
-                {item.status === 'success' && item.result?.drugId && batchSelectedForAdd.has(item.id) && (
-                  <div className="batch-preview-check">✓</div>
-                )}
+                {/* 删除按钮 - 右上角 */}
+                <button
+                  className="batch-preview-delete-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeImage(item.id);
+                  }}
+                  title={batchRecognizeItems.some(img => img.status === 'recognizing') ? '识别中，无法删除' : '移除图片'}
+                  disabled={batchRecognizeItems.some(img => img.status === 'recognizing')}
+                  style={{
+                    opacity: batchRecognizeItems.some(img => img.status === 'recognizing') ? 0.5 : 1,
+                    cursor: batchRecognizeItems.some(img => img.status === 'recognizing') ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  ✕
+                </button>
               </div>
             ))}
           </div>
 
-          <div className="batch-actions">
-            <span className="batch-count">
-              已选择 <strong>{batchSelectedForAdd.size}</strong> 个药品
-            </span>
+          {/* 开始识别按钮 */}
+          <div style={{ marginTop: '24px', textAlign: 'center' }}>
             <button
-              className="btn btn-primary"
+              className="btn btn-primary btn-large"
               onClick={handleBatchRecognize}
               disabled={batchRecognizeItems.some(item => item.status === 'recognizing')}
-              style={{ marginRight: '12px' }}
+              style={{ minWidth: '200px' }}
             >
-              {batchRecognizeItems.some(item => item.status === 'recognizing') ? '⏳ 识别中...' : '🔍 开始识别'}
-            </button>
-            <button
-              className={`btn ${batchSelectedForAdd.size > 0 ? 'btn-success' : 'btn-disabled'}`}
-              onClick={handleBatchAddToMedicineBox}
-              disabled={batchSelectedForAdd.size === 0 || isBatchAdding}
-            >
-              {isBatchAdding ? '⏳ 添加中...' : `✅ 全部加入药箱 (${batchSelectedForAdd.size})`}
+              {batchRecognizeItems.some(item => item.status === 'recognizing') ? '⏳ 识别中...' : ' 开始识别'}
             </button>
           </div>
+
         </div>
       ) : (
         <>
@@ -2382,7 +3539,6 @@ function App() {
                   <>
                     <div className="loading-spinner-container">
                       <div className="loading-spinner"></div>
-                      <div className="loading-spinner-ring"></div>
                     </div>
                     <div className="loading-progress-bar">
                       <div className="loading-progress-fill"></div>
@@ -2543,7 +3699,20 @@ function App() {
   );
 
   const renderRecognitionTab = () => (
-    <div className="card">
+    <div className="card" style={{ position: 'relative' }}>
+      {/* 加载动画覆盖层 */}
+      {isFetchingDrug && (
+        <div className="loading-overlay">
+          <div className="loading-spinner-container">
+            <div className="loading-spinner"></div>
+          </div>
+          <div className="loading-progress-bar">
+            <div className="loading-progress-fill"></div>
+          </div>
+          <p className="loading-text"> 正在查询药品详情，请稍候...</p>
+        </div>
+      )}
+      
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2 className="card-title" style={{ margin: 0 }}>
           <span className="card-title-icon">✅</span>
@@ -2554,46 +3723,159 @@ function App() {
             </span>
           )}
         </h2>
-        {recognizedDrugs.length > 0 && (
-          <button
-            className="btn btn-secondary"
-            onClick={() => setActiveTab('upload')}
-          >
-            ← 返回继续识别
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {/* 只有有识别结果时才显示全部加入药箱按钮 */}
+          {recognizedDrugs.length > 0 && (
+            <button
+              onClick={async () => {
+                // 获取所有选中的药品ID
+                const selectedDrugIds = Array.from(batchSelectedForAdd);
+                
+                if (selectedDrugIds.length === 0) {
+                  showToast('请先选择要加入药箱的药品', 'warning');
+                  return;
+                }
+                
+                // 筛选出选中的药品
+                const selectedDrugs = recognizedDrugs.filter(drug => selectedDrugIds.includes(drug.id));
+                
+                if (selectedDrugs.length === 0) {
+                  showToast('未找到选中的药品', 'error');
+                  return;
+                }
+                
+                // 清空之前的确认数据
+                setBatchConfirmedDrugs([]);
+                setBatchDrugIndex(0);
+                
+                // 打开第一个药品的确认弹窗
+                setShowBatchConfirmModal(true);
+              }}
+              disabled={isBatchAdding || batchSelectedForAdd.size === 0}
+              style={{
+                padding: '12px 24px',
+                fontSize: '16px',
+                border: 'none',
+                borderRadius: '12px',
+                background: isBatchAdding ? '#CCCCCC' : (batchSelectedForAdd.size === 0 ? '#E0E0E0' : '#4CAF50'),
+                color: 'white',
+                cursor: isBatchAdding || batchSelectedForAdd.size === 0 ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold',
+                boxShadow: '0 2px 8px rgba(76, 175, 80, 0.3)',
+                transition: 'all 0.3s ease'
+              }}
+              onMouseEnter={(e) => {
+                if (!isBatchAdding && batchSelectedForAdd.size > 0) {
+                  e.target.style.background = '#45a049';
+                  e.target.style.transform = 'scale(1.05)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isBatchAdding && batchSelectedForAdd.size > 0) {
+                  e.target.style.background = '#4CAF50';
+                  e.target.style.transform = 'scale(1)';
+                }
+              }}
+            >
+              {isBatchAdding ? '⏳ 添加中...' : `✅ 加入药箱 (${batchSelectedForAdd.size}/${recognizedDrugs.length})`}
+            </button>
+          )}
+          {recognizedDrugs.length > 0 && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => setActiveTab('upload')}
+            >
+              ← 返回继续识别
+            </button>
+          )}
+        </div>
       </div>
 
       {recognizedDrugs.length > 0 ? (
         <div className="drug-list">
-          {recognizedDrugs.map((drug, index) => (
-            <div key={index} className="drug-card" style={{ animationDelay: `${index * 0.15}s` }}>
-              <span className="drug-card-icon">💊</span>
-              <h4 className="drug-name">{drug.name}</h4>
-              <p className="drug-info">规格：{drug.spec}</p>
-              <p className="drug-info">生产厂家：{drug.manufacturer}</p>
-              <p className="drug-info">匹配度：<span className="drug-match">{drug.matchScore}%</span></p>
-              <button
-                className="btn btn-primary"
-                style={{ marginTop: '20px', width: '100%', minHeight: '56px' }}
+          {recognizedDrugs.map((drug, index) => {
+            const isSelected = batchSelectedForAdd.has(drug.id);
+            return (
+              <div 
+                key={index} 
+                className={`drug-card ${isSelected ? 'selected' : ''}`} 
+                style={{ 
+                  animationDelay: `${index * 0.15}s`,
+                  border: isSelected ? '3px solid #4CAF50' : '2px solid transparent',
+                  boxShadow: isSelected ? '0 8px 24px rgba(76, 175, 80, 0.3)' : '0 2px 8px rgba(0, 0, 0, 0.08)',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  transition: 'all 0.3s ease'
+                }}
                 onClick={() => {
-                  // 使用统一的药品信息获取函数
-                  fetchDrugDetail(drug.name, drug, {
-                    showLoading: false
+                  // 切换选中状态
+                  setBatchSelectedForAdd(prev => {
+                    const newSet = new Set(prev);
+                    if (newSet.has(drug.id)) {
+                      newSet.delete(drug.id);
+                    } else {
+                      newSet.add(drug.id);
+                    }
+                    return newSet;
                   });
                 }}
               >
-                📖 查看用药说明
-              </button>
-              <button
-                className="btn btn-success"
-                style={{ marginTop: '12px', width: '100%', minHeight: '56px' }}
-                onClick={() => addToMedicineBox(drug)}
-              >
-                ➕ 加入我的药箱
-              </button>
-            </div>
-          ))}
+                {/* 选中状态标签 - 右上角 */}
+                {isSelected && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '12px',
+                    right: '12px',
+                    background: 'linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%)',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '20px',
+                    fontSize: '15px',
+                    fontWeight: 'bold',
+                    boxShadow: '0 4px 12px rgba(76, 175, 80, 0.5)',
+                    zIndex: 10,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    animation: 'fadeInScale 0.3s ease-out'
+                  }}>
+                    <span style={{ fontSize: '18px' }}>✓</span>
+                    <span>已选择</span>
+                  </div>
+                )}
+                
+                <span className="drug-card-icon">💊</span>
+                <h4 className="drug-name">{drug.name}</h4>
+                <p className="drug-info">规格：{drug.spec}</p>
+                <p className="drug-info">生产厂家：{drug.manufacturer}</p>
+                <p className="drug-info">匹配度：<span className="drug-match">{drug.matchScore}%</span></p>
+                <button
+                  className="btn btn-primary"
+                  style={{ marginTop: '20px', width: '100%', minHeight: '56px' }}
+                  onClick={(e) => {
+                    e.stopPropagation(); // 阻止事件冒泡
+                    fetchDrugDetail(drug.name, drug, {
+                      showLoading: true
+                    });
+                  }}
+                >
+                   查看用药说明
+                </button>
+                {!drugList.some(d => d.name === drug.name) && (
+                <button
+                  className="btn btn-success"
+                  style={{ marginTop: '12px', width: '100%', minHeight: '56px' }}
+                  onClick={(e) => {
+                    e.stopPropagation(); // 阻止事件冒泡
+                    addToMedicineBox(drug);
+                  }}
+                >
+                  ➕ 加入我的药箱
+                </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="loading-container">
@@ -2620,9 +3902,8 @@ function App() {
       setIsFetchingDrug(true);
     }
     
-    fetch(`/api/v1/drug/detail?drugName=${encodeURIComponent(drugName)}`)
-      .then(res => res.json())
-      .then(data => {
+    authFetch(`/api/v1/drug/detail?drugName=${encodeURIComponent(drugName)}`)
+      .then(({ data }) => {
         if (data.code === 200 && data.data) {
           const drugDetail = data.data;
           // 合并基础信息和详细信息，确保字段完整性
@@ -2798,6 +4079,80 @@ function App() {
         </div>
 
         <div className="explanation-layout">
+          {/* 医学原文折叠对照 */}
+          <div style={{
+            borderRadius: '12px',
+            marginBottom: '16px',
+            border: '1px solid #e2e8f0',
+            overflow: 'hidden'
+          }}>
+            <div
+              onClick={() => setShowOriginalText(!showOriginalText)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 16px',
+                background: 'linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)',
+                cursor: 'pointer', userSelect: 'none'
+              }}
+            >
+              <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#7c3aed', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                📄 医学原文
+                <span style={{ fontSize: '11px', fontWeight: 'normal', color: '#a78bfa' }}>对照查看</span>
+              </span>
+              <span style={{ fontSize: '13px', color: '#7c3aed', transition: 'transform 0.2s', transform: showOriginalText ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                ▼
+              </span>
+            </div>
+            {showOriginalText && (
+              <div style={{ padding: '14px 16px', background: '#fafafa' }}>
+                {/* 左右对照布局 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', height: '400px' }}>
+                  {/* 左侧：老年友好版摘要 */}
+                  <div style={{ background: '#f0fdf4', borderRadius: '10px', padding: '12px', border: '1px solid #bbf7d0', overflowY: 'auto' }}>
+                    <h4 style={{ fontSize: '16px', fontWeight: 'bold', color: '#16a34a', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      👴 老年友好版
+                    </h4>
+                    {elderlyGuide ? (
+                      <div style={{ fontSize: '16px', lineHeight: '2', color: '#374151', whiteSpace: 'pre-wrap' }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(displayGuideHtml) }}
+                      />
+                    ) : (
+                      <p style={{ fontSize: '16px', color: '#999' }}>加载中...</p>
+                    )}
+                  </div>
+                  {/* 右侧：医学原文 */}
+                  <div style={{ background: '#fffbeb', borderRadius: '10px', padding: '12px', border: '1px solid #fde68a', overflowY: 'auto' }}>
+                    <h4 style={{ fontSize: '16px', fontWeight: 'bold', color: '#b45309', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      📋 医学原文
+                    </h4>
+                    <div style={{ fontSize: '16px', lineHeight: '2', color: '#374151' }}>
+                      <div style={{ marginBottom: '10px' }}>
+                        <span style={{ fontWeight: 'bold', color: '#92400e', fontSize: '17px' }}>【成分】</span>
+                        <p style={{ margin: '2px 0' }}>{drugDetails.ingredient}</p>
+                      </div>
+                      <div style={{ marginBottom: '10px' }}>
+                        <span style={{ fontWeight: 'bold', color: '#92400e', fontSize: '17px' }}>【适应症】</span>
+                        <p style={{ margin: '2px 0' }}>{drugDetails.indications}</p>
+                      </div>
+                      <div style={{ marginBottom: '10px' }}>
+                        <span style={{ fontWeight: 'bold', color: '#92400e', fontSize: '17px' }}>【用法用量】</span>
+                        <p style={{ margin: '2px 0' }}>{drugDetails.usage}</p>
+                      </div>
+                      <div style={{ marginBottom: '10px' }}>
+                        <span style={{ fontWeight: 'bold', color: '#92400e', fontSize: '17px' }}>【注意事项】</span>
+                        <p style={{ margin: '2px 0' }}>{drugDetails.precautions}</p>
+                      </div>
+                      <div>
+                        <span style={{ fontWeight: 'bold', color: '#92400e', fontSize: '17px' }}>【不良反应】</span>
+                        <p style={{ margin: '2px 0' }}>{drugDetails.adverseReactions}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* 上方区域：虚拟药剂师 */}
           <div className="pharmacist-section">
             <div className="chat-section">
@@ -2829,7 +4184,7 @@ function App() {
                         lineHeight: '2',
                         fontSize: '16px'
                       }}
-                      dangerouslySetInnerHTML={{ __html: displayGuideHtml }}
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(displayGuideHtml) }}
                     />
                   ) : (
                     <p className="chat-bubble-text" style={{ color: '#999' }}>
@@ -2873,6 +4228,154 @@ function App() {
             </div>
           </div>
 
+          {/* 追问功能区域 */}
+          <div style={{
+            marginTop: '16px',
+            borderRadius: '12px',
+            border: '1px solid #bfdbfe',
+            overflow: 'hidden',
+            background: '#fff'
+          }}>
+            {/* 标题栏 - 蓝色渐变 */}
+            <div style={{
+              padding: '10px 16px',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+              color: '#fff',
+              fontSize: '15px',
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              💬 向药师追问
+              <span style={{ fontSize: '11px', fontWeight: 'normal', opacity: 0.8 }}>有疑问随时问</span>
+            </div>
+
+            {/* 对话消息区域 */}
+            <div ref={followUpMessagesRef} style={{
+              maxHeight: '300px',
+              overflowY: 'auto',
+              padding: '12px',
+              background: '#f8fafc'
+            }}>
+              {followUpMessages.length === 0 && !isFollowUpLoading && (
+                <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '14px', padding: '20px 0' }}>
+                  如果对用药说明有疑问，请在下方输入您的问题
+                </p>
+              )}
+              {followUpMessages.map((msg, idx) => {
+                const isAssistant = msg.role === 'assistant';
+                const isThisSpeaking = speakingFollowUpIdx === idx && isFollowUpSpeaking;
+                return (
+                  <div key={idx} style={{
+                    display: 'flex',
+                    gap: '8px',
+                    marginBottom: '10px',
+                    flexDirection: isAssistant ? 'row' : 'row-reverse'
+                  }}>
+                    {isAssistant && (
+                      <div style={{
+                        width: '32px', height: '32px', borderRadius: '50%',
+                        background: '#3b82f6', color: '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '16px', flexShrink: 0
+                      }}>👨‍⚕️</div>
+                    )}
+                    <div style={{
+                      display: 'flex', flexDirection: 'column',
+                      maxWidth: '75%',
+                      alignItems: isAssistant ? 'flex-start' : 'stretch'
+                    }}>
+                      <div style={{
+                        padding: '10px 14px',
+                        borderRadius: '12px',
+                        fontSize: '15px',
+                        lineHeight: '1.6',
+                        whiteSpace: 'pre-wrap',
+                        background: isAssistant ? '#fff' : '#3b82f6',
+                        color: isAssistant ? '#1e293b' : '#fff',
+                        border: isAssistant ? '1px solid #e2e8f0' : 'none',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      }}>
+                        {msg.content}
+                      </div>
+                      {isAssistant && msg.content && (
+                        <button
+                          onClick={() => toggleFollowUpSpeech(idx, msg.content)}
+                          title={isThisSpeaking ? '停止播放' : '播放语音'}
+                          style={{
+                            marginTop: '4px', padding: '4px 8px', fontSize: '16px',
+                            color: isThisSpeaking ? '#dc2626' : '#2563eb',
+                            background: '#fff',
+                            border: `1px solid ${isThisSpeaking ? '#fecaca' : '#bfdbfe'}`,
+                            borderRadius: '50%', cursor: 'pointer',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: '32px', height: '32px', alignSelf: 'flex-start', lineHeight: 1
+                          }}
+                        >
+                          {isThisSpeaking ? '🔊' : '🔇'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {isFollowUpLoading && (
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                  <div style={{
+                    width: '32px', height: '32px', borderRadius: '50%',
+                    background: '#3b82f6', color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '16px', flexShrink: 0
+                  }}>👨‍⚕️</div>
+                  <div style={{
+                    padding: '10px 14px', borderRadius: '12px',
+                    background: '#fff', border: '1px solid #e2e8f0',
+                    fontSize: '14px', color: '#64748b'
+                  }}>
+                    正在思考...
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 输入区域 */}
+            <div style={{
+              padding: '10px 12px',
+              borderTop: '1px solid #e2e8f0',
+              background: '#fff',
+              display: 'flex',
+              gap: '8px'
+            }}>
+              <input
+                type="text"
+                value={followUpQuestion}
+                onChange={(e) => setFollowUpQuestion(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAskFollowUp(); } }}
+                placeholder="输入您的问题，回车发送..."
+                disabled={isFollowUpLoading}
+                style={{
+                  flex: 1, padding: '8px 12px', fontSize: '15px',
+                  border: '1px solid #cbd5e1', borderRadius: '8px',
+                  outline: 'none'
+                }}
+              />
+              <button
+                onClick={handleAskFollowUp}
+                disabled={!followUpQuestion.trim() || isFollowUpLoading}
+                style={{
+                  padding: '8px 16px', fontSize: '15px',
+                  background: (!followUpQuestion.trim() || isFollowUpLoading) ? '#94a3b8' : '#3b82f6',
+                  color: '#fff', border: 'none', borderRadius: '8px',
+                  cursor: (!followUpQuestion.trim() || isFollowUpLoading) ? 'not-allowed' : 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                发送
+              </button>
+            </div>
+          </div>
+
           {/* 下方区域：药品信息 */}
           <div className="drug-details-section">
             <div className="left-drug-column">
@@ -2900,7 +4403,8 @@ function App() {
                 </div>
               </div>
 
-              {/* 突出的加入药箱按钮 - 放在药品信息卡片下方 */}
+              {/* 突出的加入药箱按钮 - 已在药箱中则隐藏 */}
+              {!drugList.some(d => d.name === drugInfo.name) && (
               <div className="add-to-box-prominent">
                 <button
                   className="btn btn-success btn-extra-large"
@@ -2910,6 +4414,7 @@ function App() {
                   <span className="btn-text">加入我的药箱</span>
                 </button>
               </div>
+              )}
             </div>
 
             <div className="right-panel">
@@ -2960,8 +4465,6 @@ function App() {
   };
 
   const renderConflictTab = () => {
-    const hasConflict = drugList.length > 1;
-
     // 冲突规则缓存 key
     const CONFLICT_RULES_CACHE_KEY = 'conflict_rules_cache';
 
@@ -2970,8 +4473,7 @@ function App() {
       try {
         const cached = localStorage.getItem(CONFLICT_RULES_CACHE_KEY);
         if (cached) {
-          const { report, drugNames, timestamp } = JSON.parse(cached);
-          console.log('从本地缓存加载冲突规则，缓存时间:', new Date(timestamp).toLocaleString());
+          const { report, drugNames } = JSON.parse(cached);
           
           // 检查缓存的药品列表是否与当前药箱匹配
           const currentDrugNames = drugList.map(d => d.name).sort();
@@ -3006,23 +4508,14 @@ function App() {
         // 获取药箱中的药品名称列表
         const drugNames = drugList.map(drug => drug.name);
         
-        console.log('=== 开始冲突检测 ===');
-        console.log('药品列表:', drugNames);
 
-        const response = await fetch('/api/conflict/check', {
+        const { data } = await authFetch('/api/conflict/check', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
           body: JSON.stringify(drugNames)
         });
 
-        const data = await response.json();
-        console.log('冲突检测响应:', data);
-
         if (data.code === 200 && data.data) {
           setConflictReport(data.data);
-          console.log('冲突检测成功:', data.data);
           
           // 保存到本地缓存（用于断网可读）
           try {
@@ -3031,7 +4524,6 @@ function App() {
               drugNames: drugNames,
               timestamp: Date.now()
             }));
-            console.log('冲突规则已缓存');
           } catch (cacheErr) {
             console.error('缓存冲突规则失败:', cacheErr);
           }
@@ -3093,7 +4585,7 @@ function App() {
         
         const textContent = [
           ` 用药冲突检测报告`,
-          `检测时间: ${new Date(conflictReport.checkTime).toLocaleString('zh-CN')}`,
+          `检测时间: ${formatDateTime(conflictReport.checkTime)}`,
           `检测药品数: ${conflictReport.drugsChecked?.length || 0} 种`,
           '',
           `🔴 严重: ${conflictReport.statistics.severeCount} | 🟡 中度: ${conflictReport.statistics.moderateCount} |  轻微: ${conflictReport.statistics.mildCount}`,
@@ -3118,12 +4610,442 @@ function App() {
       }
     };
 
+    // 场景化选项配置（精简预设，鼓励用户自定义）
+    const scenarioOptions = [
+      { id: 'grapefruit', label: '🍊 西柚汁', type: 'beverage', value: '西柚汁' },
+      { id: 'alcohol', label: '🍺 酒', type: 'beverage', value: '酒精' },
+      { id: 'coffee', label: '☕ 咖啡', type: 'beverage', value: '咖啡' },
+      { id: 'tea', label: '🍵 浓茶', type: 'beverage', value: '浓茶' },
+      { id: 'vitamin_c', label: '💊 维C', type: 'supplement', value: '维生素C' },
+      { id: 'calcium', label: '💊 钙片', type: 'supplement', value: '钙片' },
+      { id: 'ginseng', label: '🌿 人参', type: 'supplement', value: '人参' },
+      { id: 'seafood', label: '🦐 海鲜', type: 'food', value: '海鲜' },
+    ];
+
+    // 切换场景标签选中状态
+    const toggleScenario = (scenario) => {
+      setSelectedScenarios(prev => {
+        const exists = prev.find(s => s.id === scenario.id);
+        if (exists) return prev.filter(s => s.id !== scenario.id);
+        return [...prev, scenario];
+      });
+      setScenarioConflictReport(null);
+    };
+
+    // 添加自定义食物
+    const addCustomFood = () => {
+      const trimmed = customFoodInput.trim();
+      if (!trimmed) return;
+      const customId = 'custom_' + Date.now();
+      setSelectedScenarios(prev => [...prev, { id: customId, label: trimmed, type: 'food', value: trimmed }]);
+      setCustomFoodInput('');
+      setScenarioConflictReport(null);
+    };
+
+    // 调用 /analyze 端点进行综合冲突检测
+    const handleAnalyzeConflicts = async () => {
+      if (drugList.length === 0) {
+        showToast('请先添加药品到药箱', 'warning');
+        return;
+      }
+      if (selectedScenarios.length === 0) {
+        showToast('请至少选择一个场景选项', 'warning');
+        return;
+      }
+
+      setIsCheckingScenario(true);
+      setScenarioConflictReport(null);
+
+      try {
+        const drugNames = drugList.map(d => d.name);
+        const supplements = selectedScenarios.filter(s => s.type === 'supplement').map(s => s.value);
+        const beverages = selectedScenarios.filter(s => s.type === 'beverage').map(s => s.value);
+        const foods = selectedScenarios.filter(s => s.type === 'food').map(s => s.value);
+
+        const requestBody = {
+          drugNames,
+          supplements: supplements.length > 0 ? supplements : undefined,
+          beverages: beverages.length > 0 ? beverages : undefined,
+          foods: foods.length > 0 ? foods : undefined,
+          detailed: true,
+          includeAlternatives: true
+        };
+
+
+        const { data } = await authFetch('/api/conflict/analyze', {
+          method: 'POST',
+          body: JSON.stringify(requestBody)
+        });
+
+        if (data.code === 200 && data.data) {
+          setScenarioConflictReport(data.data);
+        } else {
+          showToast(data.message || '综合冲突检测失败', 'error');
+        }
+      } catch (error) {
+        console.error('综合冲突检测异常:', error);
+        showToast('网络错误，请稍后重试', 'error');
+      } finally {
+        setIsCheckingScenario(false);
+      }
+    };
+
     return (
       <div className="card">
         <h2 className="card-title">
           <span className="card-title-icon">⚠️</span>
           用药安全检查
         </h2>
+
+        {/* 自动快速检测结果横幅 */}
+        {isAutoChecking && (
+          <div style={{
+            borderRadius: '12px',
+            padding: '14px 16px',
+            marginBottom: '20px',
+            background: '#f0f9ff',
+            border: '1px solid #bae6fd',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <div className="loading-spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }}></div>
+            <span style={{ fontSize: '14px', color: '#0369a1' }}>正在自动检测药品冲突...</span>
+          </div>
+        )}
+        {!isAutoChecking && autoCheckResult && autoCheckResult.conflicts && autoCheckResult.conflicts.length > 0 && (
+          <div style={{
+            borderRadius: '12px',
+            padding: '14px 16px',
+            marginBottom: '20px',
+            background: autoCheckResult.hasSevereConflict ? '#fef2f2' : '#fffbeb',
+            border: autoCheckResult.hasSevereConflict ? '1px solid #fca5a5' : '1px solid #fcd34d',
+            animation: 'pulse-border 2s ease-in-out infinite'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <span style={{ fontSize: '20px' }}>{autoCheckResult.hasSevereConflict ? '🔴' : '🟡'}</span>
+              <span style={{
+                fontSize: '15px',
+                fontWeight: 'bold',
+                color: autoCheckResult.hasSevereConflict ? '#dc2626' : '#d97706'
+              }}>
+                {autoCheckResult.hasSevereConflict ? '发现严重冲突！' : '发现潜在冲突'}
+              </span>
+            </div>
+            <p style={{ fontSize: '13px', color: '#555', marginBottom: '8px' }}>
+              快速检测发现 {autoCheckResult.conflicts.length} 个冲突项
+              {autoCheckResult.statistics && (
+                <>（
+                {autoCheckResult.statistics.severeCount > 0 && <span style={{ color: '#dc2626', fontWeight: 'bold' }}>{autoCheckResult.statistics.severeCount}严重 </span>}
+                {autoCheckResult.statistics.moderateCount > 0 && <span style={{ color: '#d97706' }}>{autoCheckResult.statistics.moderateCount}中度 </span>}
+                {autoCheckResult.statistics.mildCount > 0 && <span style={{ color: '#ca8a04' }}>{autoCheckResult.statistics.mildCount}轻微</span>}
+                ）</>
+              )}
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {autoCheckResult.conflicts.slice(0, 3).map((c, i) => (
+                <span key={i} style={{
+                  padding: '3px 10px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  background: c.severity === 'SEVERE' ? '#fee2e2' : c.severity === 'MODERATE' ? '#fef3c7' : '#f0fdf4',
+                  color: c.severity === 'SEVERE' ? '#dc2626' : c.severity === 'MODERATE' ? '#d97706' : '#16a34a'
+                }}>
+                  {c.drugA} × {c.drugB}
+                </span>
+              ))}
+              {autoCheckResult.conflicts.length > 3 && (
+                <span style={{ padding: '3px 10px', borderRadius: '8px', fontSize: '12px', background: '#f1f5f9', color: '#64748b' }}>
+                  +{autoCheckResult.conflicts.length - 3}项
+                </span>
+              )}
+            </div>
+            <p style={{ fontSize: '12px', color: '#888', marginTop: '10px' }}>
+              以上为本地规则快速检测结果，点击下方"开始检测"可获取AI深度分析
+            </p>
+          </div>
+        )}
+        {!isAutoChecking && autoCheckResult && (!autoCheckResult.conflicts || autoCheckResult.conflicts.length === 0) && drugList.length >= 2 && !conflictReport && (
+          <div style={{
+            borderRadius: '12px',
+            padding: '14px 16px',
+            marginBottom: '20px',
+            background: '#f0fdf4',
+            border: '1px solid #86efac'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '20px' }}>🟢</span>
+              <span style={{ fontSize: '14px', color: '#16a34a', fontWeight: 'bold' }}>快速检测未发现明显冲突</span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#888', marginTop: '6px' }}>
+              本地规则未发现冲突，如需更全面的分析请点击"开始检测"
+            </p>
+          </div>
+        )}
+
+        {/* 药品/食物/保健品综合冲突 - 折叠面板 */}
+        <div style={{
+          borderRadius: '12px',
+          marginBottom: '20px',
+          border: '1px solid #bae6fd',
+          overflow: 'hidden'
+        }}>
+          {/* 折叠标题栏 */}
+          <div
+            onClick={() => setShowScenarioPanel(!showScenarioPanel)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+              cursor: 'pointer',
+              userSelect: 'none'
+            }}
+          >
+            <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              🍽️ 药品/食物/保健品综合冲突
+              {selectedScenarios.length > 0 && (
+                <span style={{
+                  fontSize: '11px', padding: '2px 8px', borderRadius: '10px',
+                  background: '#0284c7', color: 'white'
+                }}>
+                  {selectedScenarios.length}项
+                </span>
+              )}
+            </span>
+            <span style={{ fontSize: '14px', color: '#0369a1', transition: 'transform 0.2s', transform: showScenarioPanel ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+              ▼
+            </span>
+          </div>
+
+          {/* 折叠内容 */}
+          {showScenarioPanel && (
+            <div style={{ padding: '14px 16px', background: '#f8fafc' }}>
+              <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '10px' }}>
+                选择今天的饮食/保健品，AI分析与您药品是否冲突
+              </p>
+
+              {/* 场景标签选择 */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                {scenarioOptions.map(scenario => {
+                  const isSelected = selectedScenarios.some(s => s.id === scenario.id);
+                  return (
+                    <button
+                      key={scenario.id}
+                      onClick={() => toggleScenario(scenario)}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: '16px',
+                        fontSize: '13px',
+                        border: isSelected ? '2px solid #0284c7' : '1.5px solid #cbd5e1',
+                        background: isSelected ? '#0284c7' : '#ffffff',
+                        color: isSelected ? '#ffffff' : '#475569',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {scenario.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 自定义输入 */}
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                <input
+                  type="text"
+                  value={customFoodInput}
+                  onChange={(e) => setCustomFoodInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addCustomFood()}
+                  placeholder="输入其他食物/饮品，回车添加"
+                  style={{
+                    flex: 1, padding: '7px 12px', borderRadius: '8px',
+                    border: '1.5px solid #cbd5e1', fontSize: '13px', outline: 'none'
+                  }}
+                />
+                <button
+                  onClick={addCustomFood}
+                  style={{
+                    padding: '7px 14px', borderRadius: '8px', border: 'none',
+                    background: '#0284c7', color: 'white', fontSize: '13px', cursor: 'pointer'
+                  }}
+                >
+                  添加
+                </button>
+              </div>
+
+              {/* 已选标签 */}
+              {selectedScenarios.length > 0 && (
+                <div style={{ marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                    {selectedScenarios.map(s => (
+                      <span key={s.id} style={{
+                        padding: '3px 10px', borderRadius: '10px', fontSize: '11px',
+                        background: s.type === 'beverage' ? '#dbeafe' : s.type === 'supplement' ? '#fce7f3' : '#dcfce7',
+                        color: s.type === 'beverage' ? '#1d4ed8' : s.type === 'supplement' ? '#be185d' : '#15803d',
+                        display: 'flex', alignItems: 'center', gap: '3px'
+                      }}>
+                        {s.value}
+                        <span onClick={() => toggleScenario(s)} style={{ cursor: 'pointer', fontWeight: 'bold' }}>×</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 检测按钮 */}
+              <button
+                className="btn btn-primary"
+                onClick={handleAnalyzeConflicts}
+                disabled={isCheckingScenario || drugList.length === 0 || selectedScenarios.length === 0}
+                style={{
+                  width: '100%', minHeight: '40px', fontSize: '14px',
+                  opacity: (isCheckingScenario || drugList.length === 0 || selectedScenarios.length === 0) ? 0.6 : 1
+                }}
+              >
+                {isCheckingScenario ? '🔍 AI分析中...' : '🔬 综合冲突检测'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 综合冲突检测结果 */}
+        {isCheckingScenario && (
+          <div style={{ textAlign: 'center', padding: '20px' }}>
+            <div className="loading-spinner-container" style={{ margin: '0 auto 12px' }}>
+              <div className="loading-spinner"></div>
+            </div>
+            <p style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+              🔍 AI分析中：{drugList.map(d => d.name).join('、')} × {selectedScenarios.map(s => s.value).join('、')}
+            </p>
+          </div>
+        )}
+
+        {scenarioConflictReport && !isCheckingScenario && (
+          <div style={{
+            borderRadius: '12px',
+            padding: '14px',
+            marginBottom: '16px',
+            border: scenarioConflictReport.hasSevereConflict ? '1px solid #fca5a5' : '1px solid #86efac',
+            background: scenarioConflictReport.hasSevereConflict ? '#fef2f2' : '#f0fdf4'
+          }}>
+            <h4 style={{
+              fontSize: '15px', fontWeight: 'bold', marginBottom: '10px',
+              color: scenarioConflictReport.hasSevereConflict ? '#dc2626' : '#16a34a',
+              display: 'flex', alignItems: 'center', gap: '6px'
+            }}>
+              {scenarioConflictReport.hasSevereConflict ? '🔴 发现严重冲突' : '🟢 未发现严重冲突'}
+            </h4>
+
+            {/* 检测范围 */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+              {scenarioConflictReport.drugsChecked?.length > 0 && (
+                <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '14px', background: '#dbeafe', color: '#1d4ed8' }}>
+                  💊{scenarioConflictReport.drugsChecked.join('、')}
+                </span>
+              )}
+              {scenarioConflictReport.beveragesChecked?.length > 0 && (
+                <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '14px', background: '#fef3c7', color: '#92400e' }}>
+                  🥤{scenarioConflictReport.beveragesChecked.join('、')}
+                </span>
+              )}
+              {scenarioConflictReport.supplementsChecked?.length > 0 && (
+                <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '14px', background: '#fce7f3', color: '#9d174d' }}>
+                  💊{scenarioConflictReport.supplementsChecked.join('、')}
+                </span>
+              )}
+              {scenarioConflictReport.foodsChecked?.length > 0 && (
+                <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '14px', background: '#dcfce7', color: '#15803d' }}>
+                  🍽️{scenarioConflictReport.foodsChecked.join('、')}
+                </span>
+              )}
+            </div>
+
+            {/* 统计 */}
+            {scenarioConflictReport.conflicts?.length > 0 && (
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                {scenarioConflictReport.statistics?.severeCount > 0 && (
+                  <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#dc2626', color: 'white', fontSize: '14px' }}>
+                    严重×{scenarioConflictReport.statistics.severeCount}
+                  </span>
+                )}
+                {scenarioConflictReport.statistics?.moderateCount > 0 && (
+                  <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#ea580c', color: 'white', fontSize: '14px' }}>
+                    中度×{scenarioConflictReport.statistics.moderateCount}
+                  </span>
+                )}
+                {scenarioConflictReport.statistics?.mildCount > 0 && (
+                  <span style={{ padding: '4px 10px', borderRadius: '8px', background: '#ca8a04', color: 'white', fontSize: '14px' }}>
+                    轻微×{scenarioConflictReport.statistics.mildCount}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* 冲突详情 */}
+            {scenarioConflictReport.conflicts?.map((conflict, index) => (
+              <div
+                key={index}
+                className={`conflict-item conflict-level-${conflict.severity?.toLowerCase() || 'mild'}`}
+                style={{ marginBottom: '8px', padding: '8px 10px' }}
+              >
+                <span className={`conflict-badge ${conflict.severity?.toLowerCase() || 'mild'}`}>
+                  {conflict.severity === 'SEVERE' && '🔴 严重'}
+                  {conflict.severity === 'MODERATE' && '🟡 中度'}
+                  {conflict.severity === 'MILD' && '🔵 轻微'}
+                  {(!conflict.severity || conflict.severity === 'NONE') && '🟢 安全'}
+                </span>
+                <div className="drug-connection">
+                  <div className="drug-node">{conflict.drugA}</div>
+                  <span className="drug-connector">⚡</span>
+                  <div className="drug-node">{conflict.drugB}</div>
+                </div>
+                {conflict.conflictExplanation && (
+                  <p className="conflict-explanation-text">{conflict.conflictExplanation}</p>
+                )}
+                {conflict.riskWarning && (
+                  <p className="conflict-explanation-text" style={{
+                    color: conflict.severity === 'SEVERE' ? '#dc2626' : conflict.severity === 'MODERATE' ? '#ea580c' : '#856404',
+                    fontWeight: 'bold', marginTop: '4px', fontSize: '14px'
+                  }}>
+                    ⚠️ {conflict.riskWarning}
+                  </p>
+                )}
+                {conflict.alternatives?.length > 0 && (
+                  <div style={{ marginTop: '4px' }}>
+                    {conflict.alternatives.map((alt, i) => (
+                      <p key={i} style={{ fontSize: '14px', color: '#666', marginLeft: '8px' }}>💡 {alt}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* 无冲突 */}
+            {scenarioConflictReport.conflicts?.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '10px' }}>
+                <span style={{ fontSize: '32px' }}>🛡️</span>
+                <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#16a34a' }}>未发现冲突</p>
+              </div>
+            )}
+
+            {/* 总体建议 */}
+            {scenarioConflictReport.generalAdvice && (
+              <div className="warning-box" style={{ marginTop: '10px', background: '#e0f2fe', padding: '8px 10px' }}>
+                <p style={{ fontSize: '14px', color: '#075985' }}>💊 {scenarioConflictReport.generalAdvice}</p>
+              </div>
+            )}
+
+            <button
+              className="btn btn-secondary"
+              style={{ width: '100%', marginTop: '10px', fontSize: '14px', minHeight: '36px' }}
+              onClick={() => { setScenarioConflictReport(null); }}
+            >
+              🔄 重新检测
+            </button>
+          </div>
+        )}
 
         {drugList.length === 0 ? (
           <div className="safe-display">
@@ -3147,7 +5069,7 @@ function App() {
               <p style={{ fontSize: '18px', color: 'var(--text-primary)' }}>
                 🔍 正在调用AI分析药品冲突，请稍候...
               </p>
-              <p style={{ fontSize: '14px', color: 'var(--text-light)', marginTop: '12px' }}>
+              <p style={{ fontSize: '15px', color: 'var(--text-light)', marginTop: '12px' }}>
                 系统正在检测 {drugList.length} 种药品之间的相互作用
               </p>
             </div>
@@ -3186,7 +5108,7 @@ function App() {
                   boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)'
                 }}>
                   <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{conflictReport.statistics.severeCount}</div>
-                  <div style={{ fontSize: '12px' }}>严重冲突</div>
+                  <div style={{ fontSize: '14px' }}>严重冲突</div>
                 </div>
               )}
               {conflictReport.statistics.moderateCount > 0 && (
@@ -3199,7 +5121,7 @@ function App() {
                   boxShadow: '0 4px 12px rgba(234, 88, 12, 0.3)'
                 }}>
                   <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{conflictReport.statistics.moderateCount}</div>
-                  <div style={{ fontSize: '12px' }}>中度冲突</div>
+                  <div style={{ fontSize: '14px' }}>中度冲突</div>
                 </div>
               )}
               {conflictReport.statistics.mildCount > 0 && (
@@ -3212,7 +5134,7 @@ function App() {
                   boxShadow: '0 4px 12px rgba(202, 138, 4, 0.3)'
                 }}>
                   <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{conflictReport.statistics.mildCount}</div>
-                  <div style={{ fontSize: '12px' }}>轻微注意</div>
+                  <div style={{ fontSize: '14px' }}>轻微注意</div>
                 </div>
               )}
             </div>
@@ -3255,7 +5177,7 @@ function App() {
                     <div style={{ marginTop: '12px' }}>
                       <p style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>💡 建议:</p>
                       {conflict.alternatives.map((alt, altIndex) => (
-                        <p key={altIndex} style={{ fontSize: '13px', color: '#666', marginLeft: '12px' }}>
+                        <p key={altIndex} style={{ fontSize: '14px', color: '#666', marginLeft: '12px' }}>
                           • {alt}
                         </p>
                       ))}
@@ -3310,7 +5232,7 @@ function App() {
             <span className="shield-icon">🛡️</span>
             <h3 className="safe-title">未发现明显冲突</h3>
             <p className="safe-subtitle">您的用药方案在AI分析后未发现明显冲突</p>
-            <p style={{ fontSize: '14px', color: '#666', marginTop: '12px' }}>
+            <p style={{ fontSize: '15px', color: '#666', marginTop: '12px' }}>
               ✅ 检测了 {drugList.length} 种药品，未发现问题
             </p>
           </div>
@@ -3323,7 +5245,7 @@ function App() {
                   <h3 style={{ fontSize: '20px', marginBottom: '12px', color: '#e65100' }}>
                     药品已更新，建议重新检测
                   </h3>
-                  <p style={{ fontSize: '14px', color: '#666', marginBottom: '24px' }}>
+                  <p style={{ fontSize: '15px', color: '#666', marginBottom: '24px' }}>
                     您最近添加了新药品，药箱中共有 {drugList.length} 种药品
                   </p>
                 </>
@@ -3333,7 +5255,7 @@ function App() {
                   <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>
                     AI智能冲突检测
                   </h3>
-                  <p style={{ fontSize: '14px', color: '#666', marginBottom: '24px' }}>
+                  <p style={{ fontSize: '15px', color: '#666', marginBottom: '24px' }}>
                     基于DeepSeek大模型，分析您的 {drugList.length} 种药品之间可能存在的相互作用
                   </p>
                 </>
@@ -3357,25 +5279,32 @@ function App() {
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2 className="card-title" style={{ marginBottom: 0 }}>
-          <span className="card-title-icon">📅</span>
+          <span className="card-title-icon"></span>
           {calendarViewMode === 'today' ? '今日用药时间轴' : '一周用药记录'}
         </h2>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {/* 调试按钮：手动触发提醒 */}
-          <button
-            className="btn btn-warning"
-            onClick={handleTriggerReminderManually}
-            style={{ 
-              minHeight: '40px',
-              fontSize: '14px',
-              background: '#ff9800',
-              color: 'white',
-              border: 'none'
-            }}
-            title="手动触发用药提醒（调试用）"
-          >
-            🔔 测试提醒
-          </button>
+          {/* AI周报显示/隐藏按钮 - 仅在周视图显示 */}
+          {calendarViewMode === 'week' && (
+            <button
+              className="btn"
+              onClick={() => {
+                setShowWeeklyReport(!showWeeklyReport);
+                if (selectedWeekDay) setSelectedWeekDay(null); // 打开AI周报时关闭日详情
+              }}
+              style={{ 
+                minHeight: '40px', 
+                fontSize: '16px',
+                background: showWeeklyReport ? '#e91e63' : '#ff5722',
+                color: 'white',
+                border: 'none',
+                fontWeight: 'bold',
+                boxShadow: '0 4px 12px rgba(233, 30, 99, 0.3)',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              {showWeeklyReport ? '📊 隐藏AI周报' : '📊 显示AI周报'}
+            </button>
+          )}
           <button
             className={`btn ${calendarViewMode === 'today' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => handleCalendarViewChange('today')}
@@ -3392,6 +5321,99 @@ function App() {
       </div>
 
       {calendarViewMode === 'today' ? renderTodayCalendar() : renderWeekCalendar()}
+
+      {/* AI周报摘要 - 仅在周视图显示 */}
+      {calendarViewMode === 'week' && showWeeklyReport && (
+        <div style={{ marginTop: '32px', borderTop: '2px solid #e8f4fd', paddingTop: '24px' }}>
+          <WeeklyReport compact />
+          {/* 截图按钮 - 参考冲突检测模块 */}
+          <div style={{ 
+            display: 'flex', 
+            gap: '16px', 
+            marginTop: '20px'
+          }}>
+            <button
+              className="btn btn-primary"
+              onClick={async () => {
+                // 找到WeeklyReport组件的reportRef并截图
+                const reportContent = document.querySelector('.weekly-report-content');
+                if (!reportContent) return;
+                
+                try {
+                  showToast('正在生成截图...', 'info');
+                  const canvas = await html2canvas(reportContent, {
+                    backgroundColor: '#ffffff',
+                    scale: 2,
+                    useCORS: true,
+                    logging: false
+                  });
+                  
+                  const link = document.createElement('a');
+                  const dateStr = new Date().toLocaleDateString('zh-CN').replace(/\//g, '-');
+                  link.download = `用药周报_${dateStr}.png`;
+                  link.href = canvas.toDataURL('image/png');
+                  link.click();
+                  showToast('截图已保存！', 'success');
+                } catch (error) {
+                  console.error('截图失败:', error);
+                  showToast('截图失败，请稍后重试', 'error');
+                }
+              }}
+              style={{
+                flex: 1,
+                background: '#2196F3',
+                color: 'white',
+                border: 'none',
+                padding: '16px 32px',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                boxShadow: '0 6px 16px rgba(33, 150, 243, 0.4)',
+                transition: 'all 0.3s ease',
+                minHeight: '52px'
+              }}
+            >
+               📷 截图报告
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={async () => {
+                // 获取AI总结文本并复制
+                try {
+                  const { data } = await authFetch(`/api/weekly-report/latest`);
+                  
+                  if (data.code === 200 && data.data?.fullReportText) {
+                    await navigator.clipboard.writeText(data.data.fullReportText);
+                    showToast('报告已复制到剪贴板！', 'success');
+                  } else {
+                    showToast('复制失败', 'error');
+                  }
+                } catch (error) {
+                  console.error('复制失败:', error);
+                  showToast('复制失败，请稍后重试', 'error');
+                }
+              }}
+              style={{
+                flex: 1,
+                background: '#FF9800',
+                color: 'white',
+                border: 'none',
+                padding: '16px 32px',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                boxShadow: '0 6px 16px rgba(255, 152, 0, 0.4)',
+                transition: 'all 0.3s ease',
+                minHeight: '52px'
+              }}
+            >
+               📋 复制文本
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -3446,7 +5468,7 @@ function App() {
                       <button
                         className="btn btn-secondary btn-undo"
                         onClick={() => undoMarkAsTaken(reminder.id)}
-                        style={{ minHeight: '44px', marginTop: '12px' }}
+                        style={{ marginTop: '12px' }}
                       >
                         ↩️ 撤销
                       </button>
@@ -3556,8 +5578,38 @@ function App() {
       ? weeklyMedicationData.dailyRecords.find(d => d.date === selectedWeekDay)
       : null;
 
+    // 计算一周总览统计
+    const allItems = weeklyMedicationData.dailyRecords.flatMap(d => d.items || []);
+    const weekTotal = allItems.length;
+    const weekTaken = allItems.filter(i => normalizeWeekStatus(i.status) === 'taken').length;
+    const weekRate = weekTotal > 0 ? Math.round((weekTaken / weekTotal) * 100) : 0;
+
     return (
       <div className="week-view">
+        {/* 一周总览统计 */}
+        <div className="week-summary">
+          <div className="week-summary__ring">
+            <svg viewBox="0 0 36 36" className="week-summary__svg">
+              <path
+                className="week-summary__ring-bg"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+              <path
+                className="week-summary__ring-fill"
+                strokeDasharray={`${weekRate}, 100`}
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+            </svg>
+            <span className="week-summary__percent">{weekRate}%</span>
+          </div>
+          <div className="week-summary__info">
+            <div className="week-summary__label">本周服药完成率</div>
+            <div className="week-summary__detail">
+              已服 <strong>{weekTaken}</strong> 项 / 共 <strong>{weekTotal}</strong> 项
+            </div>
+          </div>
+        </div>
+
         {/* 7 格日历 */}
         <div className="week-grid" role="grid">
           {weeklyMedicationData.dailyRecords.map((day) => {
@@ -3588,7 +5640,10 @@ function App() {
                   phase === 'future' ? 'is-future' : '',
                   total === 0 ? 'is-empty' : ''
                 ].filter(Boolean).join(' ')}
-                onClick={() => handleWeekDayToggle(day.date)}
+                onClick={() => {
+                  handleWeekDayToggle(day.date);
+                  if (showWeeklyReport) setShowWeeklyReport(false); // 打开日详情时关闭AI周报
+                }}
               >
                 <div className="week-day-cell__weekday">周{weekday}</div>
                 <div className="week-day-cell__num">{dayNum}</div>
@@ -3685,7 +5740,7 @@ function App() {
                             <span className="status-taken">✓ 已吃</span>
                             <button
                               className="btn btn-secondary btn-undo"
-                              style={{ minHeight: '44px', marginTop: '12px' }}
+                              style={{ marginTop: '12px' }}
                               onClick={() => handleWeekItemUndo(selectedDay.date, item)}
                               disabled={!item.planId}
                               title="撤销这次服药记录"
@@ -3760,13 +5815,8 @@ function App() {
     
     try {
       setIsSearching(true);
-      const response = await fetch(`/api/v1/box/search?userId=${user.userId}&keyword=${encodeURIComponent(keyword)}&status=active`);
-      const data = await response.json();
+      const { response, data } = await authFetch(`/api/v1/box/search?keyword=${encodeURIComponent(keyword)}&status=active`);
       
-      console.log('=== 搜索药箱响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
       
       if (response.ok && data.code === 200) {
         // 转换后端数据格式为前端需要的格式
@@ -3800,144 +5850,22 @@ function App() {
   };
 
   const renderDrugsTab = () => {
-    // 如果有搜索关键词且正在搜索，显示搜索中的药品列表
-    // 如果有搜索关键词且已完成搜索，显示过滤后的药品列表
-    // 否则显示完整列表
-    const displayList = filteredDrugList.length > 0 && searchQuery.trim() ? filteredDrugList : drugList;
-    
-    // 检查药品是否已设置用药计划
-    // 只通过 boxItemId 匹配，确保精确匹配
-    const hasPlan = (drug) => {
-      // 检查是否在已加载的计划中（通过 boxItemId 精确匹配）
-      const planExists = calendarPlans.some(p => p.boxItemId === drug.boxItemId);
-      return planExists;
-    };
-    
     return (
-    <div className="card">
-      <h2 className="card-title">
-        <span className="card-title-icon">🏠</span>
-        家庭药箱
-      </h2>
-
-      <div className="search-box">
-        <div className="search-input-wrapper">
-          <span className="search-icon">🔍</span>
-          <input
-            type="text"
-            className="search-input"
-            placeholder="搜索药品名称、用量或备注..."
-            value={searchQuery}
-            onChange={(e) => handleSearchDrugs(e.target.value)}
-          />
-        </div>
-        <button className="btn btn-primary btn-large" onClick={() => setShowAddDrugModal(true)}>
-          ➕ 添加新药
-        </button>
-      </div>
-
-      <div className="drug-grid">
-        {displayList.length === 0 && searchQuery.trim() && !isSearching ? (
-          <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-light)' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
-            <p style={{ fontSize: '22px' }}>未找到与"{searchQuery}"相关的药品</p>
-            <p style={{ fontSize: '18px', marginTop: '12px' }}>请尝试其他关键词</p>
-          </div>
-        ) : (
-          displayList.map((drug, index) => {
-          const isExpiring = new Date(drug.expiryDate) - new Date() < 30 * 24 * 60 * 60 * 1000;
-          const hasDrugPlan = hasPlan(drug);
-          // 使用真实总数量计算进度百分比
-          const totalQty = drug.totalQuantity || 30; // 如果没有总数量，默认30
-          const remainingQty = drug.remaining || totalQty;
-          const remainingPercent = Math.max(0, Math.min(100, (remainingQty / totalQty) * 100));
-
-          return (
-            <div 
-              key={index} 
-              className={`drug-bottle-card ${isExpiring ? 'expiring' : ''}`}
-              style={{ cursor: 'pointer', position: 'relative' }}
-            >
-              {isExpiring && <span className="expiring-tag">即将过期</span>}
-              {/* 未设置用药时段的提示图标 */}
-              {!hasDrugPlan && (
-                <span 
-                  style={{
-                    position: 'absolute',
-                    top: '10px',
-                    left: '10px',
-                    background: '#fff3cd',
-                    color: '#856404',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    zIndex: 11
-                  }}
-                  title="请添加用药时段"
-                >
-                  ⚠️ 未设置
-                </span>
-              )}
-              
-              {/* 添加到用药日历按钮 */}
-              <button
-                className="btn btn-primary add-to-calendar-btn"
-                onClick={(e) => handleOpenAddToPlanModal(drug, e)}
-                title={hasDrugPlan ? "修改用药时段" : "添加到用药日历"}
-                style={{
-                  position: 'absolute',
-                  top: '10px',
-                  right: '10px',
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  zIndex: 10,
-                  borderRadius: '8px',
-                  background: hasDrugPlan ? '#28a745' : 'var(--tech-blue)',
-                  color: 'white',
-                  border: 'none',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                }}
-              >
-                📅
-              </button>
-              
-              <div onClick={() => handleOpenDrugDetail(drug)}>
-                <div className="bottle-icon">💊</div>
-                <h4 className="bottle-name">{drug.name}</h4>
-                <p className="bottle-info">规格：{drug.spec}</p>
-                <p className="bottle-info">用法：{drug.dosage}</p>
-                <p className="bottle-info">剩余：{remainingQty}/{totalQty}片</p>
-                <div className="bottle-progress">
-                  <div className="bottle-progress-fill" style={{ width: `${remainingPercent}%` }}></div>
-                </div>
-                <p className="bottle-info" style={{ color: isExpiring ? 'var(--warning-orange)' : 'var(--text-light)' }}>
-                  效期：{drug.expiryDate}
-                </p>
-              </div>
-            </div>
-          );
-        }))}
-      </div>
-
-      <div className="stats-bar">
-        <div className="stats-item">
-          <div className="stats-value">{displayList.length}</div>
-          <div className="stats-label">种药品</div>
-        </div>
-        <div className="stats-item">
-          <div className="stats-value warning">
-            {displayList.filter(d => new Date(d.expiryDate) - new Date() < 30 * 24 * 60 * 60 * 1000).length}
-          </div>
-          <div className="stats-label">需关注</div>
-        </div>
-        <div className="stats-item">
-          <div className="stats-value success">{takenCount}</div>
-          <div className="stats-label">今日已服</div>
-        </div>
-      </div>
-    </div>
+      <DrugManagementTab
+        drugList={drugList}
+        searchQuery={searchQuery}
+        isSearching={isSearching}
+        filteredDrugList={filteredDrugList}
+        calendarPlans={calendarPlans}
+        onSearch={handleSearchDrugs}
+        onAddDrug={() => setShowAddDrugModal(true)}
+        onOpenDrugDetail={handleOpenDrugDetail}
+        onOpenAddToPlanModal={handleOpenAddToPlanModal}
+        onDiscardDrug={handleDiscardDrugFromCard}
+        onDeleteDrug={handleDeleteDrug}
+        onReloadDrugList={() => loadMedicineBoxList(user?.userId)}
+        user={user}
+      />
     );
   };
 
@@ -3945,12 +5873,29 @@ function App() {
     <>
       {/* 百度TTS音频播放器 */}
       <audio ref={audioRef} style={{ display: 'none' }} />
+      <audio ref={followUpAudioRef} style={{ display: 'none' }} />
 
       <div className="watermark-bg"></div>
-      {showRegister ? (
-        <Register onRegister={handleRegister} />
-      ) : !isLoggedIn ? (
-        <Login onLogin={handleLogin} onShowRegister={() => setShowRegister(true)} />
+      {!isLoggedIn ? (
+        <AuthGate
+          mode={loginMode}
+          showRegister={showRegister}
+          onLogin={handleLogin}
+          onRegister={handleRegister}
+          onShowRegister={() => setShowRegister(true)}
+          onSwitchToGuardian={() => setLoginMode('guardian')}
+          onSwitchToElder={() => setLoginMode('elder')}
+        />
+      ) : loginMode === 'guardian' ? (
+        <GuardianApp
+          onLogout={() => {
+            setUser(null);
+            setIsLoggedIn(false);
+            setLoginMode('elder');
+          }}
+        />
+      ) : user?.role === 'family' ? (
+        <GuardianApp user={user} onLogout={() => { setUser(null); setIsLoggedIn(false); clearAuth(); }} />
       ) : (
         <div className="app-container">
           {renderHeader()}
@@ -3980,6 +5925,7 @@ function App() {
               </button>
             </div>
 
+            <div key={activeTab} className="tab-page">
             {activeTab === 'home' && renderHomeTab()}
             {activeTab === 'upload' && renderUploadTab()}
             {activeTab === 'recognition' && renderRecognitionTab()}
@@ -3987,14 +5933,48 @@ function App() {
             {activeTab === 'conflict' && renderConflictTab()}
             {activeTab === 'calendar' && renderCalendarTab()}
             {activeTab === 'drugs' && renderDrugsTab()}
-            {activeTab === 'emergency' && (
-              <div className="card emergency-card">
-                <EmergencyAssistant emergencyContacts={emergencyContacts} />
-              </div>
-            )}
+            {activeTab === 'emergency' && <EmergencyTab emergencyContacts={emergencyContacts} elderId={user?.id} />}
+            </div>
           </div>
 
         </div>
+      )}
+
+      {/* 老人端通知面板 */}
+      {user?.role !== 'family' && user?.id && (
+        <ElderNotificationPanel
+          isOpen={showNotificationPanel}
+          onClose={() => setShowNotificationPanel(false)}
+          onUnreadCountChange={setNotificationUnreadCount}
+          onContactAdded={() => loadEmergencyContacts(user.id)}
+          wsConnected={wsConnected}
+        />
+      )}
+
+      {/* 语音交互入口 - 浮动麦克风按钮 */}
+      {isLoggedIn && user?.role !== 'family' && (
+        <FloatingMicButton
+          onTranscript={(text) => {
+            // 语音指令解析
+            const cmd = text.trim().toLowerCase();
+            const commands = [
+              { keywords: ['首页', '主页', '回家', '回到首页'], tab: 'home', label: '首页' },
+              { keywords: ['识别', '拍照', '扫描', '上传', '识别药品'], tab: 'upload', label: '识别药品' },
+              { keywords: ['说明', '用药说明', '说明书', '药品说明'], tab: 'explanation', label: '用药说明' },
+              { keywords: ['冲突', '冲突检测', '药物冲突', '检测冲突'], tab: 'conflict', label: '冲突检测' },
+              { keywords: ['日历', '用药日历', '日程', '计划'], tab: 'calendar', label: '用药日历' },
+              { keywords: ['药箱', '管理', '我的药箱', '药品管理', '药箱管理'], tab: 'drugs', label: '药箱管理' },
+              { keywords: ['紧急', '急救', '求助', '救命', '紧急助手'], tab: 'emergency', label: '紧急助手' },
+            ];
+            const match = commands.find(c => c.keywords.some(k => cmd.includes(k)));
+            if (match) {
+              setActiveTab(match.tab);
+              showToast(`已跳转到：${match.label}`, 'success');
+            } else {
+              showToast(`未识别指令："${text}"，请尝试说：冲突检测、紧急助手、识别药品等`, 'info');
+            }
+          }}
+        />
       )}
 
       {showProfileModal && (
@@ -4133,6 +6113,12 @@ function App() {
         />
       )}
 
+      {showMyGuardians && (
+        <MyGuardiansModal
+          onClose={() => setShowMyGuardians(false)}
+        />
+      )}
+
       {showAddDrugModal && (
         <AddDrugModal
           onClose={() => setShowAddDrugModal(false)}
@@ -4150,6 +6136,512 @@ function App() {
         />
       )}
 
+      {/* 批量识别药品确认弹窗 - 逐个确认 */}
+      {showBatchConfirmModal && recognizedDrugs.length > 0 && batchDrugIndex < recognizedDrugs.length && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px',
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div 
+            ref={batchConfirmModalRef}
+            style={{
+            background: 'white',
+            borderRadius: '32px',
+            padding: '48px',
+            width: '100%',
+            maxWidth: '600px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+            position: 'relative'
+          }}>
+            {/* 关闭按钮 */}
+            <button
+              style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                border: 'none',
+                background: '#F5F5F5',
+                fontSize: '24px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.3s ease'
+              }}
+              onClick={() => {
+                setShowBatchConfirmModal(false);
+                setBatchConfirmedDrugs([]);
+                setBatchDrugIndex(0);
+              }}
+              onMouseEnter={(e) => e.target.style.background = '#E0E0E0'}
+              onMouseLeave={(e) => e.target.style.background = '#F5F5F5'}
+            >
+              ✕
+            </button>
+
+            {/* 进度提示 */}
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{
+                display: 'inline-block',
+                padding: '8px 20px',
+                background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
+                color: 'white',
+                borderRadius: '20px',
+                fontSize: '16px',
+                fontWeight: 'bold'
+              }}>
+                {(() => {
+                  // 计算当前步骤：找到当前药品在选中列表中的位置
+                  const selectedDrugIds = Array.from(batchSelectedForAdd);
+                  const currentIndexInSelected = selectedDrugIds.indexOf(recognizedDrugs[batchDrugIndex]?.id);
+                  const currentStep = currentIndexInSelected >= 0 ? currentIndexInSelected + 1 : batchDrugIndex + 1;
+                  const totalSteps = selectedDrugIds.length;
+                  return `步骤 ${currentStep} / ${totalSteps}`;
+                })()}
+              </div>
+            </div>
+
+            {/* 标题 */}
+            <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+              <div style={{ fontSize: '64px', marginBottom: '16px' }}>💊</div>
+              <h2 style={{
+                fontSize: '32px',
+                fontWeight: '800',
+                color: '#4A90E2',
+                marginBottom: '8px'
+              }}>
+                确认药品信息
+              </h2>
+              <p style={{ fontSize: '18px', color: '#6B6B6B' }}>
+                请完善以下药品的用药信息
+              </p>
+            </div>
+
+            {/* 当前药品信息 */}
+            <div style={{
+              padding: '24px',
+              background: 'linear-gradient(135deg, #E3F2FD 0%, #F1F8E9 100%)',
+              borderRadius: '16px',
+              border: '2px solid #4A90E2',
+              marginBottom: '32px'
+            }}>
+              <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px', color: '#3D3D3D' }}>
+                {recognizedDrugs[batchDrugIndex].name}
+              </h3>
+              <p style={{ fontSize: '16px', color: '#6B6B6B', marginBottom: '8px' }}>
+                <strong>规格：</strong>{recognizedDrugs[batchDrugIndex].spec || '未指定'}
+              </p>
+              <p style={{ fontSize: '16px', color: '#6B6B6B' }}>
+                <strong>匹配度：</strong><span style={{ color: '#4CAF50', fontWeight: 'bold' }}>{recognizedDrugs[batchDrugIndex].matchScore}%</span>
+              </p>
+            </div>
+
+            {/* 表单 - 使用key强制重新渲染 */}
+            <form 
+              key={`drug-form-${recognizedDrugs[batchDrugIndex]?.id || batchDrugIndex}`}
+              onSubmit={(e) => {
+              e.preventDefault();
+              
+              // 获取表单数据
+              const formData = new FormData(e.target);
+              const dosageAmount = formData.get('dosageAmount') || '1';
+              const dosageUnit = formData.get('dosageUnit') || '片';
+              const frequency = formData.get('frequency');
+              const startDate = formData.get('startDate');
+              const endDate = formData.get('endDate');
+              const expiryDate = formData.get('expiryDate');
+              const totalQuantity = formData.get('totalQuantity') || '30';
+              
+              // 验证必填项
+              if (!frequency || !startDate || !endDate || !expiryDate) {
+                showToast('请填写所有必填项', 'warning');
+                return;
+              }
+              
+              // 保存当前药品信息
+              const confirmedDrug = {
+                drugId: recognizedDrugs[batchDrugIndex].id,
+                name: recognizedDrugs[batchDrugIndex].name,
+                spec: recognizedDrugs[batchDrugIndex].spec,
+                dosage: `${dosageAmount}${dosageUnit}`,
+                frequency: frequency,
+                startDate: startDate,
+                endDate: endDate,
+                expiryDate: expiryDate,
+                totalQuantity: parseFloat(totalQuantity),
+                status: 'active'
+              };
+              
+              
+              // 检查是否是最后一个选中的药品
+              const selectedDrugIds = Array.from(batchSelectedForAdd);
+              
+              const currentIndex = selectedDrugIds.indexOf(recognizedDrugs[batchDrugIndex].id);
+              
+              const isLastDrug = currentIndex >= selectedDrugIds.length - 1;
+              
+              if (!isLastDrug) {
+                // 不是最后一个，添加到列表并切换到下一个
+                setBatchConfirmedDrugs(prev => [...prev, confirmedDrug]);
+                
+                // 找到下一个选中药品的索引
+                const nextDrugId = selectedDrugIds[currentIndex + 1];
+                const nextIndex = recognizedDrugs.findIndex(d => d.id === nextDrugId);
+                setBatchDrugIndex(nextIndex);
+                // 延迟滚动到顶部，确保DOM已更新
+                setTimeout(() => {
+                  if (batchConfirmModalRef.current) {
+                    batchConfirmModalRef.current.scrollTop = 0;
+                  }
+                }, 100);
+              } else {
+                // 是最后一个药品，将所有药品一起添加
+                
+                // 重要：直接构建完整的药品列表，不依赖异步状态
+                const finalDrugList = [...batchConfirmedDrugs, confirmedDrug];
+                
+                // 关闭弹窗
+                setShowBatchConfirmModal(false);
+                
+                // 清空临时状态
+                setBatchConfirmedDrugs([]);
+                setBatchDrugIndex(0);
+                
+                // 使用 setTimeout 确保弹窗关闭后再执行批量添加
+                setTimeout(() => {
+                  // 直接传递完整的药品列表给批量添加函数
+                  handleBatchAddAllDrugsWithList(finalDrugList);
+                }, 100);
+              }
+            }}>
+              {/* 每次用量 */}
+              <div style={{ marginBottom: '28px' }}>
+                <label style={{
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  marginBottom: '12px',
+                  display: 'block',
+                  color: '#3D3D3D'
+                }}>
+                  💉 每次用量 <span style={{ color: '#E74C3C' }}>*</span>
+                </label>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    name="dosageAmount"
+                    defaultValue="1"
+                    placeholder="输入剂量"
+                    style={{
+                      flex: 1,
+                      padding: '20px 24px',
+                      fontSize: '20px',
+                      border: '3px solid #F0EBE3',
+                      borderRadius: '20px',
+                      outline: 'none',
+                      background: '#FAF7F2',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                  <select
+                    name="dosageUnit"
+                    defaultValue="片"
+                    style={{
+                      flex: 1,
+                      padding: '20px 24px',
+                      fontSize: '20px',
+                      border: '3px solid #F0EBE3',
+                      borderRadius: '20px',
+                      outline: 'none',
+                      background: '#FAF7F2',
+                      fontFamily: 'inherit',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {/* 固体剂型 */}
+                    <option value="片">片</option>
+                    <option value="粒">粒</option>
+                    <option value="丸">丸</option>
+                    <option value="颗">颗</option>
+                    <option value="胶囊">胶囊</option>
+                    <option value="锭">锭</option>
+                    
+                    {/* 包装单位 */}
+                    <option value="瓶">瓶</option>
+                    <option value="支">支</option>
+                    <option value="盒">盒</option>
+                    <option value="袋">袋</option>
+                    
+                    {/* 液体剂型 */}
+                    <option value="ml">ml</option>
+                    <option value="L">L</option>
+                    <option value="滴">滴</option>
+                    <option value="喷">喷</option>
+                    <option value="口服液">口服液</option>
+                    <option value="糖浆">糖浆</option>
+                    <option value="溶液">溶液</option>
+                    <option value="混悬液">混悬液</option>
+                    <option value="乳剂">乳剂</option>
+                    
+                    {/* 外用剂型 */}
+                    <option value="贴">贴</option>
+                    <option value="膏">膏</option>
+                    <option value="霜">霜</option>
+                    <option value="软膏">软膏</option>
+                    <option value="凝胶">凝胶</option>
+                    <option value="栓">栓</option>
+                    <option value="洗剂">洗剂</option>
+                    <option value="搽剂">搽剂</option>
+                    
+                    {/* 注射剂型 */}
+                    <option value="针">针</option>
+                    <option value="安瓿">安</option>
+                    <option value="粉针">粉针</option>
+                    <option value="水针">水针</option>
+                    
+                    {/* 重量单位 */}
+                    <option value="g">g</option>
+                    <option value="mg">mg</option>
+                    <option value="μg">μg</option>
+                    <option value="ng">ng</option>
+                    <option value="kg">kg</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 用药频率 */}
+              <div style={{ marginBottom: '28px' }}>
+                <label style={{
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  marginBottom: '12px',
+                  display: 'block',
+                  color: '#3D3D3D'
+                }}>
+                   用药频率 <span style={{ color: '#E74C3C' }}>*</span>
+                </label>
+                <select
+                  name="frequency"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '20px 24px',
+                    fontSize: '20px',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    outline: 'none',
+                    background: 'white',
+                    fontFamily: 'inherit',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="">-- 请选择用药频率 --</option>
+                  <option value="每日一次">每日一次</option>
+                  <option value="每日两次">每日两次</option>
+                  <option value="每日三次">每日三次</option>
+                  <option value="每日四次">每日四次</option>
+                  <option value="隔日一次">隔日一次</option>
+                  <option value="每周一次">每周一次</option>
+                  <option value="必要时服用">必要时服用</option>
+                  <option value="睡前服用">睡前服用</option>
+                  <option value="饭前服用">饭前服用</option>
+                  <option value="饭后服用">饭后服用</option>
+                </select>
+              </div>
+
+              {/* 开始服药日期 */}
+              <div style={{ marginBottom: '28px' }}>
+                <label style={{
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  marginBottom: '12px',
+                  display: 'block',
+                  color: '#3D3D3D'
+                }}>
+                   开始服药日期 <span style={{ color: '#E74C3C' }}>*</span>
+                </label>
+                <input
+                  type="date"
+                  name="startDate"
+                  required
+                  defaultValue={new Date().toISOString().split('T')[0]}
+                  style={{
+                    width: '100%',
+                    padding: '20px 24px',
+                    fontSize: '20px',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    outline: 'none',
+                    background: '#FAF7F2',
+                    fontFamily: 'inherit'
+                  }}
+                />
+              </div>
+
+              {/* 结束服药日期 */}
+              <div style={{ marginBottom: '28px' }}>
+                <label style={{
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  marginBottom: '12px',
+                  display: 'block',
+                  color: '#3D3D3D'
+                }}>
+                  📅 结束服药日期 <span style={{ color: '#E74C3C' }}>*</span>
+                </label>
+                <input
+                  type="date"
+                  name="endDate"
+                  required
+                  defaultValue={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                  style={{
+                    width: '100%',
+                    padding: '20px 24px',
+                    fontSize: '20px',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    outline: 'none',
+                    background: '#FAF7F2',
+                    fontFamily: 'inherit'
+                  }}
+                />
+              </div>
+
+              {/* 有效期 */}
+              <div style={{ marginBottom: '28px' }}>
+                <label style={{
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  marginBottom: '12px',
+                  display: 'block',
+                  color: '#3D3D3D'
+                }}>
+                  📅 有效期 <span style={{ color: '#E74C3C' }}>*</span>
+                </label>
+                <input
+                  type="date"
+                  name="expiryDate"
+                  required
+                  defaultValue={new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                  style={{
+                    width: '100%',
+                    padding: '20px 24px',
+                    fontSize: '20px',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    outline: 'none',
+                    background: '#FAF7F2',
+                    fontFamily: 'inherit'
+                  }}
+                />
+              </div>
+
+              {/* 总数量 */}
+              <div style={{ marginBottom: '36px' }}>
+                <label style={{
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  marginBottom: '12px',
+                  display: 'block',
+                  color: '#3D3D3D'
+                }}>
+                  🔢 总数量 <span style={{ color: '#E74C3C' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  name="totalQuantity"
+                  defaultValue="30"
+                  min="1"
+                  step="0.1"
+                  style={{
+                    width: '100%',
+                    padding: '20px 24px',
+                    fontSize: '20px',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    outline: 'none',
+                    background: '#FAF7F2',
+                    fontFamily: 'inherit',
+                    // 完全隐藏并禁用数字输入框的滚动调整条
+                    MozAppearance: 'textfield',
+                    WebkitAppearance: 'none',
+                    appearance: 'none'
+                  }}
+                />
+              </div>
+
+              {/* 按钮组 */}
+              <div style={{
+                display: 'flex',
+                gap: '20px',
+                justifyContent: 'center'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBatchConfirmModal(false);
+                    setBatchConfirmedDrugs([]);
+                    setBatchDrugIndex(0);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '24px 40px',
+                    fontSize: '22px',
+                    fontWeight: '700',
+                    border: '3px solid #F0EBE3',
+                    borderRadius: '20px',
+                    background: 'white',
+                    color: '#6B6B6B',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    flex: 1,
+                    padding: '24px 40px',
+                    fontSize: '22px',
+                    fontWeight: '700',
+                    border: 'none',
+                    borderRadius: '20px',
+                    background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
+                    color: 'white',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 8px 24px rgba(74, 144, 226, 0.3)'
+                  }}
+                >
+                  {(() => {
+                    // 计算当前药品在选中列表中的位置
+                    const selectedDrugIds = Array.from(batchSelectedForAdd);
+                    const currentIndexInSelected = selectedDrugIds.indexOf(recognizedDrugs[batchDrugIndex]?.id);
+                    const isLastDrug = currentIndexInSelected >= selectedDrugIds.length - 1;
+                    return isLastDrug ? '✅ 全部添加' : '✅ 下一步';
+                  })()}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* 冲突报告卡片弹窗 - 放在顶层确保居中显示 */}
       {showConflictReport && conflictReport && (
         <div className="modal-overlay" onClick={() => setShowConflictReport(false)}>
@@ -4161,7 +6653,7 @@ function App() {
             <div className="modal-body">
               <div style={{ marginBottom: '20px' }}>
                 <p style={{ fontSize: '14px', color: '#666' }}>
-                  检测时间: {new Date(conflictReport.checkTime).toLocaleString('zh-CN')}
+                  检测时间: {formatDateTime(conflictReport.checkTime)}
                 </p>
                 <p style={{ fontSize: '14px', color: '#666' }}>
                   检测药品数: {conflictReport.drugsChecked?.length || 0} 种
@@ -4525,6 +7017,353 @@ function App() {
         </div>
       )}
 
+      {/* 添加药品时发现过期的弹窗 */}
+      {showExpiredDrugModal && expiredDrugInfo && (
+        <div className="modal-overlay" onClick={handleCloseExpiredDrugModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '450px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ color: '#ef4444' }}>️ 药品过期提示</h3>
+              <button className="modal-close-btn" onClick={handleCloseExpiredDrugModal}>✕</button>
+            </div>
+            <div className="modal-body" style={{ textAlign: 'center', padding: '30px 20px' }}>
+              <div style={{ 
+                fontSize: '64px', 
+                marginBottom: '20px',
+                lineHeight: '1'
+              }}>
+                🗑️
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <p style={{ 
+                  fontSize: '18px', 
+                  fontWeight: '600', 
+                  color: '#1f2937',
+                  marginBottom: '12px'
+                }}>
+                  药品添加失败
+                </p>
+                <p style={{ 
+                  fontSize: '15px', 
+                  color: '#6b7280',
+                  lineHeight: '1.6'
+                }}>
+                  您添加的 <span style={{ fontWeight: '600', color: '#ef4444' }}>{expiredDrugInfo.drugName}</span> 已过期
+                </p>
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#9ca3af',
+                  marginTop: '8px'
+                }}>
+                  有效期：{expiredDrugInfo.expiryDate}
+                </p>
+              </div>
+              <div style={{ 
+                background: '#fef2f2', 
+                borderLeft: '4px solid #ef4444',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                marginBottom: '20px'
+              }}>
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#991b1b',
+                  margin: 0
+                }}>
+                  该药品已自动删除，请勿使用过期药品
+                </p>
+              </div>
+              <button 
+                className="btn btn-large" 
+                onClick={handleCloseExpiredDrugModal}
+                style={{ 
+                  width: '100%',
+                  background: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '14px 20px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#dc2626';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#ef4444';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.3)';
+                }}
+              >
+                我知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 已过期且未丢弃药品弹窗 */}
+      {showTodayExpiredModal && todayExpiredDrugs.length > 0 && (
+        <div className="modal-overlay" onClick={handleCloseTodayExpiredModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ color: '#ef4444' }}>⚠️ 药品过期提醒</h3>
+              <button className="modal-close-btn" onClick={handleCloseTodayExpiredModal}>✕</button>
+            </div>
+            <div className="modal-body" style={{ padding: '24px 20px' }}>
+              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                <div style={{ 
+                  fontSize: '64px', 
+                  marginBottom: '16px',
+                  lineHeight: '1'
+                }}>
+                  🗑️
+                </div>
+                <p style={{ 
+                  fontSize: '17px', 
+                  fontWeight: '600', 
+                  color: '#1f2937',
+                  marginBottom: '8px'
+                }}>
+                  检测到 {todayExpiredDrugs.length} 个药品已过期
+                </p>
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#6b7280'
+                }}>
+                  这些药品仍在药箱中显示，请及时处理
+                </p>
+              </div>
+              
+              {/* 过期药品列表 */}
+              <div style={{ 
+                background: '#fef2f2', 
+                borderRadius: '12px',
+                padding: '16px',
+                marginBottom: '20px',
+                maxHeight: '300px',
+                overflowY: 'auto'
+              }}>
+                <p style={{ 
+                  fontSize: '14px', 
+                  fontWeight: '600',
+                  color: '#991b1b',
+                  marginBottom: '12px'
+                }}>
+                  📋 过期药品清单：
+                </p>
+                {todayExpiredDrugs.map((drug, index) => (
+                  <div key={drug.boxItemId || index} style={{
+                    padding: '10px 12px',
+                    marginBottom: index < todayExpiredDrugs.length - 1 ? '8px' : '0',
+                    background: 'white',
+                    borderRadius: '8px',
+                    borderLeft: '4px solid #ef4444'
+                  }}>
+                    <p style={{ 
+                      fontSize: '15px', 
+                      fontWeight: '600', 
+                      color: '#1f2937',
+                      margin: '0 0 4px 0'
+                    }}>
+                      💊 {drug.drugName || drug.name || '未知药品'}
+                    </p>
+                    <p style={{ 
+                      fontSize: '13px', 
+                      color: '#9ca3af',
+                      margin: 0
+                    }}>
+                      有效期至：{drug.expiryDate}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              
+              <div style={{ 
+                background: '#fffbeb', 
+                borderLeft: '4px solid #f59e0b',
+                padding: '12px 16px',
+                borderRadius: '8px'
+              }}>
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#92400e',
+                  margin: 0,
+                  lineHeight: '1.6'
+                }}>
+                  💡 温馨提示：<br/>
+                  过期药品可能失效或产生有害物质，请勿继续使用。<br/>
+                  您可以在药箱中找到这些药品，点击“我已丢弃”按钮进行清理。
+                </p>
+              </div>
+              
+              <button 
+                className="btn btn-large" 
+                onClick={handleCloseTodayExpiredModal}
+                style={{ 
+                  width: '100%',
+                  marginTop: '20px',
+                  background: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '14px 20px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#dc2626';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#ef4444';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.3)';
+                }}
+              >
+                我知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 缺药预警详情弹窗 */}
+      {showShortageDetail && shortageWarnings.length > 0 && (
+        <div className="modal-overlay" onClick={() => setShowShortageDetail(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ color: '#e67e22' }}>⚠️ 缺药预警</h3>
+              <button className="modal-close-btn" onClick={() => setShowShortageDetail(false)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ padding: '20px' }}>
+              <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                <div style={{ fontSize: '40px', marginBottom: '8px' }}>
+                  {shortageWarnings.some(w => w.warningLevel === 'critical') ? '🚨' : '⚠️'}
+                </div>
+                <p style={{ fontSize: '16px', color: '#333', fontWeight: '600' }}>
+                  您有 <span style={{ color: '#e74c3c', fontSize: '20px' }}>{shortageWarnings.length}</span> 种药品即将用尽
+                </p>
+                <p style={{ fontSize: '13px', color: '#888', marginTop: '4px' }}>
+                  建议尽快补充，避免断药影响治疗
+                </p>
+              </div>
+
+              {/* 预警药品列表 */}
+              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                {shortageWarnings.map((warning, index) => (
+                  <div
+                    key={warning.boxItemId || index}
+                    style={{
+                      background: warning.warningLevel === 'critical'
+                        ? 'linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%)'
+                        : warning.warningLevel === 'urgent'
+                          ? 'linear-gradient(135deg, #fff8f0 0%, #ffe8cc 100%)'
+                          : 'linear-gradient(135deg, #fffff0 0%, #fff8dc 100%)',
+                      borderRadius: '10px',
+                      padding: '12px 14px',
+                      marginBottom: '10px',
+                      borderLeft: `4px solid ${
+                        warning.warningLevel === 'critical' ? '#e74c3c'
+                          : warning.warningLevel === 'urgent' ? '#e67e22' : '#f39c12'
+                      }`
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <span style={{ fontWeight: '600', fontSize: '15px', color: '#333' }}>
+                          {warning.drugName}
+                        </span>
+                        {warning.specification && (
+                          <span style={{ fontSize: '12px', color: '#999', marginLeft: '6px' }}>
+                            {warning.specification}
+                          </span>
+                        )}
+                      </div>
+                      <span style={{
+                        fontSize: '12px',
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        fontWeight: '600',
+                        color: 'white',
+                        background: warning.warningLevel === 'critical' ? '#e74c3c'
+                          : warning.warningLevel === 'urgent' ? '#e67e22' : '#f39c12'
+                      }}>
+                        {warning.warningLevelDesc}
+                      </span>
+                    </div>
+                    <div style={{ marginTop: '6px', fontSize: '13px', color: '#666', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                      <span>用量：{warning.dosage}</span>
+                      <span>频率：{warning.frequency}</span>
+                      <span>剩余：{warning.remainingQuantity ?? 0}份</span>
+                    </div>
+                    <div style={{ marginTop: '4px', fontSize: '14px', fontWeight: '600',
+                      color: warning.remainingDays <= 0 ? '#e74c3c' : '#e67e22'
+                    }}>
+                      {warning.remainingDays <= 0
+                        ? '药品已用尽，请立即补充'
+                        : `预计还可服用${warning.remainingDays}天`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 快捷操作按钮 */}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                <button
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    fontSize: '15px',
+                    fontWeight: '600',
+                    background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => {
+                    setShowShortageDetail(false);
+                    setActiveTab('drugs');
+                  }}
+                >
+                  🏪 去购药
+                </button>
+                <button
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    fontSize: '15px',
+                    fontWeight: '600',
+                    background: 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => {
+                    setShowShortageDetail(false);
+                    setActiveTab('emergency');
+                  }}
+                >
+                  🏥 在线问诊
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 药品详情弹窗 */}
       {showDrugDetailModal && selectedDrug && (
         <div className="modal-overlay" onClick={handleCloseDrugDetail}>
@@ -4591,13 +7430,90 @@ function App() {
               </div>
             </div>
 
-            <div className="modal-footer">
-              <button className="btn btn-secondary btn-large" onClick={() => handleEditDrug(selectedDrug)}>
-                ✏️ 修改
-              </button>
-              <button className="btn btn-danger btn-large" onClick={() => handleDeleteDrug(selectedDrug)}>
-                 删除
-              </button>
+            <div className="modal-footer" style={{
+              display: 'flex',
+              gap: '12px',
+              justifyContent: 'center',
+              padding: '20px 0 24px 0',
+              borderTop: '1px solid #e5e7eb',
+              marginTop: '20px'
+            }}>
+              {(() => {
+                // 判断药品是否已过期
+                if (!selectedDrug.expiryDate) return null;
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const expiryDate = new Date(selectedDrug.expiryDate);
+                expiryDate.setHours(0, 0, 0, 0);
+                const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+                const isExpired = daysUntilExpiry < 0;
+                            
+                // 已过期药品不显示修改和删除按钮
+                if (isExpired) return null;
+                            
+                return (
+                  <>
+                    <button 
+                      className="btn btn-large" 
+                      onClick={() => handleEditDrug(selectedDrug)}
+                      style={{ 
+                        flex: '1 1 0',
+                        background: '#f59e0b',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '14px 20px',
+                        fontSize: '15px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#d97706';
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.4)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#f59e0b';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(245, 158, 11, 0.3)';
+                      }}
+                    >
+                      ️ 修改
+                    </button>
+                    <button 
+                      className="btn btn-large" 
+                      onClick={() => handleDeleteDrug(selectedDrug)}
+                      style={{ 
+                        flex: '1 1 0',
+                        background: '#ef4444',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '14px 20px',
+                        fontSize: '15px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#dc2626';
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.4)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#ef4444';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.3)';
+                      }}
+                    >
+                      🗑️ 删除
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -4665,7 +7581,7 @@ function App() {
           {/* 基本信息 */}
           <div style={{ marginBottom: '24px' }}>
             <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '6px' }}>
-              检测时间: {new Date(conflictReport.checkTime).toLocaleString('zh-CN')}
+              检测时间: {formatDateTime(conflictReport.checkTime)}
             </p>
             <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '0' }}>
               检测药品数: {conflictReport.drugsChecked?.length || 0} 种

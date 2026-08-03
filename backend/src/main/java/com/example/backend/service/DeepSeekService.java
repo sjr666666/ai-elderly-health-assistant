@@ -6,6 +6,7 @@ import com.example.backend.model.dto.DrugDetailResponse;
 import com.example.backend.model.dto.DrugSearchResponse;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * DeepSeek AI服务接口
@@ -72,4 +73,34 @@ public interface DeepSeekService {
      * @return 药品搜索结果列表
      */
     List<DrugSearchResponse> searchMultipleDrugsWithAI(String keyword);
+
+    /**
+     * 使用DeepSeek AI判断药品是处方药还是非处方药
+     *
+     * @param drugName 药品名称
+     * @return "处方药" 或 "非处方药"，判断失败返回null
+     */
+    String classifyDrugCategory(String drugName);
+
+    /**
+     * 使用DeepSeek AI生成每日慢病科普文章
+     * 基于用户慢性病史和基本信息，生成通俗易懂的健康科普内容
+     *
+     * @param diseaseName 慢病名称（如"高血压"）
+     * @param age 用户年龄（可选）
+     * @param gender 用户性别（可选）
+     * @return Map包含 "title" 和 "content" 两个key，生成失败返回null
+     */
+    java.util.Map<String, String> generateDiseaseScienceLesson(String diseaseName, Integer age, String gender);
+
+    /**
+     * 使用DeepSeek AI回答用户关于药品的追问
+     * 基于药品信息和已有对话上下文，回答用户的后续问题
+     *
+     * @param drugDetail   药品详细信息
+     * @param question     用户的追问
+     * @param conversationHistory 已有的对话历史（角色: content 格式）
+     * @return AI回答文本，失败返回null
+     */
+    String answerFollowUpQuestion(DrugDetailResponse drugDetail, String question, List<Map<String, String>> conversationHistory);
 }

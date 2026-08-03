@@ -1,17 +1,21 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.common.BusinessException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.backend.common.util.SnowflakeIdGenerator;
 import com.example.backend.mapper.DrugBaseMapper;
 import com.example.backend.mapper.OcrRecordMapper;
+import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.dto.BatchRecognizeResponse;
 import com.example.backend.model.dto.OcrResultResponse;
 import com.example.backend.model.dto.OcrUploadResponse;
 import com.example.backend.model.entity.DrugBase;
 import com.example.backend.model.entity.OcrRecord;
+import com.example.backend.model.entity.SysUser;
 import com.example.backend.service.DrugRecognitionService;
 import com.example.backend.service.OcrAsyncService;
 import com.example.backend.service.OcrService;
+import com.example.backend.service.RedisOcrTaskQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,9 +47,11 @@ public class OcrServiceImpl implements OcrService {
 
     private final OcrRecordMapper ocrRecordMapper;
     private final DrugBaseMapper drugBaseMapper;
+    private final UserMapper userMapper;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final OcrAsyncService ocrAsyncService;
     private final DrugRecognitionService drugRecognitionService;
+    private final RedisOcrTaskQueue ocrTaskQueue;
 
     @Value("${upload.path:./uploads}")
     private String uploadPath;
@@ -113,10 +119,12 @@ public class OcrServiceImpl implements OcrService {
     private static final class CacheEntry {
         final long createdAt;
         final BatchRecognizeResponse response;
+        final Long userId;
 
-        CacheEntry(BatchRecognizeResponse response) {
+        CacheEntry(BatchRecognizeResponse response, Long userId) {
             this.createdAt = System.currentTimeMillis();
             this.response = response;
+            this.userId = userId;
         }
 
         boolean isExpired(long now, long ttlMillis) {
@@ -128,26 +136,46 @@ public class OcrServiceImpl implements OcrService {
     public OcrServiceImpl(
             OcrRecordMapper ocrRecordMapper,
             DrugBaseMapper drugBaseMapper,
+            UserMapper userMapper,
             OcrAsyncService ocrAsyncService,
-            DrugRecognitionService drugRecognitionService) {
+            DrugRecognitionService drugRecognitionService,
+            RedisOcrTaskQueue ocrTaskQueue) {
         this.ocrRecordMapper = ocrRecordMapper;
         this.drugBaseMapper = drugBaseMapper;
+        this.userMapper = userMapper;
         this.snowflakeIdGenerator = new SnowflakeIdGenerator(1, 1);
         this.ocrAsyncService = ocrAsyncService;
         this.drugRecognitionService = drugRecognitionService;
+        this.ocrTaskQueue = ocrTaskQueue;
     }
 
     @Override
     public OcrUploadResponse uploadAndRecognize(MultipartFile file, Long userId) {
         try {
+            // 入口校验：文件类型+大小，杜绝无效请求
+            validateImageFile(file);
+
             String fileId = String.valueOf(snowflakeIdGenerator.nextId());
-            logger.info("开始处理OCR识别任务 - fileId: {}, userId: {}, fileName: {}",
+            logger.info("开始处理OCR识别任务 - fileId: {}, userId (雪花算法ID): {}, fileName: {}",
                     fileId, userId, file.getOriginalFilename());
+
+            // 根据雪花算法 user_id 查询实际的自增主键 id
+            LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
+            queryWrapper.eq(SysUser::getId, userId);
+            SysUser user = userMapper.selectOne(queryWrapper);
+
+            if (user == null) {
+                logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
+                throw new BusinessException("用户不存在");
+            }
+
+            Long actualUserId = user.getId();
+            logger.info("用户ID转换成功 - 雪花算法ID: {}, 自增主键ID: {}", userId, actualUserId);
 
             String imageUrl = saveFileLocally(file, fileId);
 
             OcrRecord ocrRecord = new OcrRecord();
-            ocrRecord.setUserId(userId);
+            ocrRecord.setUserId(actualUserId);  // 使用自增主键ID
             ocrRecord.setImageUrl(imageUrl);
             ocrRecord.setStatus(OcrRecord.Status.PENDING.getCode());
             ocrRecordMapper.insert(ocrRecord);
@@ -156,7 +184,7 @@ public class OcrServiceImpl implements OcrService {
             logger.info("OCR记录已创建 - dbRecordId: {}, imageUrl: {}", dbRecordId, imageUrl);
 
             // 调用异步服务处理OCR识别
-            ocrAsyncService.processOcrAsync(dbRecordId);
+            ocrTaskQueue.publish(dbRecordId);
             logger.info("异步OCR任务已提交 - dbRecordId: {}", dbRecordId);
 
             return OcrUploadResponse.builder()
@@ -218,12 +246,12 @@ public class OcrServiceImpl implements OcrService {
     
 
     @Override
-    public OcrResultResponse getOcrResult(String taskId) {
+    public OcrResultResponse getOcrResult(String taskId, Long userId) {
         try {
             Long recordId = Long.parseLong(taskId);
             OcrRecord ocrRecord = ocrRecordMapper.selectById(recordId);
 
-            if (ocrRecord == null) {
+            if (ocrRecord == null || !userId.equals(ocrRecord.getUserId())) {
                 return null;
             }
 
@@ -247,8 +275,21 @@ public class OcrServiceImpl implements OcrService {
     @Override
     public BatchRecognizeResponse batchUploadAndRecognize(MultipartFile[] files, Long userId) {
         String batchId = String.valueOf(snowflakeIdGenerator.nextId());
-        logger.info("开始处理批量OCR识别任务 - batchId: {}, fileCount: {}, userId: {}",
+        logger.info("开始处理批量OCR识别任务 - batchId: {}, fileCount: {}, userId (雪花算法ID): {}",
                 batchId, files.length, userId);
+
+        // 根据雪花算法 user_id 查询实际的自增主键 id
+        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(SysUser::getId, userId);
+        SysUser user = userMapper.selectOne(queryWrapper);
+
+        if (user == null) {
+            logger.error("用户不存在 - userId (雪花算法ID): {}", userId);
+            throw new BusinessException("用户不存在");
+        }
+
+        Long actualUserId = user.getId();
+        logger.info("用户ID转换成功 - 雪花算法ID: {}, 自增主键ID: {}", userId, actualUserId);
 
         BatchRecognizeResponse response = new BatchRecognizeResponse();
         response.setBatchId(batchId);
@@ -263,6 +304,9 @@ public class OcrServiceImpl implements OcrService {
             BatchRecognizeResponse.RecognizeItem item = new BatchRecognizeResponse.RecognizeItem();
 
             try {
+                // 入口校验：文件类型+大小
+                validateImageFile(file);
+
                 String fileId = String.valueOf(snowflakeIdGenerator.nextId());
                 String imageUrl = saveFileLocally(file, fileId);
                 item.setImageId(fileId);
@@ -270,14 +314,14 @@ public class OcrServiceImpl implements OcrService {
 
                 // 创建OCR记录
                 OcrRecord ocrRecord = new OcrRecord();
-                ocrRecord.setUserId(userId);
+                ocrRecord.setUserId(actualUserId);  // 使用自增主键ID
                 ocrRecord.setImageUrl(imageUrl);
                 ocrRecord.setStatus(OcrRecord.Status.PENDING.getCode());
                 ocrRecordMapper.insert(ocrRecord);
                 Long recordId = ocrRecord.getId();
 
                 // 调用异步OCR处理（会直接执行完成）
-                ocrAsyncService.processOcrAsync(recordId);
+                ocrTaskQueue.publish(recordId);
 
                 // 等待异步处理完成并获取结果
                 OcrRecord processedRecord = waitForProcessingResult(recordId);
@@ -308,14 +352,14 @@ public class OcrServiceImpl implements OcrService {
                     }
                 } else {
                     failedCount.incrementAndGet();
-                    item.setStatus("failed");
+                    item.setStatus(OcrRecord.Status.FAILED.getCode());
                     item.setMessage("处理超时");
                 }
 
             } catch (Exception e) {
                 logger.error("批量图片处理失败", e);
                 failedCount.incrementAndGet();
-                item.setStatus("failed");
+                item.setStatus(OcrRecord.Status.FAILED.getCode());
                 item.setMessage("处理失败: " + e.getMessage());
             }
 
@@ -327,7 +371,7 @@ public class OcrServiceImpl implements OcrService {
         response.setFailedCount(failedCount.get());
 
         // 缓存结果供后续查询
-        batchResultCache.put(batchId, new CacheEntry(response));
+        batchResultCache.put(batchId, new CacheEntry(response, actualUserId));
 
         logger.info("批量OCR识别完成 - batchId: {}, 成功: {}, 失败: {}",
                 batchId, successCount.get(), failedCount.get());
@@ -356,9 +400,9 @@ public class OcrServiceImpl implements OcrService {
     }
 
     @Override
-    public BatchRecognizeResponse getBatchResult(String batchId) {
+    public BatchRecognizeResponse getBatchResult(String batchId, Long userId) {
         CacheEntry entry = batchResultCache.get(batchId);
-        if (entry == null) {
+        if (entry == null || !userId.equals(entry.userId)) {
             return null;
         }
         if (entry.isExpired(System.currentTimeMillis(), batchCacheTtlMillis)) {
@@ -366,5 +410,46 @@ public class OcrServiceImpl implements OcrService {
             return null;
         }
         return entry.response;
+    }
+
+    /**
+     * 校验上传的图片文件：大小、扩展名、内容类型。
+     * 不符合则抛 IllegalArgumentException，由上层统一捕获转成 400 响应。
+     */
+    private void validateImageFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("上传文件为空，请选择图片后再上传");
+        }
+        long maxSize = 10L * 1024 * 1024; // 10MB
+        if (file.getSize() > maxSize) {
+            throw new IllegalArgumentException("图片大小不能超过 10MB，当前文件：" + (file.getSize() / 1024) + "KB");
+        }
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename != null) {
+            String lower = originalFilename.toLowerCase();
+            if (!(lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")
+                    || lower.endsWith(".bmp") || lower.endsWith(".webp"))) {
+                throw new IllegalArgumentException("图片格式不支持，请使用 JPG/PNG/BMP/WEBP 格式");
+            }
+        }
+        String contentType = file.getContentType();
+        if (contentType != null && !contentType.startsWith("image/")) {
+            throw new IllegalArgumentException("请上传图片文件（当前文件类型：" + contentType + "）");
+        }
+        try (var input = file.getInputStream()) {
+            byte[] header = input.readNBytes(12);
+            boolean jpeg = header.length >= 3 && (header[0] & 0xff) == 0xff
+                    && (header[1] & 0xff) == 0xd8 && (header[2] & 0xff) == 0xff;
+            boolean png = header.length >= 8 && (header[0] & 0xff) == 0x89
+                    && header[1] == 0x50 && header[2] == 0x4e && header[3] == 0x47;
+            boolean webp = header.length >= 12 && header[0] == 'R' && header[1] == 'I'
+                    && header[2] == 'F' && header[3] == 'F' && header[8] == 'W'
+                    && header[9] == 'E' && header[10] == 'B' && header[11] == 'P';
+            if (!jpeg && !png && !webp) {
+                throw new IllegalArgumentException("文件内容不是受支持的图片格式");
+            }
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("无法读取上传文件");
+        }
     }
 }

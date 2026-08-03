@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useToast } from './Toast';
 
 /**
@@ -65,7 +65,7 @@ function AddToPlanModal({ drug, onClose, onSubmit }) {
   };
 
   // 根据频率自动推荐时间段
-  const getRecommendedSlots = () => {
+  const getRecommendedSlots = useCallback(() => {
     if (!drug.frequency) return [];
     
     const freq = drug.frequency.toLowerCase();
@@ -87,7 +87,7 @@ function AddToPlanModal({ drug, onClose, onSubmit }) {
     }
     
     return [];
-  };
+  }, [drug.frequency]);
 
   // 初始化推荐选择
   useEffect(() => {
@@ -95,7 +95,7 @@ function AddToPlanModal({ drug, onClose, onSubmit }) {
     if (recommendedSlots.length > 0) {
       setSelectedTimeSlots(recommendedSlots);
     }
-  }, []);
+  }, [getRecommendedSlots]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>

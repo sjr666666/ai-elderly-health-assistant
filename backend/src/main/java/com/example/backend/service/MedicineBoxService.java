@@ -2,6 +2,7 @@ package com.example.backend.service;
 
 import com.example.backend.model.dto.AddMedicineRequest;
 import com.example.backend.model.dto.MedicineBoxResponse;
+import com.example.backend.model.dto.MedicineShortageWarningDTO;
 import com.example.backend.model.dto.UpdateMedicineRequest;
 
 import java.util.List;
@@ -54,4 +55,22 @@ public interface MedicineBoxService {
      * @param boxId  药箱条目ID
      */
     void deleteMedicineBoxEntry(Long userId, Long boxId);
+
+    /**
+     * 获取今日新过期的药品列表
+     *
+     * @param userId 用户ID
+     * @return 今日新过期的药品列表（status=stopped 且 expiryDate <= 今天）
+     */
+    List<MedicineBoxResponse> getTodayExpiredMedicines(Long userId);
+
+    /**
+     * 获取缺药预警列表
+     * 基于服用频率、每次剂量和剩余药量计算剩余天数，
+     * 返回剩余天数小于7天的活跃药品预警
+     *
+     * @param userId 用户ID（雪花算法ID）
+     * @return 缺药预警列表，按剩余天数升序排列
+     */
+    List<MedicineShortageWarningDTO> getShortageWarnings(Long userId);
 }

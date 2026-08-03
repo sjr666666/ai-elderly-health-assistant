@@ -1,63 +1,64 @@
 package com.example.backend.common;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.bind.annotation.ResponseStatus;
 
-import java.util.HashMap;
-import java.util.Map;
+import javax.validation.ConstraintViolationException;
+import java.util.stream.Collectors;
 
+/** Keeps internal exception details out of public API responses. */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
-
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ResponseResult<Void>> handleBusinessException(BusinessException e) {
-        logger.error("业务异常: {}", e.getMessage());
-        return ResponseEntity.ok(ResponseResult.fail(e.getCode(), e.getMessage()));
+    public ResponseEntity<ResponseResult<Void>> handleBusiness(BusinessException exception) {
+        return ResponseEntity.status(toHttpStatus(exception.getCode()))
+                .body(ResponseResult.fail(exception.getCode(), exception.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ResponseResult<Map<String, String>>> handleValidationException(MethodArgumentNotValidException e) {
-        Map<String, String> errors = new HashMap<>();
-        e.getBindingResult().getAllErrors().forEach(error -> {
-            String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
-        });
-        logger.error("参数校验失败: {}", errors);
+    public ResponseEntity<ResponseResult<Void>> handleValidation(MethodArgumentNotValidException exception) {
+        String message = exception.getBindingResult().getFieldErrors().stream()
+                .map(this::formatFieldError)
+                .collect(Collectors.joining(", "));
         return ResponseEntity.badRequest()
-                .body(ResponseResult.of(ResponseCode.VALIDATION_ERROR.getCode(), "参数校验失败", errors));
+                .body(ResponseResult.fail(ResponseCode.VALIDATION_ERROR.getCode(), message));
     }
 
-    @ExceptionHandler(MissingServletRequestParameterException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ResponseEntity<ResponseResult<Void>> handleMissingParam(MissingServletRequestParameterException e) {
-        logger.error("请求参数缺失: {}", e.getParameterName());
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ResponseResult<Void>> handleConstraintViolation(ConstraintViolationException exception) {
         return ResponseEntity.badRequest()
-                .body(ResponseResult.fail("请求参数缺失: " + e.getParameterName()));
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ResponseResult<Void>> handleException(Exception e) {
-        logger.error("服务器内部错误: {}, 消息: {}", e.getClass().getName(), e.getMessage(), e);
-        String detailedMessage = e.getClass().getSimpleName() + ": " + e.getMessage();
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ResponseResult.fail(ResponseCode.INTERNAL_ERROR.getCode(), "系统内部错误: " + detailedMessage));
+                .body(ResponseResult.fail(ResponseCode.VALIDATION_ERROR.getCode(), "请求参数校验失败"));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ResponseResult<Void>> handleIllegalArgumentException(IllegalArgumentException e) {
-        logger.error("非法参数: {}", e.getMessage());
+    public ResponseEntity<ResponseResult<Void>> handleIllegalArgument(IllegalArgumentException exception) {
         return ResponseEntity.badRequest()
-                .body(ResponseResult.fail(e.getMessage()));
+                .body(ResponseResult.fail(ResponseCode.PARAM_ERROR.getCode(), exception.getMessage()));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ResponseResult<Void>> handleUnexpected(Exception exception) {
+        log.error("Unhandled request error", exception);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseResult.fail(ResponseCode.INTERNAL_ERROR));
+    }
+
+    private String formatFieldError(FieldError error) {
+        return error.getField() + ": " + error.getDefaultMessage();
+    }
+
+    private HttpStatus toHttpStatus(int code) {
+        try {
+            return HttpStatus.valueOf(code);
+        } catch (IllegalArgumentException ignored) {
+            return HttpStatus.INTERNAL_SERVER_ERROR;
+        }
     }
 }

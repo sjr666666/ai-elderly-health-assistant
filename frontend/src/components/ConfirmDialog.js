@@ -1,7 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
-const ConfirmDialog = ({ isOpen, title, message, confirmText, cancelText, onConfirm, onCancel, confirmStyle }) => {
+/**
+ * 确认弹窗
+ * @param {boolean} hideCancel 是否隐藏取消按钮（用于纯提示场景，单按钮模式）
+ */
+const ConfirmDialog = ({ isOpen, title, message, confirmText, cancelText, onConfirm, onCancel, confirmStyle, hideCancel }) => {
   const overlayRef = useRef(null);
 
   useEffect(() => {
@@ -35,9 +39,11 @@ const ConfirmDialog = ({ isOpen, title, message, confirmText, cancelText, onConf
           <p>{message}</p>
         </div>
         <div className="confirm-actions">
-          <button className="confirm-cancel-btn" onClick={onCancel}>
-            {cancelText || '取消'}
-          </button>
+          {!hideCancel && (
+            <button className="confirm-cancel-btn" onClick={onCancel}>
+              {cancelText || '取消'}
+            </button>
+          )}
           <button
             className={`confirm-ok-btn ${confirmStyle || ''}`}
             onClick={onConfirm}

@@ -1,18 +1,32 @@
 package com.example.backend.controller;
 
 import com.example.backend.common.ResponseResult;
+import com.example.backend.mapper.GuardianElderRelationMapper;
+import com.example.backend.mapper.UserMapper;
 import com.example.backend.model.dto.AddContactRequest;
 import com.example.backend.model.dto.AddContactResponse;
 import com.example.backend.model.entity.AiConversationLog;
 import com.example.backend.model.entity.EmergencyContact;
+import com.example.backend.model.entity.EmergencyEvent;
+import com.example.backend.model.entity.GuardianElderRelation;
+import com.example.backend.model.entity.SysUser;
+import com.example.backend.model.enums.EventType;
+import com.example.backend.model.enums.RelationStatus;
+import com.example.backend.model.enums.Severity;
 import com.example.backend.service.AiConversationLogService;
 import com.example.backend.service.EmergencyContactService;
+import com.example.backend.service.EmergencyEventService;
+import com.example.backend.service.SmsNotificationService;
 import com.example.backend.service.impl.AiEmergencyServiceImpl;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,13 +44,36 @@ public class EmergencyController {
     private final AiEmergencyServiceImpl aiEmergencyService;
     private final AiConversationLogService conversationLogService;
     private final EmergencyContactService emergencyContactService;
+    private final EmergencyEventService emergencyEventService;
+    private final SmsNotificationService smsNotificationService;
+    private final GuardianElderRelationMapper guardianElderRelationMapper;
+    private final UserMapper userMapper;
 
     public EmergencyController(AiEmergencyServiceImpl aiEmergencyService,
                                AiConversationLogService conversationLogService,
-                               EmergencyContactService emergencyContactService) {
+                               EmergencyContactService emergencyContactService,
+                               EmergencyEventService emergencyEventService,
+                               SmsNotificationService smsNotificationService,
+                               GuardianElderRelationMapper guardianElderRelationMapper,
+                               UserMapper userMapper) {
         this.aiEmergencyService = aiEmergencyService;
         this.conversationLogService = conversationLogService;
         this.emergencyContactService = emergencyContactService;
+        this.emergencyEventService = emergencyEventService;
+        this.smsNotificationService = smsNotificationService;
+        this.guardianElderRelationMapper = guardianElderRelationMapper;
+        this.userMapper = userMapper;
+    }
+
+    /**
+     * 获取当前认证用户的ID（数据库主键）
+     */
+    private Long getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("用户未认证");
+        }
+        return (Long) authentication.getPrincipal();
     }
 
     /**
@@ -69,36 +106,92 @@ public class EmergencyController {
      */
     @PostMapping("/ask")
     public ResponseResult<String> askEmergencyQuestion(@RequestBody EmergencyRequest request) {
-        
-        Long userId = request.getUserId();
+
+        Long userId = getCurrentUserId();
         String question = request.getQuestion();
         Boolean isEmergency = request.getIsEmergency();
         List<Map<String, String>> history = request.getHistory();
-        
-        logger.info("收到紧急咨询请求 - 用户ID: {}, 问题: {}, 紧急标识: {}, 历史记录数: {}", 
+
+        logger.info("收到紧急咨询请求 - 用户ID: {}, 问题: {}, 紧急标识: {}, 历史记录数: {}",
                 userId, question, isEmergency, history != null ? history.size() : 0);
 
         // 如果未指定是否紧急，自动判断
-        boolean emergencyFlag = isEmergency != null ? isEmergency 
+        boolean emergencyFlag = isEmergency != null ? isEmergency
                                                     : aiEmergencyService.isEmergencyQuestion(question);
 
         return aiEmergencyService.handleEmergencyQuestion(userId, question, emergencyFlag, history);
     }
 
     /**
+     * 触发紧急模式
+     * 老人开启紧急模式时调用，创建紧急事件并通知所有关联家属
+     *
+     * @return 操作结果
+     */
+    @PostMapping("/trigger")
+    public ResponseResult<Map<String, Object>> triggerEmergencyMode() {
+        Long elderId = getCurrentUserId();
+
+        logger.info("老人触发紧急模式 - elderId: {}", elderId);
+
+        // 查询老人信息
+        SysUser elder = userMapper.selectById(elderId);
+        String elderName = elder != null ? elder.getRealName() : "老人";
+
+        // 创建紧急事件
+        EmergencyEvent event = new EmergencyEvent();
+        event.setElderId(elderId);
+        event.setEventType(EventType.SOS.getCode());
+        event.setSeverity(Severity.HIGH.getCode());
+        event.setDescription(elderName + "开启了紧急求助模式");
+        event.setEventTime(LocalDateTime.now());
+        event.setIsResolved(0);
+        emergencyEventService.createEvent(event);
+
+        logger.info("紧急事件已创建 - eventId: {}", event.getId());
+
+        // 查询所有关联家属
+        LambdaQueryWrapper<GuardianElderRelation> relationQuery = new LambdaQueryWrapper<>();
+        relationQuery.eq(GuardianElderRelation::getElderId, elderId)
+                .eq(GuardianElderRelation::getStatus, RelationStatus.ACTIVE.getCode());
+        List<GuardianElderRelation> relations = guardianElderRelationMapper.selectList(relationQuery);
+
+        // 通知每位家属
+        int notifyCount = 0;
+        for (GuardianElderRelation relation : relations) {
+            SysUser guardian = userMapper.selectById(relation.getGuardianId());
+            String phone = guardian != null ? guardian.getPhone() : "";
+            try {
+                String message = String.format("【紧急求助】%s开启了紧急求助模式，请立即关注！", elderName);
+                smsNotificationService.sendNotification(
+                        relation.getGuardianId(), elderId, EventType.EMERGENCY_ALERT.getCode(), message, phone);
+                notifyCount++;
+            } catch (Exception e) {
+                logger.error("通知家属失败 - guardianId: {}", relation.getGuardianId(), e);
+            }
+        }
+
+        logger.info("紧急模式触发完成 - 通知家属数: {}", notifyCount);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("eventId", event.getId());
+        result.put("notifiedGuardians", notifyCount);
+        return ResponseResult.success(result);
+    }
+
+    /**
      * 获取对话历史
      *
-     * @param userId 用户ID
      * @param limit  返回数量限制（可选，默认20）
      * @return 对话历史列表
      */
     @GetMapping("/history")
     public ResponseResult<List<AiConversationLog>> getConversationHistory(
-            @RequestParam("userId") Long userId,
             @RequestParam(value = "limit", defaultValue = "20") Integer limit) {
-        
+
+        Long userId = getCurrentUserId();
         logger.info("查询对话历史 - 用户ID: {}, 限制: {}", userId, limit);
-        
+
         List<AiConversationLog> history = conversationLogService.getHistoryByUserId(userId, limit);
         return ResponseResult.success(history);
     }
@@ -106,15 +199,14 @@ public class EmergencyController {
     /**
      * 清空对话历史
      *
-     * @param userId 用户ID
      * @return 操作结果
      */
     @DeleteMapping("/history")
-    public ResponseResult<String> clearConversationHistory(
-            @RequestParam("userId") Long userId) {
-        
+    public ResponseResult<String> clearConversationHistory() {
+
+        Long userId = getCurrentUserId();
         logger.info("清空对话历史 - 用户ID: {}", userId);
-        
+
         boolean success = conversationLogService.clearHistoryByUserId(userId);
         if (success) {
             return ResponseResult.success("对话历史已清空");
@@ -249,3 +341,4 @@ public class EmergencyController {
         }
     }
 }
+
