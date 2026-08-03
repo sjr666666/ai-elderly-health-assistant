@@ -51,6 +51,8 @@ public class SecurityConfig {
                 // CORS 预检请求放行
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .antMatchers("/actuator/health", "/actuator/info").permitAll()
+                // WebSocket 握手放行（由 WebSocketAuthInterceptor 单独认证 token）
+                .antMatchers("/ws/**").permitAll()
                 // 登录和注册接口无需认证
                 .antMatchers(HttpMethod.POST, "/api/v1/user/login", "/api/v1/user/register", "/api/v1/user/refresh", "/api/v1/user/logout").permitAll()
                 // 家属端API需要FAMILY角色认证

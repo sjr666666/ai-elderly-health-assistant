@@ -1327,7 +1327,11 @@ function App() {
 
     const connectWebSocket = () => {
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${wsProtocol}//${window.location.hostname}:8080/ws/notifications?elderId=${user.id}`;
+      // 后端 WebSocket 地址（开发环境直接连 8080；token 通过查询参数传递，
+      // 因为浏览器 WebSocket API 无法自定义请求头，后端拦截器同时支持两种方式）
+      const host = window.location.hostname;
+      const token = getToken();
+      const wsUrl = `${wsProtocol}//${host}:8080/ws/notifications?token=${encodeURIComponent(token || '')}&elderId=${user.id}`;
       try {
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
