@@ -1410,7 +1410,7 @@ function App() {
     return () => {
       delete window.speakMedicationReminder;
     };
-  }, []);
+  }, [speakRef]);
 
   // 用药提醒：每分钟检查一次，支持渐进式提醒
   useEffect(() => {
@@ -1580,7 +1580,7 @@ function App() {
       
       return () => clearTimeout(timer);
     }
-  }, [showMedicationReminder, missedReminders]);
+  }, [showMedicationReminder, missedReminders, speakRef]);
 
 
   // 调用后端追问API
@@ -1687,7 +1687,7 @@ function App() {
     if (followUpMessagesRef.current) {
       followUpMessagesRef.current.scrollTop = followUpMessagesRef.current.scrollHeight;
     }
-  }, [followUpMessages, isFollowUpLoading]);
+  }, [followUpMessages, isFollowUpLoading, followUpMessagesRef]);
 
   // 当selectedDrug变化时，自动调用AI生成老年友好指导
   useEffect(() => {
