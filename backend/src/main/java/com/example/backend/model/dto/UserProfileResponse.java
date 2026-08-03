@@ -90,4 +90,9 @@ public class UserProfileResponse {
      * 角色（elder/family）
      */
     private String role;
+
+    /**
+     * 联系电话
+     */
+    private String phone;
 }

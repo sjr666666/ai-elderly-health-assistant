@@ -3,10 +3,22 @@ import { createPortal } from 'react-dom';
 import Toast from './Toast';
 import ConfirmDialog from './ConfirmDialog';
 
+/**
+ * 检测是否为移动端设备
+ * 移动端：直接 tel: 协议拨号
+ * 桌面端：弹出友好提示，告知用户该功能仅在手机端可用
+ */
+const isMobileDevice = () => {
+  if (typeof navigator === 'undefined') return false;
+  return /Android|iPhone|iPad|iPod|Windows Phone|Mobile/i.test(navigator.userAgent)
+    || (typeof window !== 'undefined' && 'ontouchstart' in window && window.innerWidth < 1024);
+};
+
 const ContactModal = ({ isOpen, onClose, contacts }) => {
   const overlayRef = useRef(null);
   const [showToast, setShowToast] = useState(false);
   const [confirmState, setConfirmState] = useState({ isOpen: false, phone: '', title: '', message: '' });
+  const [showDesktopTip, setShowDesktopTip] = useState(false); // 桌面端不支持拨号提示
 
   useEffect(() => {
     const handleEscape = (e) => {
@@ -26,7 +38,7 @@ const ContactModal = ({ isOpen, onClose, contacts }) => {
         document.body.style.overflow = '';
       }
     };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -50,6 +62,12 @@ const ContactModal = ({ isOpen, onClose, contacts }) => {
   };
 
   const handleCallPhone = (phone) => {
+    // 桌面端：弹出友好提示，告知用户该功能仅在手机端可用
+    if (!isMobileDevice()) {
+      setShowDesktopTip(true);
+      return;
+    }
+    // 移动端：原有的确认拨号逻辑
     const isEmergency = phone === '120' || phone === '110';
     setConfirmState({
       isOpen: true,
@@ -146,6 +164,17 @@ const ContactModal = ({ isOpen, onClose, contacts }) => {
         onConfirm={handleConfirm}
         onCancel={() => setConfirmState({ ...confirmState, isOpen: false })}
         confirmStyle={confirmState.phone === '120' || confirmState.phone === '110' ? 'danger' : ''}
+      />
+
+      {/* 桌面端不支持拨号提示弹窗 */}
+      <ConfirmDialog
+        isOpen={showDesktopTip}
+        title="功能仅在手机端可用"
+        message="拨号功能需要手机硬件支持，电脑端暂不可用。请您用手机登录老人端拨打家属电话或 120/110 急救电话，给您带来不便敬请谅解。"
+        confirmText="我知道了"
+        hideCancel
+        onConfirm={() => setShowDesktopTip(false)}
+        onCancel={() => setShowDesktopTip(false)}
       />
     </>
   );

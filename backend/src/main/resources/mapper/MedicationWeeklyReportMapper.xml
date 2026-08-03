@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.backend.mapper.MedicationWeeklyReportMapper">
+
+    <!-- 查询用户指定时间范围内的周报列表 -->
+    <select id="selectByUserAndDateRange" resultType="com.example.backend.model.entity.MedicationWeeklyReport">
+        SELECT * FROM elderly_medication.medication_weekly_report
+        WHERE user_id = #{userId}
+          AND start_date &gt;= #{startDate}
+          AND end_date &lt;= #{endDate}
+        ORDER BY generated_at DESC
+    </select>
+
+    <!-- 查询用户最新的周报 -->
+    <select id="selectLatestByUserId" resultType="com.example.backend.model.entity.MedicationWeeklyReport">
+        SELECT * FROM elderly_medication.medication_weekly_report
+        WHERE user_id = #{userId}
+        ORDER BY generated_at DESC
+        LIMIT 1
+    </select>
+
+    <!-- 统计用户的平均合规率 -->
+    <select id="selectAverageComplianceRate" resultType="java.lang.Double">
+        SELECT AVG(compliance_rate)
+        FROM elderly_medication.medication_weekly_report
+        WHERE user_id = #{userId}
+    </select>
+
+</mapper>

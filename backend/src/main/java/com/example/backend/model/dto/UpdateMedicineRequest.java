@@ -2,6 +2,8 @@ package com.example.backend.model.dto;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 /**
  * 修改药箱条目请求DTO
  * 所有字段均为可选，支持部分字段更新
@@ -37,12 +39,12 @@ public class UpdateMedicineRequest {
     /**
      * 总数量（如30片、60片）
      */
-    private Integer totalQuantity;
+    private BigDecimal totalQuantity;
 
     /**
      * 剩余数量
      */
-    private Integer remainingQuantity;
+    private BigDecimal remainingQuantity;
 
     /**
      * 备注说明（最长500字符）

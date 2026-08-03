@@ -1,10 +1,12 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 
+/**
+ * 渐进式提醒弹窗
+ * 阶段：pre_remind(提前15min/蓝色) → due_now(到时/橙色) → overdue(超时/红色) → notify_family(已通知家属/深红)
+ */
 const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
-  const audioRef = useRef(null);
 
   useEffect(() => {
-    // 阻止背景滚动
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = 'auto';
@@ -27,6 +29,90 @@ const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
     return Math.floor(diff / (1000 * 60));
   };
 
+  // 根据提醒阶段获取样式配置
+  const getStageConfig = (stage) => {
+    switch (stage) {
+      case 'pre_remind':
+        return {
+          headerBg: 'linear-gradient(135deg, #42A5F5 0%, #1E88E5 100%)',
+          icon: '🔔',
+          title: '即将到服药时间',
+          subtitle: '以下药物将在15分钟后需要服用',
+          cardBg: '#E3F2FD',
+          cardBorder: '#42A5F5',
+          tagBg: '#E3F2FD',
+          tagColor: '#1565C0',
+          tagText: '提前提醒',
+          footerText: '💡 提前做好准备，按时服药效果更好'
+        };
+      case 'due_now':
+        return {
+          headerBg: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
+          icon: '⏰',
+          title: '该服药了',
+          subtitle: '以下药物已到服药时间，请及时服用',
+          cardBg: '#FFF3E0',
+          cardBorder: '#FF9800',
+          tagBg: '#FFF3E0',
+          tagColor: '#E65100',
+          tagText: '到时提醒',
+          footerText: '💡 点击"已服用"按钮标记为已服用'
+        };
+      case 'overdue':
+        return {
+          headerBg: 'linear-gradient(135deg, #EF5350 0%, #C62828 100%)',
+          icon: '⚠️',
+          title: '服药超时提醒',
+          subtitle: '以下药物已超时未服用，请尽快服药！',
+          cardBg: '#FFEBEE',
+          cardBorder: '#EF5350',
+          tagBg: '#FFEBEE',
+          tagColor: '#C62828',
+          tagText: '超时提醒',
+          footerText: '⚠️ 超时未服用将通知您的家属'
+        };
+      case 'notify_family':
+        return {
+          headerBg: 'linear-gradient(135deg, #B71C1C 0%, #7f0000 100%)',
+          icon: '🚨',
+          title: '已通知家属',
+          subtitle: '以下药物超时较久，已通知您的家属关注',
+          cardBg: '#FFEBEE',
+          cardBorder: '#B71C1C',
+          tagBg: '#FFCDD2',
+          tagColor: '#B71C1C',
+          tagText: '已通知家属',
+          footerText: '🚨 您的家属已收到漏服通知，请尽快服药'
+        };
+      default:
+        return {
+          headerBg: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
+          icon: '⏰',
+          title: '用药提醒',
+          subtitle: '您有以下用药计划未完成',
+          cardBg: '#FFF3E0',
+          cardBorder: '#FF9800',
+          tagBg: '#FFF3E0',
+          tagColor: '#E65100',
+          tagText: '提醒',
+          footerText: '💡 点击"已服用"按钮标记为已服用'
+        };
+    }
+  };
+
+  // 获取所有提醒中最高级别的阶段
+  const getHighestStage = () => {
+    const stageOrder = ['pre_remind', 'due_now', 'overdue', 'notify_family'];
+    let highestIndex = -1;
+    reminders.forEach(r => {
+      const idx = stageOrder.indexOf(r.reminderStage);
+      if (idx > highestIndex) highestIndex = idx;
+    });
+    return highestIndex >= 0 ? stageOrder[highestIndex] : 'due_now';
+  };
+
+  const stageConfig = getStageConfig(getHighestStage());
+
   return (
     <div style={{
       position: 'fixed',
@@ -41,7 +127,7 @@ const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
       justifyContent: 'center',
       padding: '20px'
     }} onClick={onClose}>
-      <div 
+      <div
         style={{
           background: 'white',
           borderRadius: '16px',
@@ -54,9 +140,9 @@ const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 头部 */}
+        {/* 头部 - 根据阶段变色 */}
         <div style={{
-          background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
+          background: stageConfig.headerBg,
           color: 'white',
           padding: '20px',
           display: 'flex',
@@ -65,10 +151,10 @@ const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
         }}>
           <div>
             <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '700' }}>
-              ⚠️ 用药提醒
+              {stageConfig.icon} {stageConfig.title}
             </h3>
             <p style={{ margin: '4px 0 0 0', fontSize: '14px', opacity: 0.9 }}>
-              您有以下用药计划未完成
+              {stageConfig.subtitle}
             </p>
           </div>
           <button
@@ -99,20 +185,20 @@ const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
           overflowY: 'auto'
         }}>
           {reminders && reminders.map((reminder, index) => {
-            // calendarPlans 中的数据字段是 time，不是 scheduledTime
             const scheduledTime = reminder.time || reminder.scheduledTime;
             const drugName = reminder.drug || reminder.drugName || reminder.name || '未知药品';
             const dosage = reminder.dosage;
             const overdueMinutes = calculateOverdueMinutes(scheduledTime);
-            // 转换为小时（保留1位小数）
             const overdueHours = (overdueMinutes / 60).toFixed(1);
-                    
+            const itemStage = reminder.reminderStage || 'due_now';
+            const itemConfig = getStageConfig(itemStage);
+
             return (
               <div
                 key={reminder.id || index}
                 style={{
-                  background: overdueMinutes > 60 ? '#ffebee' : '#fff3e0',
-                  border: `2px solid ${overdueMinutes > 60 ? '#ef5350' : '#ff9800'}`,
+                  background: itemConfig.cardBg,
+                  border: `2px solid ${itemConfig.cardBorder}`,
                   borderRadius: '12px',
                   padding: '16px',
                   marginBottom: '12px',
@@ -130,30 +216,38 @@ const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div style={{ flex: 1 }}>
-                    <p style={{
-                      fontSize: '16px',
-                      fontWeight: '600',
-                      color: '#3D3D3D',
-                      margin: '0 0 8px 0'
-                    }}>
-                      💊 {drugName}
-                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '16px', fontWeight: '600', color: '#3D3D3D' }}>
+                        💊 {drugName}
+                      </span>
+                      <span style={{
+                        background: itemConfig.tagBg,
+                        color: itemConfig.tagColor,
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        border: `1px solid ${itemConfig.cardBorder}`
+                      }}>
+                        {itemConfig.tagText}
+                      </span>
+                    </div>
                     <p style={{
                       fontSize: '14px',
                       color: '#6B6B6B',
                       margin: '0 0 4px 0'
                     }}>
-                       应在 {formatTime(scheduledTime)} 服用
+                      应在 {formatTime(scheduledTime)} 服用
                       {reminder.specification && ` - ${reminder.specification}`}
                     </p>
                     {overdueMinutes > 0 && (
                       <p style={{
                         fontSize: '13px',
-                        color: overdueMinutes > 60 ? '#c62828' : '#e65100',
+                        color: itemConfig.tagColor,
                         margin: 0,
                         fontWeight: '600'
                       }}>
-                        ⚠️ 已超时 {overdueHours} 小时
+                        ⚠️ 已超时 {overdueMinutes >= 60 ? `${overdueHours} 小时` : `${overdueMinutes} 分钟`}
                       </p>
                     )}
                     {dosage && (
@@ -188,12 +282,10 @@ const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
                     onMouseEnter={(e) => {
                       e.target.style.background = '#45a049';
                       e.target.style.transform = 'scale(1.05)';
-                      e.target.style.boxShadow = '0 4px 12px rgba(76, 175, 80, 0.4)';
                     }}
                     onMouseLeave={(e) => {
                       e.target.style.background = '#4CAF50';
                       e.target.style.transform = 'scale(1)';
-                      e.target.style.boxShadow = '0 2px 8px rgba(76, 175, 80, 0.3)';
                     }}
                   >
                     ✓ 已服用
@@ -216,12 +308,11 @@ const MedicationReminderModal = ({ reminders, onClose, onMarkAsTaken }) => {
             color: '#9E9E9E',
             margin: 0
           }}>
-            💡 点击"已服用"按钮标记为已服用
+            {stageConfig.footerText}
           </p>
         </div>
       </div>
 
-      {/* CSS动画 */}
       <style>{`
         @keyframes fadeInUp {
           0% {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useToast } from './Toast';
+import { getToken } from '../utils/elderApi';
 
 /**
  * 编辑药品弹窗组件
@@ -30,8 +31,8 @@ const EditDrugModal = ({ onClose, onSave, drug, userId }) => {
       showToast('请输入每次用量', 'warning');
       return;
     }
-    if (!frequency.trim()) {
-      showToast('请输入用药频率', 'warning');
+    if (!frequency) {
+      showToast('请选择用药频率', 'warning');
       return;
     }
     if (!expiryDate) {
@@ -45,7 +46,7 @@ const EditDrugModal = ({ onClose, onSave, drug, userId }) => {
       // 构造请求体（只包含非空字段）
       const requestBody = {};
       if (dosage.trim()) requestBody.dosage = dosage.trim();
-      if (frequency.trim()) requestBody.frequency = frequency.trim();
+      if (frequency) requestBody.frequency = frequency;
       if (startDate) requestBody.startDate = startDate;
       if (endDate) requestBody.endDate = endDate;
       if (expiryDate) requestBody.expiryDate = expiryDate;
@@ -54,32 +55,24 @@ const EditDrugModal = ({ onClose, onSave, drug, userId }) => {
       if (note.trim()) requestBody.note = note.trim();
       if (status) requestBody.status = status;
 
-      console.log('=== 编辑药品请求 ===');
-      console.log('boxItemId:', drug.boxItemId);
-      console.log('userId:', userId);
-      console.log('请求体:', requestBody);
-      console.log('==================');
 
-      const response = await fetch(`/api/v1/box/${drug.boxItemId}?userId=${userId}`, {
+      const response = await fetch(`/api/v1/box/${drug.boxItemId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`,
         },
         body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
 
-      console.log('=== 编辑药品响应 ===');
-      console.log('状态码:', response.status);
-      console.log('响应数据:', data);
-      console.log('==================');
 
       if (response.ok && data.code === 200) {
         onSave({
           ...drug,
           dosage: dosage.trim(),
-          frequency: frequency.trim(),
+          frequency: frequency,
           startDate: startDate || null,
           endDate: endDate || null,
           expiryDate: expiryDate,
@@ -222,11 +215,9 @@ const EditDrugModal = ({ onClose, onSave, drug, userId }) => {
             }}>
                用药频率 <span style={{ color: '#E74C3C' }}>*</span>
             </label>
-            <input
-              type="text"
+            <select
               value={frequency}
               onChange={(e) => setFrequency(e.target.value)}
-              placeholder="例如：每日两次、每日三次"
               required
               style={{
                 width: '100%',
@@ -236,20 +227,38 @@ const EditDrugModal = ({ onClose, onSave, drug, userId }) => {
                 borderRadius: '16px',
                 outline: 'none',
                 transition: 'all 0.3s ease',
-                background: '#FAF7F2',
-                fontFamily: 'inherit'
+                background: frequency ? '#FAF7F2' : 'white',
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                appearance: 'none',
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%236B6B6B' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 20px center'
               }}
               onFocus={(e) => {
                 e.target.style.borderColor = '#4A90E2';
                 e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
-                e.target.style.background = 'white';
               }}
               onBlur={(e) => {
                 e.target.style.borderColor = '#F0EBE3';
                 e.target.style.boxShadow = 'none';
-                e.target.style.background = '#FAF7F2';
               }}
-            />
+            >
+              <option value="">-- 请选择用药频率 --</option>
+              <option value="每日一次">每日一次</option>
+              <option value="每日两次">每日两次</option>
+              <option value="每日三次">每日三次</option>
+              <option value="每日四次">每日四次</option>
+              <option value="隔日一次">隔日一次</option>
+              <option value="每周一次">每周一次</option>
+              <option value="每周两次">每周两次</option>
+              <option value="每月一次">每月一次</option>
+              <option value="必要时服用">必要时服用</option>
+              <option value="睡前服用">睡前服用</option>
+              <option value="饭前服用">饭前服用</option>
+              <option value="饭后服用">饭后服用</option>
+              <option value="空腹服用">空腹服用</option>
+            </select>
           </div>
 
           {/* 有效期 */}

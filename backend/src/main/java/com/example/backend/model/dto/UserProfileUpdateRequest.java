@@ -82,4 +82,9 @@ public class UserProfileUpdateRequest {
      * 是否饮酒：0否/1是
      */
     private Integer isDrinking;
+
+    /**
+     * 联系电话
+     */
+    private String phone;
 }

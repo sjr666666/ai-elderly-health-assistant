@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useToast } from './Toast';
+import { getToken } from '../utils/elderApi';
 
 /**
  * 批量识别药品弹窗组件
@@ -13,7 +14,6 @@ function BatchRecognizeModal({ onClose, onAddToBox, userId }) {
   // 状态管理
   const [selectedImages, setSelectedImages] = useState([]); // 已选择的图片
   const [isRecognizing, setIsRecognizing] = useState(false); // 是否正在识别
-  const [recognizeResults, setRecognizeResults] = useState([]); // 识别结果
   const [selectedForAdd, setSelectedForAdd] = useState(new Set()); // 选中的要添加的药品
   const [isAddingToBox, setIsAddingToBox] = useState(false); // 是否正在添加到药箱
 
@@ -56,8 +56,45 @@ function BatchRecognizeModal({ onClose, onAddToBox, userId }) {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    const MIN_PX = 15;
+    const MAX_PX = 4096;
+    const validFiles = [];
+
+    for (const f of files) {
+      if (f.size > MAX_SIZE) {
+        showToast(`${f.name} 超过 10MB，已跳过`, 'warning');
+        continue;
+      }
+      const ok = await new Promise((resolve) => {
+        const url = URL.createObjectURL(f);
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          if (img.width < MIN_PX || img.height < MIN_PX) {
+            showToast(`${f.name} 图片太小（最小 15×15 像素），已跳过`, 'warning');
+            resolve(false);
+          } else if (img.width > MAX_PX || img.height > MAX_PX) {
+            showToast(`${f.name} 尺寸过大，请使用不超过 4096×4096 像素的图片，已跳过`, 'warning');
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          showToast(`${f.name} 无法读取，已跳过`, 'warning');
+          resolve(false);
+        };
+        img.src = url;
+      });
+      if (ok) validFiles.push(f);
+    }
+
+    if (validFiles.length === 0) return;
+
     // 转换为JPEG格式
-    const convertedFiles = await Promise.all(files.map(convertToJpeg));
+    const convertedFiles = await Promise.all(validFiles.map(convertToJpeg));
 
     // 创建预览URL
     const newImages = convertedFiles.map((file, index) => ({
@@ -116,10 +153,10 @@ function BatchRecognizeModal({ onClose, onAddToBox, userId }) {
       });
 
       // 调用批量识别API
-      const response = await fetch('http://localhost:8080/api/v1/drug/recognize/batch-upload', {
+      const response = await fetch('/api/v1/drug/recognize/batch-upload', {
         method: 'POST',
         headers: {
-          'X-User-Id': userId || '1'
+          'Authorization': `Bearer ${getToken()}`
         },
         body: formData
       });
@@ -221,10 +258,11 @@ function BatchRecognizeModal({ onClose, onAddToBox, userId }) {
         if (!img.result?.drugId) continue;
 
         try {
-          const response = await fetch(`/api/v1/box?userId=${userId}`, {
+          const response = await fetch(`/api/v1/box`, {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${getToken()}`,
             },
             body: JSON.stringify({
               drugId: img.result.drugId,

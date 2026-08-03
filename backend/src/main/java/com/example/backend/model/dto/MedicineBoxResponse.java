@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 /**
  * 药箱列表响应 DTO
  */
@@ -77,12 +79,12 @@ public class MedicineBoxResponse {
     /**
      * 总数量
      */
-    private Integer totalQuantity;
+    private BigDecimal totalQuantity;
 
     /**
      * 剩余数量
      */
-    private Integer remainingQuantity;
+    private BigDecimal remainingQuantity;
 
     /**
      * 备注

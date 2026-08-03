@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from './Toast';
+import { getToken } from '../utils/elderApi';
+
+// 常见慢性病预设选项
+const CHRONIC_DISEASE_OPTIONS = [
+  '高血压', '糖尿病', '冠心病', '高血脂', '脑梗死',
+  '慢性肾病', '慢性肝病', '哮喘', '慢阻肺', '痛风',
+  '骨质疏松', '心律失常', '心力衰竭', '帕金森病', '类风湿关节炎'
+];
 
 function ProfileModal({ onComplete, onClose, userId }) {
   const [allergyHistory, setAllergyHistory] = useState('');
-  const [chronicDiseases, setChronicDiseases] = useState('');
+  const [chronicDiseases, setChronicDiseases] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const showToast = useToast();
@@ -16,11 +24,16 @@ function ProfileModal({ onComplete, onClose, userId }) {
         return;
       }
       try {
-        const response = await fetch(`/api/v1/user/profile?userId=${userId}`);
+        const response = await fetch(`/api/v1/user/profile`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` },
+        });
         const data = await response.json();
         if (response.ok && data.code === 200) {
           setAllergyHistory(data.data.allergyHistory || '');
-          setChronicDiseases(data.data.chronicDiseases || '');
+          const raw = data.data.chronicDiseases || '';
+          if (raw.trim()) {
+            setChronicDiseases(raw.split(/[、,;，；]/).map(s => s.trim()).filter(Boolean));
+          }
         } else {
           console.error('获取用户信息失败:', data.message);
         }
@@ -42,14 +55,16 @@ function ProfileModal({ onComplete, onClose, userId }) {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/api/v1/user/profile?userId=${userId}`, {
+      const diseasesStr = chronicDiseases.length > 0 ? chronicDiseases.join('、') : '';
+      const response = await fetch(`/api/v1/user/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`,
         },
         body: JSON.stringify({
           allergyHistory: allergyHistory || null,
-          chronicDiseases: chronicDiseases || null
+          chronicDiseases: diseasesStr
         }),
       });
 
@@ -58,12 +73,13 @@ function ProfileModal({ onComplete, onClose, userId }) {
       if (response.ok && data.code === 200) {
         onComplete({
           allergyHistory: allergyHistory || null,
-          chronicDiseases: chronicDiseases || null
+          chronicDiseases: diseasesStr
         });
       } else {
         showToast(data.message || '更新失败，请重试', 'error');
       }
     } catch (err) {
+      console.error('更新健康信息失败:', err);
       showToast('网络连接失败，请稍后重试', 'error');
     } finally {
       setIsSubmitting(false);
@@ -192,35 +208,66 @@ function ProfileModal({ onComplete, onClose, userId }) {
             marginBottom: '12px',
             display: 'block',
             color: '#3D3D3D'
-          }}>💊 慢性病史（选填）</label>
-          <textarea
-            value={chronicDiseases}
-            onChange={(e) => setChronicDiseases(e.target.value)}
-            placeholder="例如：高血压、糖尿病、冠心病"
-            rows="3"
-            style={{
-              width: '100%',
-              padding: '20px 24px',
-              fontSize: '20px',
-              border: '3px solid #F0EBE3',
-              borderRadius: '20px',
-              outline: 'none',
-              resize: 'none',
-              transition: 'all 0.3s ease',
-              background: '#FAF7F2',
-              fontFamily: 'inherit'
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = '#4A90E2';
-              e.target.style.boxShadow = '0 0 0 6px rgba(74, 144, 226, 0.12)';
-              e.target.style.background = 'white';
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = '#F0EBE3';
-              e.target.style.boxShadow = 'none';
-              e.target.style.background = '#FAF7F2';
-            }}
-          />
+          }}>💊 慢性病史（选填，可多选）</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {CHRONIC_DISEASE_OPTIONS.map(disease => {
+              const selected = chronicDiseases.includes(disease);
+              return (
+                <button
+                  key={disease}
+                  type="button"
+                  onClick={() => {
+                    setChronicDiseases(prev =>
+                      selected ? prev.filter(d => d !== disease) : [...prev, disease]
+                    );
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '20px',
+                    fontSize: '16px',
+                    border: selected ? '2px solid #4A90E2' : '2px solid #ddd',
+                    background: selected ? '#4A90E2' : '#fff',
+                    color: selected ? '#fff' : '#555',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {disease}
+                </button>
+              );
+            })}
+            {chronicDiseases.filter(d => !CHRONIC_DISEASE_OPTIONS.includes(d)).map(disease => (
+              <span
+                key={disease}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '20px',
+                  fontSize: '16px',
+                  border: '2px solid #e8a735',
+                  background: '#fff8e1',
+                  color: '#b8860b',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                {disease}
+                <button
+                  type="button"
+                  onClick={() => setChronicDiseases(prev => prev.filter(d => d !== disease))}
+                  style={{
+                    background: 'none', border: 'none', color: '#b8860b',
+                    cursor: 'pointer', fontSize: '16px', padding: '0 2px', lineHeight: 1
+                  }}
+                >×</button>
+              </span>
+            ))}
+          </div>
+          {chronicDiseases.length > 0 && (
+            <div style={{ marginTop: '10px', fontSize: '15px', color: '#888' }}>
+              已选：{chronicDiseases.join('、')}
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '16px' }}>

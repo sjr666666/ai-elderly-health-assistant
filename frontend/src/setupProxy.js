@@ -4,7 +4,7 @@ module.exports = function(app) {
   app.use(
     '/api',
     createProxyMiddleware({
-        target: 'http://localhost:8080',
+        target: process.env.BACKEND_PROXY_TARGET || 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
         logLevel: 'debug',
@@ -12,7 +12,10 @@ module.exports = function(app) {
             '^/api': '/api'  // 关键：明确保留 /api 前缀
         },
         onProxyReq: (proxyReq, req, res) => {
-          console.log('[Proxy] Forwarding:', req.method, req.url);
+          // 转发Cookie
+          if (req.headers.cookie) {
+            proxyReq.setHeader('Cookie', req.headers.cookie);
+          }
           // 只在Content-Type为application/json时设置charset
           const contentType = proxyReq.getHeader('Content-Type');
           if (contentType && contentType.includes('application/json')) {

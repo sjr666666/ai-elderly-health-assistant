@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { saveToken } from '../utils/elderApi';
+import { validateCredentials } from '../utils/authValidation';
 
-function Login({ onLogin, onShowRegister }) {
+function Login({ onLogin, onShowRegister, onSwitchToGuardian }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -11,20 +13,20 @@ function Login({ onLogin, onShowRegister }) {
     // 阻止表单默认提交
     if (e) e.preventDefault();
 
-    // 手动验证并触发表单气泡提示
-    if (!username.trim() || !password) {
+    const credentialError = validateCredentials(username, password);
+    if (credentialError) {
       const usernameInput = document.querySelector('input[type="text"]');
       const passwordInput = document.querySelector('input[placeholder="请输入密码"]');
       
       if (!username.trim()) {
-        usernameInput.setCustomValidity('请输入用户名');
+        usernameInput.setCustomValidity(credentialError);
         usernameInput.reportValidity();
         usernameInput.focus();
         return;
       }
       
       if (!password) {
-        passwordInput.setCustomValidity('请输入密码');
+        passwordInput.setCustomValidity(credentialError);
         passwordInput.reportValidity();
         passwordInput.focus();
         return;
@@ -37,6 +39,7 @@ function Login({ onLogin, onShowRegister }) {
     try {
       const response = await fetch('/api/v1/user/login', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json;charset=UTF-8',
           'Accept': 'application/json',
@@ -50,12 +53,26 @@ function Login({ onLogin, onShowRegister }) {
       const data = await response.json();
 
       if (response.ok && data.code === 200) {
-        // 直接传递后端返回的用户数据
-        onLogin(data.data);
+        const userData = data.data;
+        // 老人端登录界面仅允许老人账号登录，家属账号请使用家属端登录
+        if (userData.role === 'family') {
+          setError('家属账号请使用家属端登录');
+          setIsLoading(false);
+          return;
+        }
+        // 保存JWT token
+        if (userData.token) {
+          saveToken(userData.token);
+        }
+        // 传递用户数据（不含token）
+        const userInfo = { ...userData };
+        delete userInfo.token;
+        onLogin(userInfo);
       } else {
         setError(data.message || '用户名或密码错误');
       }
     } catch (err) {
+      console.error('登录请求失败:', err);
       setError('网络连接失败，请稍后重试');
     } finally {
       setIsLoading(false);
@@ -70,7 +87,7 @@ function Login({ onLogin, onShowRegister }) {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      minHeight: 'calc(var(--vh, 1vh) * 100)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -306,6 +323,41 @@ function Login({ onLogin, onShowRegister }) {
             }}
           >
             立即注册
+          </button>
+        </div>
+
+        {/* 家属端登录入口 */}
+        <div style={{
+          marginTop: '16px',
+          textAlign: 'center',
+          fontSize: '14px',
+          color: '#999'
+        }}>
+          <span>家属账号？</span>
+          <button
+            type="button"
+            onClick={() => onSwitchToGuardian && onSwitchToGuardian()}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#3A7BC8',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              marginLeft: '4px',
+              padding: 0,
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.color = '#2D6AB5';
+              e.target.style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.color = '#3A7BC8';
+              e.target.style.transform = 'scale(1)';
+            }}
+          >
+            家属端登录 →
           </button>
         </div>
         </form>

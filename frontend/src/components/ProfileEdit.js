@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useToast } from './Toast';
+import { getToken, clearAuth } from '../utils/elderApi';
 
 // 器官功能状态选项
 const ORGAN_FUNCTION_OPTIONS = [
@@ -8,6 +9,13 @@ const ORGAN_FUNCTION_OPTIONS = [
   { value: 'moderate_impairment', label: '中度不全' },
   { value: 'severe_impairment', label: '重度不全' },
   { value: 'unknown', label: '不详' }
+];
+
+// 常见慢性病预设选项
+const CHRONIC_DISEASE_OPTIONS = [
+  '高血压', '糖尿病', '冠心病', '高血脂', '脑梗死',
+  '慢性肾病', '慢性肝病', '哮喘', '慢阻肺', '痛风',
+  '骨质疏松', '心律失常', '心力衰竭', '帕金森病', '类风湿关节炎'
 ];
 
 // 数字转字符串（保留旧值回显）
@@ -22,7 +30,11 @@ function ProfileEdit({ user, onSave, onClose }) {
   const [height, setHeight] = useState(numToStr(user?.height));
   const [weight, setWeight] = useState(numToStr(user?.weight));
   const [allergyHistory, setAllergyHistory] = useState(user?.allergyHistory || '');
-  const [chronicDiseases, setChronicDiseases] = useState(user?.chronicDiseases || '');
+  const [chronicDiseases, setChronicDiseases] = useState(() => {
+    const raw = user?.chronicDiseases || '';
+    if (!raw.trim()) return [];
+    return raw.split(/[、,;，；]/).map(s => s.trim()).filter(Boolean);
+  });
   const [kidneyFunction, setKidneyFunction] = useState(user?.kidneyFunction || 'normal');
   const [liverFunction, setLiverFunction] = useState(user?.liverFunction || 'normal');
   const [isPregnant, setIsPregnant] = useState(user?.isPregnant === 1);
@@ -95,7 +107,7 @@ function ProfileEdit({ user, onSave, onClose }) {
     if (!validateForm()) {
       return;
     }
-    if (!user || !user.userId) {
+    if (!user) {
       showToast('用户信息缺失，请重新登录', 'error');
       return;
     }
@@ -109,7 +121,7 @@ function ProfileEdit({ user, onSave, onClose }) {
         height: parseNum(height),
         weight: parseNum(weight),
         allergyHistory: allergyHistory.trim() || null,
-        chronicDiseases: chronicDiseases.trim() || null,
+        chronicDiseases: chronicDiseases.length > 0 ? chronicDiseases.join('、') : '',
         kidneyFunction: user?.kidneyFunction || null,
         liverFunction: user?.liverFunction || null,
         isPregnant: isPregnant ? 1 : 0,
@@ -118,9 +130,12 @@ function ProfileEdit({ user, onSave, onClose }) {
         isDrinking: isDrinking ? 1 : 0
       };
 
-      const response = await fetch(`/api/v1/user/profile?userId=${user.userId}`, {
+      const response = await fetch(`/api/v1/user/profile`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`,
+        },
         body: JSON.stringify(payload),
       });
 
@@ -129,14 +144,15 @@ function ProfileEdit({ user, onSave, onClose }) {
           showToast('个人信息已更新！', 'success');
           onSave(payload);
         } else if (data.message && data.message.includes('用户不存在')) {
-          // localStorage 中的 userId 已被数据库清理（雪花 ID 失效）
+          // 用户不存在，清除认证状态
           showToast('登录已失效，请重新登录', 'error');
-          localStorage.removeItem('user');
+          clearAuth();
           setTimeout(() => window.location.reload(), 1200);
         } else {
           showToast(data.message || '更新失败，请重试', 'error');
         }
     } catch (err) {
+      console.error('更新个人信息失败:', err);
       showToast('网络连接失败，请稍后重试', 'error');
     } finally {
       setIsSubmitting(false);
@@ -296,13 +312,66 @@ function ProfileEdit({ user, onSave, onClose }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">慢性病史（选填）</label>
-            <textarea
-              value={chronicDiseases}
-              onChange={(e) => setChronicDiseases(e.target.value)}
-              placeholder="例如：高血压、糖尿病、冠心病"
-              rows="3" className="form-textarea"
-            />
+            <label className="form-label">慢性病史（选填，可多选）</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {CHRONIC_DISEASE_OPTIONS.map(disease => {
+                const selected = chronicDiseases.includes(disease);
+                return (
+                  <button
+                    key={disease}
+                    type="button"
+                    onClick={() => {
+                      setChronicDiseases(prev =>
+                        selected ? prev.filter(d => d !== disease) : [...prev, disease]
+                      );
+                    }}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '20px',
+                      fontSize: '14px',
+                      border: selected ? '1px solid #4A90E2' : '1px solid #ddd',
+                      background: selected ? '#4A90E2' : '#fff',
+                      color: selected ? '#fff' : '#555',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {disease}
+                  </button>
+                );
+              })}
+              {chronicDiseases.filter(d => !CHRONIC_DISEASE_OPTIONS.includes(d)).map(disease => (
+                <span
+                  key={disease}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '20px',
+                    fontSize: '14px',
+                    border: '1px solid #e8a735',
+                    background: '#fff8e1',
+                    color: '#b8860b',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  {disease}
+                  <button
+                    type="button"
+                    onClick={() => setChronicDiseases(prev => prev.filter(d => d !== disease))}
+                    style={{
+                      background: 'none', border: 'none', color: '#b8860b',
+                      cursor: 'pointer', fontSize: '14px', padding: '0 2px', lineHeight: 1
+                    }}
+                  >×</button>
+                </span>
+              ))}
+            </div>
+            {chronicDiseases.length > 0 && (
+              <div style={{ marginTop: '8px', fontSize: '13px', color: '#888' }}>
+                已选：{chronicDiseases.join('、')}
+              </div>
+            )}
           </div>
 
           {/* 关键用药因素分组 */}

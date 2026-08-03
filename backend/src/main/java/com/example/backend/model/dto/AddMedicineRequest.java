@@ -1,9 +1,11 @@
 package com.example.backend.model.dto;
 
+import com.example.backend.model.entity.UserMedicineBox;
 import lombok.Data;
 
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import java.math.BigDecimal;
 
 /**
  * 添加药品到药箱请求DTO
@@ -48,7 +50,7 @@ public class AddMedicineRequest {
      * 总数量（如30片、60片）
      */
     @NotNull(message = "总数量不能为空")
-    private Integer totalQuantity;
+    private BigDecimal totalQuantity;
 
     /**
      * 备注说明（最长500字符）
@@ -76,7 +78,7 @@ public class AddMedicineRequest {
     private String manufacturer;
 
     /**
-     * 状态，默认 active
+     * 状态，默认 active（对应 UserMedicineBox.Status.ACTIVE）
      */
-    private String status = "active";
+    private String status = UserMedicineBox.Status.ACTIVE.getCode();
 }

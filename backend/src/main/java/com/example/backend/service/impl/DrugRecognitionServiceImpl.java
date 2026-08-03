@@ -93,7 +93,7 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                 if (logId != null) {
                     logService.updateUnmatched(logId, "识别文本为空");
                 }
-                return buildResult(null, null, null, "unmatched", "未能识别出文字");
+                return buildResult(null, null, null, OcrRecord.Status.UNMATCHED.getCode(), "未能识别出文字");
             }
 
             // 步骤2: 从OCR文本中提取核心药品名称（过滤说明书内容）
@@ -110,7 +110,7 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                 if (logId != null) {
                     logService.updateUnmatched(logId, "未能提取药品名称");
                 }
-                return buildResult(null, null, null, "unmatched", "未能识别出药品名称");
+                return buildResult(null, null, null, OcrRecord.Status.UNMATCHED.getCode(), "未能识别出药品名称");
             }
 
             logger.info("提取药品名称成功 - 提取结果: {}", extractedName);
@@ -135,7 +135,7 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                 if (logId != null) {
                     logService.updateUnmatched(logId, validationResult.getMessage());
                 }
-                return buildResult(null, null, null, "unmatched", validationResult.getMessage());
+                return buildResult(null, null, null, OcrRecord.Status.UNMATCHED.getCode(), validationResult.getMessage());
             }
 
             // 步骤4: 在数据库中查找匹配的药品
@@ -156,7 +156,7 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                 }
 
                 return buildResult(matchResult.getDrugId(), matchResult.getDrugName(),
-                        matchResult.getScore(), "matched", "药品识别成功");
+                        matchResult.getScore(), OcrRecord.Status.MATCHED.getCode(), "药品识别成功");
 
             } else {
                 // 未匹配到现有药品
@@ -169,7 +169,7 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                     // 自动入库成功
                     if (logId != null) {
                         try {
-                            logService.updateImported(logId, newDrug.getId());
+                            logService.updateImported(logId, newDrug.getId(), newDrug.getGenericName());
                         } catch (Exception logEx) {
                             logger.warn("更新入库日志失败 - error: {}", logEx.getMessage());
                         }
@@ -178,13 +178,13 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                             newDrug.getId(), newDrug.getGenericName());
 
                     return buildResult(newDrug.getId(), newDrug.getGenericName(),
-                            new BigDecimal("1.0"), "matched", "新药品已自动添加到数据库");
+                            new BigDecimal("1.0"), OcrRecord.Status.MATCHED.getCode(), "新药品已自动添加到数据库");
                 } else {
                     // 自动入库失败或不满足条件
                     if (logId != null) {
                         logService.updateUnmatched(logId, "未能匹配到现有药品，且不符合自动入库条件");
                     }
-                    return buildResult(null, null, null, "unmatched", "未能识别出匹配的药品，请尝试手动输入");
+                    return buildResult(null, null, null, OcrRecord.Status.UNMATCHED.getCode(), "未能识别出匹配的药品，请尝试手动输入");
                 }
             }
 
@@ -197,7 +197,7 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
                     logger.warn("更新异常日志失败 - error: {}", logEx.getMessage());
                 }
             }
-            return buildResult(null, null, null, "failed", "识别失败，请重试");
+            return buildResult(null, null, null, OcrRecord.Status.FAILED.getCode(), "识别失败，请重试");
         }
     }
 
@@ -344,27 +344,79 @@ public class DrugRecognitionServiceImpl implements DrugRecognitionService {
             return existingDrugs.get(0);
         }
 
-        // 提取规格信息
-        String specification = nameNormalizer.extractSpecification(rawText);
+        try {
+            // 调用AI获取药品详细信息
+            logger.info("调用AI获取药品详细信息 - drugName: {}", normalizedName);
+            com.example.backend.model.dto.DrugDetailResponse aiResponse = deepSeekService.queryDrugInfoWithAI(normalizedName);
+            
+            if (aiResponse != null && aiResponse.getGenericName() != null && !aiResponse.getGenericName().isEmpty()) {
+                logger.info("AI返回成功 - genericName: {}, ingredient: {}", aiResponse.getGenericName(), aiResponse.getIngredient());
+                
+                // 构建description字段
+                StringBuilder description = new StringBuilder();
+                if (aiResponse.getIngredient() != null && !aiResponse.getIngredient().isEmpty()) {
+                    description.append("成分：").append(aiResponse.getIngredient()).append("。");
+                }
+                if (aiResponse.getIndications() != null && !aiResponse.getIndications().isEmpty()) {
+                    description.append("适应症：").append(aiResponse.getIndications()).append("。");
+                }
+                if (aiResponse.getUsage() != null && !aiResponse.getUsage().isEmpty()) {
+                    description.append("用法用量：").append(aiResponse.getUsage()).append("。");
+                }
+                if (aiResponse.getPrecautions() != null && !aiResponse.getPrecautions().isEmpty()) {
+                    description.append("注意事项：").append(aiResponse.getPrecautions()).append("。");
+                }
+                if (aiResponse.getAdverseReactions() != null && !aiResponse.getAdverseReactions().isEmpty()) {
+                    description.append("不良反应：").append(aiResponse.getAdverseReactions()).append("。");
+                }
 
-        // 创建新药品记录
-        DrugBase newDrug = new DrugBase();
-        newDrug.setGenericName(normalizedName);
-        newDrug.setTradeName(normalizedName); // 初始时商品名和通用名相同
-        newDrug.setCommonName(normalizedName); // 初始时俗名也相同
-        newDrug.setSpecification(specification);
-        newDrug.setCategory("非处方药"); // 默认分类
-        newDrug.setCreatedAt(LocalDateTime.now());
+                // 创建新药品记录
+                DrugBase newDrug = DrugBase.builder()
+                        .genericName(aiResponse.getGenericName() != null ? aiResponse.getGenericName() : normalizedName)
+                        .tradeName(aiResponse.getTradeName())
+                        .commonName(aiResponse.getCommonName())
+                        .specification(aiResponse.getSpecification() != null ? aiResponse.getSpecification() : nameNormalizer.extractSpecification(rawText))
+                        .manufacturer(aiResponse.getManufacturer())
+                        .category(aiResponse.getCategory())
+                        .description(description.length() > 0 ? description.toString() : null)
+                        .build();
 
-        // 保存到数据库
-        int result = drugBaseMapper.insert(newDrug);
-        if (result > 0) {
-            logger.info("新药品已成功入库 - drugId: {}, genericName: {}", newDrug.getId(), newDrug.getGenericName());
-            return newDrug;
+                // 保存到数据库
+                int result = drugBaseMapper.insert(newDrug);
+                if (result > 0) {
+                    logger.info("✅ 新药品已成功入库（含AI详情） - drugId: {}, genericName: {}, hasDescription: {}",
+                            newDrug.getId(), newDrug.getGenericName(), description.length() > 0);
+                    return newDrug;
+                } else {
+                    logger.error("❌ 新药品入库失败 - normalizedName: {}", normalizedName);
+                    return null;
+                }
+            } else {
+                logger.warn("AI未能返回有效药品信息，仅保存基本信息 - drugName: {}", normalizedName);
+                
+                // 降级：仅保存基本信息
+                String specification = nameNormalizer.extractSpecification(rawText);
+                String category = deepSeekService.classifyDrugCategory(normalizedName);
+                
+                DrugBase newDrug = DrugBase.builder()
+                        .genericName(normalizedName)
+                        .tradeName(normalizedName)
+                        .commonName(normalizedName)
+                        .specification(specification)
+                        .category(category)
+                        .build();
+
+                int result = drugBaseMapper.insert(newDrug);
+                if (result > 0) {
+                    logger.info("✅ 新药品已入库（仅基本信息） - drugId: {}, genericName: {}", newDrug.getId(), newDrug.getGenericName());
+                    return newDrug;
+                }
+                return null;
+            }
+        } catch (Exception e) {
+            logger.error("❌ 调用AI或入库异常 - drugName: {}, error: {}", normalizedName, e.getMessage(), e);
+            return null;
         }
-
-        logger.error("新药品入库失败 - normalizedName: {}", normalizedName);
-        return null;
     }
 
     /**

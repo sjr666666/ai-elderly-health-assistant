@@ -1,0 +1,16 @@
+# Copy this file to application-local.properties for local development.
+spring.datasource.password=your_mysql_password_here
+
+aliyun.oss.access-key-id=${ALIYUN_OSS_ACCESS_KEY_ID:}
+aliyun.oss.access-key-secret=${ALIYUN_OSS_ACCESS_KEY_SECRET:}
+
+baidu.ocr.app-id=${BAIDU_OCR_APP_ID:}
+baidu.ocr.api-key=${BAIDU_OCR_API_KEY:}
+baidu.ocr.secret-key=${BAIDU_OCR_SECRET_KEY:}
+
+baidu.tts.appId=${BAIDU_TTS_APP_ID:}
+baidu.tts.apiKey=${BAIDU_TTS_API_KEY:}
+baidu.tts.secretKey=${BAIDU_TTS_SECRET_KEY:}
+
+deepseek.api-key=${DEEPSEEK_API_KEY:}
+spring.redis.password=${SPRING_REDIS_PASSWORD:}
