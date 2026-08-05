@@ -347,6 +347,18 @@
   border: 1px solid var(--danger-border);
 }
 
+/* 注册成功提示 */
+.g-success-tip {
+  background: #E8F5E9;
+  color: #2E7D32;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+  border: 1px solid #A5D6A7;
+}
+
 /* 登录按钮 */
 .g-login-submit {
   width: 100%;

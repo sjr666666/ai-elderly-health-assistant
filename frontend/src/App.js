@@ -42,6 +42,7 @@ function App() {
   const recognitionHistoryModalRef = useRef(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [registerSuccess, setRegisterSuccess] = useState(''); // 注册成功提示，返回登录页时展示
   const [loginMode, setLoginMode] = useState('elder'); // 'elder' | 'guardian'
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [user, setUser] = useState(null);
@@ -194,11 +195,11 @@ function App() {
     return { expiredDrugs, expiringDrugs };
   }, [drugList]);
 
-  const handleRegister = (registerData) => {
+  const handleRegister = (registerData, successMsg) => {
     setShowRegister(false);
-    if (registerData) {
-      setLoginMode(registerData.role === 'family' ? 'guardian' : 'elder');
-      handleLogin(registerData);
+    // 注册成功后返回登录页，不自动登录；successMsg 用于在登录页展示成功提示
+    if (successMsg) {
+      setRegisterSuccess(successMsg);
     }
   };
 
@@ -662,6 +663,7 @@ function App() {
       ...loginData
     });
     setIsLoggedIn(true);
+    setRegisterSuccess(''); // 登录成功后清除注册成功提示
 
     // 用户信息仅保存在React state中，不存localStorage
 
@@ -5880,11 +5882,21 @@ function App() {
         <AuthGate
           mode={loginMode}
           showRegister={showRegister}
+          registerSuccess={registerSuccess}
           onLogin={handleLogin}
           onRegister={handleRegister}
-          onShowRegister={() => setShowRegister(true)}
-          onSwitchToGuardian={() => setLoginMode('guardian')}
-          onSwitchToElder={() => setLoginMode('elder')}
+          onShowRegister={() => {
+            setRegisterSuccess('');
+            setShowRegister(true);
+          }}
+          onSwitchToGuardian={() => {
+            setRegisterSuccess('');
+            setLoginMode('guardian');
+          }}
+          onSwitchToElder={() => {
+            setRegisterSuccess('');
+            setLoginMode('elder');
+          }}
         />
       ) : loginMode === 'guardian' ? (
         <GuardianApp
