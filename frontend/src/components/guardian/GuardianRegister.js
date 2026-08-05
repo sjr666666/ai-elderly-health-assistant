@@ -1,5 +1,4 @@
 import React, { useRef, useState } from 'react';
-import { saveToken } from '../../utils/guardianApi';
 import { AUTH_RULES } from '../../utils/authValidation';
 import './guardian.css';
 
@@ -36,7 +35,7 @@ function GuardianRegister({ onRegister, onBackToLogin }) {
 
   const validate = () => {
     const errors = {};
-    if (!AUTH_RULES.username.test(form.username.trim())) errors.username = '用户名需为4-20位字母、数字或下划线';
+    if (!AUTH_RULES.username.test(form.username.trim())) errors.username = '用户名需为4-20位字母、数字、下划线或中文';
     if (!AUTH_RULES.password.test(form.password)) errors.password = '密码长度需为6-20位';
     if (form.password !== form.confirmPassword) errors.confirmPassword = '两次输入的密码不一致';
     if (!form.realName.trim() || form.realName.trim().length > 50) errors.realName = '请输入真实姓名，且不能超过50个字符';
@@ -73,22 +72,8 @@ function GuardianRegister({ onRegister, onBackToLogin }) {
         return;
       }
 
-      const loginResponse = await fetch('/api/v1/user/login', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ username: form.username.trim(), password: form.password }),
-      });
-      const loginData = await loginResponse.json();
-      if (!loginResponse.ok || loginData.code !== 200 || loginData.data?.role !== 'family') {
-        setError('注册成功，请返回登录');
-        return;
-      }
-
-      const userData = { ...loginData.data };
-      if (userData.token) saveToken(userData.token);
-      delete userData.token;
-      onRegister(userData);
+      // 注册成功，返回登录页由用户手动登录
+      onRegister(null, '注册成功，请使用新账号登录');
     } catch (requestError) {
       console.error('家属注册失败:', requestError);
       setError('网络连接失败，请稍后重试');
