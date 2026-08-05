@@ -4,17 +4,17 @@ import Register from './Register';
 import GuardianLogin from './guardian/GuardianLogin';
 import GuardianRegister from './guardian/GuardianRegister';
 
-export default function AuthGate({ mode, showRegister, onLogin, onRegister, onShowRegister,
+export default function AuthGate({ mode, showRegister, registerSuccess, onLogin, onRegister, onShowRegister,
   onSwitchToGuardian, onSwitchToElder }) {
   if (mode === 'guardian') {
     if (showRegister) {
       return <GuardianRegister onRegister={onRegister} onBackToLogin={() => onRegister(null)} />;
     }
-    return <GuardianLogin onLogin={onLogin} onShowRegister={onShowRegister} onSwitchToElder={onSwitchToElder} />;
+    return <GuardianLogin onLogin={onLogin} onShowRegister={onShowRegister} onSwitchToElder={onSwitchToElder} registerSuccess={registerSuccess} />;
   }
   if (showRegister) {
     return <Register onRegister={onRegister} />;
   }
   return <Login onLogin={onLogin} onShowRegister={onShowRegister}
-    onSwitchToGuardian={onSwitchToGuardian} />;
+    onSwitchToGuardian={onSwitchToGuardian} registerSuccess={registerSuccess} />;
 }
