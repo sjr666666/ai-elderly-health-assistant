@@ -1,5 +1,4 @@
 import React, { useState, useRef } from 'react';
-import { saveToken } from '../utils/elderApi';
 
 function Register({ onRegister }) {
   const [username, setUsername] = useState('');
@@ -27,13 +26,13 @@ function Register({ onRegister }) {
     setError('');
 
     const errors = [];
-    if (!/^[A-Za-z0-9_]{4,20}$/.test(username.trim())) errors.push('用户名需为4-20位字母、数字或下划线');
+    if (!/^[A-Za-z0-9_\u4e00-\u9fa5]{4,20}$/.test(username.trim())) errors.push('用户名需为4-20位字母、数字、下划线或中文');
     if (!/^.{6,20}$/.test(password)) errors.push('密码长度需为6-20位');
     if (password !== confirmPassword) errors.push('两次输入的密码不一致');
     if (!realName.trim() || realName.trim().length > 50) errors.push('请输入真实姓名，且不能超过50个字符');
     if (age === '' || Number(age) < 0 || Number(age) > 150) errors.push('年龄必须在0-150之间');
     const nextFieldErrors = {};
-    if (!/^[A-Za-z0-9_]{4,20}$/.test(username.trim())) nextFieldErrors.username = '用户名需为4-20位字母、数字或下划线';
+    if (!/^[A-Za-z0-9_\u4e00-\u9fa5]{4,20}$/.test(username.trim())) nextFieldErrors.username = '用户名需为4-20位字母、数字、下划线或中文';
     if (!/^.{6,20}$/.test(password)) nextFieldErrors.password = '密码长度需为6-20位';
     if (password !== confirmPassword) nextFieldErrors.confirmPassword = '两次输入的密码不一致';
     if (!realName.trim() || realName.trim().length > 50) nextFieldErrors.realName = '请输入真实姓名，且不能超过50个字符';
@@ -114,39 +113,8 @@ function Register({ onRegister }) {
       const data = await response.json();
 
       if (response.ok && data.code === 200) {
-        // 注册成功后自动调用登录接口
-        const loginResponse = await fetch('/api/v1/user/login', {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json;charset=UTF-8',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify({
-            username: username.trim(),
-            password: password,
-          }),
-        });
-
-        const loginData = await loginResponse.json();
-
-        if (loginResponse.ok && loginData.code === 200) {
-          // 登录成功，保存JWT token（用户信息不存localStorage）
-          const loginResult = loginData.data;
-          if (loginResult.token) {
-            saveToken(loginResult.token);
-          }
-          const userData = {
-            ...loginResult,
-            realName: realName.trim(),
-            age: parseInt(age)
-          };
-          delete userData.token;
-          onRegister(userData);
-        } else {
-          // 登录失败，但注册成功，提示用户手动登录
-          setError('注册成功，请手动登录');
-        }
+        // 注册成功，跳回登录页由用户手动登录
+        onRegister(null, '注册成功，请使用新账号登录');
       } else {
         setError(data.message || '注册失败，请重试');
       }
@@ -275,7 +243,7 @@ function Register({ onRegister }) {
               required
               minLength={4}
               maxLength={20}
-              pattern="[A-Za-z0-9_]+"
+              pattern="[A-Za-z0-9_\u4e00-\u9fa5]+"
               style={{
                 width: '100%',
                 padding: '18px 24px',

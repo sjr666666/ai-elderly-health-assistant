@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { saveToken } from '../utils/elderApi';
 import { validateCredentials } from '../utils/authValidation';
 
-function Login({ onLogin, onShowRegister, onSwitchToGuardian }) {
+function Login({ onLogin, onShowRegister, onSwitchToGuardian, registerSuccess }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -119,6 +119,20 @@ function Login({ onLogin, onShowRegister, onSwitchToGuardian }) {
             fontWeight: '600'
           }}>
             ⚠️ {error}
+          </div>
+        )}
+
+        {registerSuccess && (
+          <div style={{
+            background: '#E8F5E9',
+            color: '#2E7D32',
+            padding: '16px 20px',
+            borderRadius: '12px',
+            marginBottom: '24px',
+            fontSize: '16px',
+            fontWeight: '600'
+          }}>
+            ✅ {registerSuccess}
           </div>
         )}
 
