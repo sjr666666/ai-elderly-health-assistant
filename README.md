@@ -50,49 +50,28 @@ git clone https://github.com/sjr666666/aaagame.git
 cd aaagame
 ```
 
-### 2. 数据库初始化
+### 2. 数据库初始化（Flyway 自动迁移，推荐）
 
-**Windows 用户**：
+项目已集成 **Flyway** 数据库版本管理，**无需手动执行任何 SQL**：
 
-```bash
-cd backend
-init_database.bat
+1. 确保 MySQL 服务已启动，在 `application-local.properties` 中配置好密码（见下一步）
+2. 直接启动后端，Flyway 会自动完成：
+   - 库不存在时自动创建 `elderly_medication` 数据库（连接账号需有建库权限）
+   - 按版本顺序执行 `db/migration/` 下的迁移脚本（V1 建表 → V2 基础数据 → V3/V4 结构演进）
+   - 每次变更记录在 `flyway_schema_history` 表中，**升级时自动执行增量迁移**
 
-# 或跳过完整药品数据（仅导入基础数据，加快速度）
-init_database.bat --skip-drug-data
+迁移脚本一览：
 
-# 或指定数据库连接信息
-init_database.bat -u root -p your_password
-```
+| 版本 | 文件 | 说明 |
+|------|------|------|
+| V1 | `db/migration/V1__init_schema.sql` | 19 张核心表（用户/药品/计划/家属端等）+ 外键 |
+| V2 | `db/migration/V2__init_data.sql` | 基础数据（5 个测试账号、完整药品库、关键词、别名） |
+| V3 | `db/migration/V3__production_support.sql` | 生产支撑表（通知箱/异步任务/刷新会话） |
+| V4 | `db/migration/V4__use_decimal_inventory_quantities.sql` | 药箱数量字段升级为 DECIMAL |
 
-**macOS / Linux 用户**：
-
-```bash
-cd backend
-chmod +x init_database.sh
-./init_database.sh
-
-# 或指定参数
-./init_database.sh -u root -p your_password
-```
-
-脚本会依次执行以下SQL（**必须按顺序执行**）：
-
-| 顺序 | 脚本文件 | 说明 |
-|------|----------|------|
-| 1 | `init_database.sql` | 创建数据库 + 16张基础表 + 测试数据 |
-| 2 | `init_drug_data.sql` | 补充完整药品数据（约76种常见药品） |
-| 3 | `init_guardian_tables.sql` | 家属端3张表（关联/通知/紧急事件）+ 外键 |
-
-> 所有SQL脚本**可重复执行**：建表用 `CREATE TABLE IF NOT EXISTS`，数据用 `INSERT IGNORE`，外键用存储过程安全添加。
-
-**手动初始化**（不推荐，仅在脚本不可用时）：
-
-```bash
-mysql -u root -p --default-character-set=utf8mb4 < src/main/resources/init_database.sql
-mysql -u root -p --default-character-set=utf8mb4 < src/main/resources/init_drug_data.sql
-mysql -u root -p --default-character-set=utf8mb4 < src/main/resources/init_guardian_tables.sql
-```
+> **老库平滑升级**：已用旧脚本初始化过的数据库，首次启动会自动 baseline 到 V1 并执行后续增量迁移，不会重复建表。
+>
+> **手动脚本（已废弃，仅供排查参考）**：`init_database.sql` / `init_drug_data.sql` / `init_guardian_tables.sql` / `init_weekly_report_table.sql` 及 `init_database.bat/sh` 仍保留，但**新环境请直接使用 Flyway**，不要再手动执行，避免与迁移记录冲突。
 
 ### 3. 后端配置
 
@@ -311,24 +290,32 @@ innovative-ideas-challenge/
 
 ## 数据库表结构
 
-| 表名 | 说明 | 所属脚本 |
+> 由 Flyway 管理，共 22 张表，按迁移版本组织。
+
+| 表名 | 说明 | 所属迁移 |
 |------|------|----------|
-| `sys_user` | 用户表（老人+家属） | init_database.sql |
-| `drug_base` | 药品基础库 | init_database.sql |
-| `user_medicine_box` | 家庭药箱 | init_database.sql |
-| `medication_plan` | 用药计划 | init_database.sql |
-| `medication_log` | 服药确认记录 | init_database.sql |
-| `drug_conflict_rules` | 药品冲突规则 | init_database.sql |
-| `drug_category_keywords` | 药品类别关键词 | init_database.sql |
-| `drug_aliases` | 药品别名映射 | init_database.sql |
-| `ocr_record` | OCR识别记录 | init_database.sql |
-| `drug_recognition_log` | 药品识别日志 | init_database.sql |
-| `ai_conversation_log` | AI对话记录 | init_database.sql |
-| `reminder_log` | 提醒通知记录 | init_database.sql |
-| `emergency_contact` | 紧急联系人 | init_database.sql |
-| `guardian_elder_relation` | 家属-老人关联 | init_guardian_tables.sql |
-| `sms_notification_log` | 短信通知日志 | init_guardian_tables.sql |
-| `emergency_event` | 紧急事件 | init_guardian_tables.sql |
+| `sys_user` | 用户表（老人+家属） | V1__init_schema |
+| `drug_base` | 药品基础库 | V1__init_schema |
+| `user_medicine_box` | 家庭药箱 | V1__init_schema |
+| `medication_plan` | 用药计划 | V1__init_schema |
+| `medication_log` | 服药确认记录 | V1__init_schema |
+| `drug_conflict_rules` | 药品冲突规则 | V1__init_schema |
+| `drug_category_keywords` | 药品类别关键词 | V1__init_schema |
+| `drug_aliases` | 药品别名映射 | V1__init_schema |
+| `ocr_record` | OCR识别记录 | V1__init_schema |
+| `drug_recognition_log` | 药品识别日志 | V1__init_schema |
+| `ai_conversation_log` | AI对话记录 | V1__init_schema |
+| `reminder_log` | 提醒通知记录 | V1__init_schema |
+| `emergency_contact` | 紧急联系人 | V1__init_schema |
+| `daily_lesson` | 今日一课-慢病科普 | V1__init_schema |
+| `guardian_elder_relation` | 家属-老人关联 | V1__init_schema |
+| `sms_notification_log` | 短信通知日志 | V1__init_schema |
+| `emergency_event` | 紧急事件 | V1__init_schema |
+| `elder_notification` | 老人端通知 | V1__init_schema |
+| `medication_weekly_report` | AI用药周报 | V1__init_schema |
+| `notification_outbox` | 通知发件箱（事务消息） | V3__production_support |
+| `async_task_record` | 异步任务记录 | V3__production_support |
+| `auth_refresh_session` | 刷新令牌会话 | V3__production_support |
 
 ## 注意事项
 
@@ -337,7 +324,7 @@ innovative-ideas-challenge/
 3. **代理配置**：前端使用 `setupProxy.js` 代理转发API请求，请勿修改 `http-proxy-middleware` 版本号
 4. **阿里云OSS**：`access-key-id` 留空时系统自动禁用OSS，不影响其他功能
 5. **Neo4j**：已排除自动配置，不影响项目启动
-6. **数据库更新**：从旧版本更新时，需按顺序重新执行三个SQL脚本
+6. **数据库更新**：升级版本后首次启动，Flyway 会自动执行增量迁移（`db/migration/`），无需手动操作；如需查看已执行记录，检查 `flyway_schema_history` 表
 
 ## 开发规范
 
