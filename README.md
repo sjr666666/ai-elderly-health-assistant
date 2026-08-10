@@ -183,6 +183,36 @@ docker compose up -d --build
 - 开发模式热更新: `docker compose -f docker-compose.dev.yml up`(代码挂载 + 端口映射 3000/8080)
 - HTTPS 部署: 参考 `docker-compose.https.yml`(需配置证书)
 
+## 功能截图
+
+### 老人端
+
+登录界面(渐变色 + 大字体设计,适配老年人视觉):
+
+![老人端登录](docs/images/elder-login.png)
+
+登录后的首页 — 集常用功能、SOS 紧急求助、今日一课健康科普于一体:
+
+![老人端首页](docs/images/elder-home.png)
+
+AI 紧急助手 — 红色呼叫家人一键直达,8 大紧急情况分类标签引导:
+
+![AI 紧急助手](docs/images/elder-ai.png)
+
+家庭药箱 — 搜索 / 新增 / 多选,药品状态一目了然:
+
+![家庭药箱](docs/images/elder-box.png)
+
+### 家属端(移动端风格)
+
+仪表盘 — 关联老人、紧急事件、临期药品三项核心指标:
+
+![家属端仪表盘](docs/images/guardian-dashboard.png)
+
+老人详情 — 今日用药计划、紧急事件、临期药品分块展示,一屏掌握:
+
+![老人详情](docs/images/guardian-elder-detail.png)
+
 ## 功能特性
 
 ### 老人端
