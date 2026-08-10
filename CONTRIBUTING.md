@@ -47,7 +47,7 @@
    ```bash
    git clone https://github.com/<你的用户名>/aaagame.git
    cd aaagame
-   git remote add upstream https://github.com/sjr666666/aaagame.git
+   git remote add upstream https://github.com/sjr666666/ai-elderly-health-assistant.git
    ```
 
 3. 基于最新 `main` 创建功能分支(**命名规范**:`feat/xxx`、`fix/xxx`、`docs/xxx`、`refactor/xxx`):

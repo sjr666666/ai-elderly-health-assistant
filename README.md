@@ -3,12 +3,12 @@
 > 🏥 专为老年人设计的智能用药安全与健康管理应用 —— AI 紧急咨询、用药冲突检测、按时服药提醒、家属远程监护
 
 <p align="center">
-  <img src="https://img.shields.io/github/license/sjr666666/aaagame" alt="License: MIT" />
-  <img src="https://img.shields.io/github/stars/sjr666666/aaagame?style=social" alt="GitHub stars" />
-  <img src="https://img.shields.io/github/forks/sjr666666/aaagame?style=social" alt="GitHub forks" />
-  <img src="https://github.com/sjr666666/aaagame/actions/workflows/ci.yml/badge.svg" alt="CI" />
-  <img src="https://img.shields.io/github/languages/top/sjr666666/aaagame" alt="Top language" />
-  <img src="https://img.shields.io/github/commit-activity/m/sjr666666/aaagame" alt="Commit activity" />
+  <img src="https://img.shields.io/github/license/sjr666666/ai-elderly-health-assistant" alt="License: MIT" />
+  <img src="https://img.shields.io/github/stars/sjr666666/ai-elderly-health-assistant?style=social" alt="GitHub stars" />
+  <img src="https://img.shields.io/github/forks/sjr666666/ai-elderly-health-assistant?style=social" alt="GitHub forks" />
+  <img src="https://github.com/sjr666666/ai-elderly-health-assistant/actions/workflows/ci.yml/badge.svg" alt="CI" />
+  <img src="https://img.shields.io/github/languages/top/sjr666666/ai-elderly-health-assistant" alt="Top language" />
+  <img src="https://img.shields.io/github/commit-activity/m/sjr666666/ai-elderly-health-assistant" alt="Commit activity" />
 </p>
 
 **⭐ 如果这个项目对你有帮助,欢迎点个 Star,让更多人看到它!**
@@ -46,7 +46,7 @@ AI紧急助手系统是一款专为老年人设计的智能健康助手，提供
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/sjr666666/aaagame.git
+git clone https://github.com/sjr666666/ai-elderly-health-assistant.git
 cd aaagame
 ```
 
@@ -338,8 +338,8 @@ innovative-ideas-challenge/
 非常欢迎任何形式的贡献:提 Bug、建议功能、改进文档、提交代码!
 
 - 📝 想贡献代码?请先阅读 **[贡献指南](./CONTRIBUTING.md)** —— 有完整的开发环境搭建、代码规范与 PR 流程
-- 🐛 遇到问题?通过 **[Issue 模板](https://github.com/sjr666666/aaagame/issues/new/choose)** 提交(会自动生成结构化模板)
-- 💬 有想法想讨论?欢迎到 **[Discussions](https://github.com/sjr666666/aaagame/discussions)** 交流
+- 🐛 遇到问题?通过 **[Issue 模板](https://github.com/sjr666666/ai-elderly-health-assistant/issues/new/choose)** 提交(会自动生成结构化模板)
+- 💬 有想法想讨论?欢迎到 **[Discussions](https://github.com/sjr666666/ai-elderly-health-assistant/discussions)** 交流
 - 🚀 新手友好:标记了 `good first issue` 的 Issue 最适合第一次贡献
 
 > 本项目遵循 [Contributor Covenant](./CODE_OF_CONDUCT.md) 行为准则。

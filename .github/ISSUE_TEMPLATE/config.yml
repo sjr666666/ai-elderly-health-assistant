@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: 📖 项目文档
-    url: https://github.com/sjr666666/aaagame/blob/main/README.md
+    url: https://github.com/sjr666666/ai-elderly-health-assistant/blob/main/README.md
     about: 先阅读 README,包含快速开始、API 概览与数据库说明
   - name: 💬 参与讨论
-    url: https://github.com/sjr666666/aaagame/discussions
+    url: https://github.com/sjr666666/ai-elderly-health-assistant/discussions
     about: 功能想法、使用问题欢迎在 Discussions 讨论
