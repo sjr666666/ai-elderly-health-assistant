@@ -17,6 +17,8 @@
 
 AI紧急助手系统是一款专为老年人设计的智能健康助手，提供紧急情况下的急救指导、日常健康咨询、用药管理和家属监护等功能。系统分为**老人端**和**家属端**双端设计，老人端侧重用药管理与紧急求助，家属端侧重远程监护与通知接收。
 
+核心亮点：**RAG 用药知识库**（933 条知识：药品 / 慢病指南 / FAQ）——AI 回答基于检索资料生成，**可溯源、降幻觉**；SSE 流式输出 + 药箱个性化（AI 知道老人真实在吃什么药）+ 三级离线降级（向量 → 关键词 → 本地直出），医疗场景离线可用。
+
 ## 技术栈
 
 ### 前端
@@ -26,13 +28,17 @@ AI紧急助手系统是一款专为老年人设计的智能健康助手，提供
 
 ### 后端
 - Spring Boot 2.7.18 + MyBatis Plus 3.5.5
-- MySQL 8.0
-- Spring Security（BCrypt 密码加密）
+- MySQL 8.0 + Redis（缓存/异步链路）
+- Spring Security + JWT（BCrypt 密码加密，无状态鉴权）
+- Flyway 数据库版本管理（V1~V6 增量迁移，无需手动 SQL）
 - Hutool 工具库
 - 阿里云 OSS（药品图片存储，可选）
 - 百度 OCR（药品包装识别）
 - 百度 TTS（语音播报）
-- DeepSeek AI（紧急咨询 / 用药指导 / 冲突分析）
+- DeepSeek AI（紧急咨询 / 用药指导 / 冲突分析 / RAG 生成）
+- **SiliconFlow bge-m3（RAG 语义检索向量化，1024 维）**：未配 Key 自动降级内置哈希向量
+- **RAG 检索增强生成**：向量检索 + 关键词倒排双路检索，三级降级（VECTOR→KEYWORD→LOCAL）
+- **SSE 流式输出**：问答逐字返回，老人等待有实时反馈
 
 ## 开发计划
 
@@ -71,7 +77,7 @@ AI紧急助手系统是一款专为老年人设计的智能健康助手，提供
 
 - [x] `VectorStore`：内存向量索引 + 余弦相似度 top-k 召回
 - [x] `KeywordIndex`：本地关键词倒排索引（离线降级用）
-- [x] 检索单测：14 个用例（KeywordIndex/VectorStore/Markdown 解析，命中正确性验证）
+- [x] 检索单测：23 个用例（KeywordIndex/VectorStore/Markdown 解析/降级策略，命中正确性 + 低分尾项过滤验证）
 
 ### 阶段三：RAG 问答接口（P3）
 
@@ -130,6 +136,8 @@ cd aaagame
 | V2 | `db/migration/V2__init_data.sql` | 基础数据（5 个测试账号、完整药品库、关键词、别名） |
 | V3 | `db/migration/V3__production_support.sql` | 生产支撑表（通知箱/异步任务/刷新会话） |
 | V4 | `db/migration/V4__use_decimal_inventory_quantities.sql` | 药箱数量字段升级为 DECIMAL |
+| V5 | `db/migration/V5__create_knowledge_chunk.sql` | RAG 知识切片表（title/content/embedding_json/关键词） |
+| V6 | `db/migration/V6__add_knowledge_source_ref.sql` | 知识来源标注列 `source_ref`（回答可溯源） |
 
 > **老库平滑升级**：已用旧脚本初始化过的数据库，首次启动会自动 baseline 到 V1 并执行后续增量迁移，不会重复建表。
 >
@@ -164,8 +172,13 @@ baidu.tts.appId=your_baidu_tts_app_id
 baidu.tts.apiKey=your_baidu_tts_api_key
 baidu.tts.secretKey=your_baidu_tts_secret_key
 
-# DeepSeek大模型（紧急咨询/用药指导/冲突分析）
+# DeepSeek大模型（紧急咨询/用药指导/冲突分析/RAG回答生成）
 deepseek.api-key=sk-your_deepseek_api_key_here
+
+# SiliconFlow bge-m3（RAG语义检索，可选但强烈推荐）
+# 不填则检索用内置降级向量（精度受限）；填了检索才"懂语义"（如"这药和降压药一起吃行不行"）
+# 获取：https://cloud.siliconflow.cn 控制台 → API 密钥
+siliconflow.api-key=sk-your_siliconflow_api_key_here
 ```
 
 > 阿里云OSS的 `access-key-id` 留空时，系统会自动禁用OSS功能，不影响其他功能使用。
@@ -225,6 +238,8 @@ cp .env.example .env
 | `JWT_SECRET` | JWT 签名密钥(**至少 32 字符**) |
 | `PHONE_ENCRYPT_KEY` | 手机号加密密钥 |
 | `APP_CORS_ALLOWED_ORIGINS` | 允许的前端来源,如 `http://localhost` |
+| `DEEPSEEK_API_KEY` | DeepSeek 大模型 Key（AI 回答生成，可选） |
+| `SILICONFLOW_API_KEY` | SiliconFlow bge-m3 语义检索 Key（RAG 检索精度关键，可选） |
 
 **第二步:启动**
 
@@ -244,6 +259,14 @@ docker compose up -d --build
 - 停止服务: `docker compose down`;彻底清理(含数据): `docker compose down -v`
 - 开发模式热更新: `docker compose -f docker-compose.dev.yml up`(代码挂载 + 端口映射 3000/8080)
 - HTTPS 部署: 参考 `docker-compose.https.yml`(需配置证书)
+
+## 项目文档
+
+| 文档 | 内容 |
+|------|------|
+| [RAG实现讲解.md](./docs/RAG实现讲解.md) | RAG 原理 + 本项目实现逐段讲解 + 面试 Q&A（入门） |
+| [RAG实现讲解2-进阶.md](./docs/RAG实现讲解2-进阶.md) | 循环依赖解耦 / P4 接入法 / 检索质量兜底 / 引用体系 / 流式（进阶） |
+| [RAG演示话术.md](./docs/RAG演示话术.md) | 竞赛演示 3 个场景（可溯源问答 / 药箱个性化 / 降级兜底）+ 答辩备答 |
 
 ## 功能截图
 
@@ -314,6 +337,15 @@ AI 紧急助手 — 红色呼叫家人一键直达,8 大紧急情况分类标签
 - 多联系人增删改查
 - 首个联系人自动设为主要联系人
 
+#### 用药问问（RAG 用药知识问答）
+- 检索增强生成：问题 → 语义检索知识库（933 条）→ AI 基于资料回答，**可溯源**
+- **流式输出**：SSE 打字机效果，等待时动态反馈（"正在回答…"）
+- **引用溯源**：回答中 [1][2] 编号可点击跳转对应资料，来源标注"已引用/未采用"
+- **药箱个性化**：自动注入用户药箱真实用药（"根据您的药箱：XXX"），回答贴合本人情况
+- 老人友好：大字条目化排版、重点荧光笔高亮、🔊 语音播报、快捷提问胶囊（免打字）
+- 三级降级：向量检索 → 关键词倒排 → 本地直出，断网/无 Key 仍可用
+- 知识外置：**加知识 = 加一个 .md 文件**（`resources/knowledge/`），重启自动入库
+
 #### 多模态与体验
 - 百度 TTS 语音播报（语速可调，老年人友好）
 - 老年友好界面（大字体、高对比度）
@@ -361,14 +393,27 @@ innovative-ideas-challenge/
 │   │   │   ├── entity/               # 数据库实体（15个）
 │   │   │   └── vo/                   # 视图对象
 │   │   ├── service/                  # 服务接口
+│   │   │   ├── rag/                  # RAG 检索增强生成（Embedding/向量库/倒排索引/入库/问答）
+│   │   │   │   ├── RagEmbeddingService   # 双策略向量化（bge-m3 / 本地哈希降级）
+│   │   │   │   ├── VectorStore          # 内存向量索引 + 余弦 top-k
+│   │   │   │   ├── KeywordIndex         # 中文 bigram 倒排索引（离线降级，标题加权）
+│   │   │   │   ├── RagIngestService     # 知识入库（扫描 Markdown + 药品动态抽取）
+│   │   │   │   ├── RagSearchService     # 纯检索层（向量/关键词 + 分数兜底过滤）
+│   │   │   │   └── RagService           # 问答编排（检索→增强→生成，药箱个性化）
 │   │   │   └── impl/                 # 服务实现
 │   │   └── task/                     # 定时任务
 │   ├── src/main/resources/
+│   │   ├── knowledge/                # 知识库（Markdown，加知识=加文件）
+│   │   │   ├── drugs/                #   药品知识（817 个，开源数据集）
+│   │   │   ├── guides/               #   慢病指南（10 个）
+│   │   │   └── faqs/                 #   用药 FAQ（12 条）
+│   │   ├── db/migration/             # Flyway 迁移（V1~V6）
 │   │   ├── init_database.sql         # 建库+基础表+测试数据
 │   │   ├── init_drug_data.sql        # 完整药品数据
 │   │   ├── init_guardian_tables.sql  # 家属端表
 │   │   ├── application.properties    # 主配置
 │   │   └── application-local.properties.example  # 本地配置模板
+│   ├── scripts/rag-dataset/          # 开源数据集采集脚本（可复现）
 │   ├── init_database.bat             # Windows初始化脚本
 │   ├── init_database.sh              # Linux/Mac初始化脚本
 │   └── pom.xml
@@ -385,10 +430,15 @@ innovative-ideas-challenge/
 │   │   │   ├── Login.js              # 老人端登录
 │   │   │   ├── DrugListView.js       # 药箱管理
 │   │   │   ├── EmergencyAssistant.js # AI紧急助手
+│   │   │   ├── RagAskCard.jsx        # 用药问问（RAG 问答卡片，流式+引用）
 │   │   │   └── ...                   # 其他老人端组件
 │   │   ├── App.js                    # 根组件（角色路由）
 │   │   └── setupProxy.js             # API代理配置
 │   └── package.json
+├── docs/                             # 文档
+│   ├── RAG实现讲解.md                # RAG 原理+实现+面试 Q&A
+│   ├── RAG实现讲解2-进阶.md          # 检索兜底/引用体系/流式/采集 进阶讲解
+│   └── RAG演示话术.md                # 竞赛演示 3 个场景话术
 └── README.md
 ```
 
@@ -420,9 +470,19 @@ innovative-ideas-challenge/
 | 冲突 | `/api/v1/drug-conflict` | 药品冲突检测 |
 | 紧急 | `/api/v1/emergency` | 紧急联系人/SOS |
 
+### RAG 用药知识库 API
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/rag/ask` | POST | 用药知识问答（body: `{"question":"..."}`），返回 answer + sources[]（含来源标注/药箱药品） |
+| `/api/rag/ask/stream` | POST | SSE 流式问答（meta 来源 → delta 逐字 → done） |
+| `/api/rag/ingest` | POST | 全量重灌知识库（换 embedding 后必须调用） |
+| `/api/rag/ingest/drug/{id}` | POST | 单药增量入库（新药自动向量化） |
+| `/api/rag/health` | GET | 知识库健康状态（切片数 / embedding provider） |
+
 ## 数据库表结构
 
-> 由 Flyway 管理，共 22 张表，按迁移版本组织。
+> 由 Flyway 管理，共 23 张表，按迁移版本组织。
 
 | 表名 | 说明 | 所属迁移 |
 |------|------|----------|
@@ -448,6 +508,7 @@ innovative-ideas-challenge/
 | `notification_outbox` | 通知发件箱（事务消息） | V3__production_support |
 | `async_task_record` | 异步任务记录 | V3__production_support |
 | `auth_refresh_session` | 刷新令牌会话 | V3__production_support |
+| `knowledge_chunk` | RAG 知识切片（文本/向量/来源，933 条） | V5__create_knowledge_chunk + V6 |
 
 ## 注意事项
 
