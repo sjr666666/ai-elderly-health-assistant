@@ -9,10 +9,8 @@ services:
       MYSQL_PASSWORD: ${MYSQL_APP_PASSWORD:?MYSQL_APP_PASSWORD is required}
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./backend/src/main/resources/init_database.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-      - ./backend/src/main/resources/init_drug_data.sql:/docker-entrypoint-initdb.d/02-drug-data.sql:ro
-      - ./backend/src/main/resources/init_guardian_tables.sql:/docker-entrypoint-initdb.d/03-guardian.sql:ro
-      - ./backend/src/main/resources/init_weekly_report_table.sql:/docker-entrypoint-initdb.d/04-weekly-report.sql:ro
+      # 表结构与基础数据由后端启动时的 Flyway 自动迁移(db/migration/V1~V4)管理,
+      # 不再挂载手动 init_*.sql 脚本,避免与迁移记录冲突
     networks: [internal]
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]

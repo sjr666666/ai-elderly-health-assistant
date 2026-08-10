@@ -143,6 +143,46 @@ npm start
 
 > 登录后系统根据角色自动跳转：老人 → 老人端首页，家属 → 家属端移动端页面。
 
+### 7. Docker 一键部署（推荐）
+
+项目已提供完整的 `docker-compose.yml`,一条命令拉起 MySQL + Redis + 后端 + 前端四个服务。
+
+**第一步:准备环境变量**
+
+```bash
+cp .env.example .env
+```
+
+编辑 `.env`,至少填写以下必填项(其余可留空,对应的 AI/存储功能会自动禁用):
+
+| 变量 | 说明 |
+|------|------|
+| `MYSQL_ROOT_PASSWORD` | MySQL root 密码(建议长随机串) |
+| `MYSQL_APP_PASSWORD` | 应用账号 `medication_app` 的密码 |
+| `REDIS_PASSWORD` | Redis 密码 |
+| `JWT_SECRET` | JWT 签名密钥(**至少 32 字符**) |
+| `PHONE_ENCRYPT_KEY` | 手机号加密密钥 |
+| `APP_CORS_ALLOWED_ORIGINS` | 允许的前端来源,如 `http://localhost` |
+
+**第二步:启动**
+
+```bash
+docker compose up -d --build
+```
+
+**第三步:访问**
+
+- 前端: http://localhost (默认 `HTTP_PORT=80`,可在 `.env` 修改)
+- 后端 API: http://localhost:8080
+
+**说明:**
+
+- 数据库表结构与基础数据由后端启动时的 **Flyway 自动迁移** 完成(见上「数据库初始化」),无需手动执行 SQL
+- 数据持久化在 Docker volumes(`mysql-data` / `redis-data` / `uploads-data`),删除容器不会丢数据
+- 停止服务: `docker compose down`;彻底清理(含数据): `docker compose down -v`
+- 开发模式热更新: `docker compose -f docker-compose.dev.yml up`(代码挂载 + 端口映射 3000/8080)
+- HTTPS 部署: 参考 `docker-compose.https.yml`(需配置证书)
+
 ## 功能特性
 
 ### 老人端
