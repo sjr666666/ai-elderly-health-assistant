@@ -28,6 +28,11 @@ public class KeywordIndex {
     private final Map<String, List<Long>> invertedIndex = new ConcurrentHashMap<>();
     /** 切片ID → 切片本体 */
     private final Map<Long, KnowledgeChunk> chunkById = new ConcurrentHashMap<>();
+    /** 切片ID → 标题 bigram 集合（标题命中加权，药名在标题时检索更准） */
+    private final Map<Long, Set<String>> titleGramsById = new ConcurrentHashMap<>();
+
+    /** 标题 bigram 命中权重（内容命中为 1） */
+    private static final int TITLE_WEIGHT = 3;
 
     /**
      * 重建倒排索引
@@ -35,8 +40,11 @@ public class KeywordIndex {
     public void rebuild(List<KnowledgeChunk> chunks) {
         invertedIndex.clear();
         chunkById.clear();
+        titleGramsById.clear();
         for (KnowledgeChunk chunk : chunks) {
             chunkById.put(chunk.getId(), chunk);
+            Set<String> titleGrams = bigrams(chunk.getTitle());
+            titleGramsById.put(chunk.getId(), titleGrams);
             Set<String> grams = bigrams(chunk.getTitle() + " " + safe(chunk.getContent()));
             for (String gram : grams) {
                 invertedIndex.computeIfAbsent(gram, k -> new ArrayList<>()).add(chunk.getId());
@@ -47,12 +55,19 @@ public class KeywordIndex {
 
     /**
      * 关键词检索：对 query 切 bigram，命中切片按命中词项数打分
+     * <p>
+     * 带<b>最低命中过滤</b>：query ≥3 字（≥2 个 bigram）时，命中词项 < 2 的切片直接丢弃。
+     * 原因：药品知识里普遍含"过期/有效期/注意事项"等通用词，若只命中 1 个通用 bigram
+     * 就进入结果，会把"右旋糖酐70""田七痛经胶囊"这类完全无关的药带进参考资料（实测漂移）。
+     * 精确药名/疾病名通常命中 ≥2 个 bigram（"布洛芬"→布洛/洛芬），不受影响。
      */
     public List<VectorStore.ScoredChunk> search(String query, int topK) {
         Set<String> queryGrams = bigrams(query);
         if (queryGrams.isEmpty() || chunkById.isEmpty()) {
             return Collections.emptyList();
         }
+        // 最短 query（1-2 字）只产生 1 个 bigram，最低命中降为 1，避免误杀
+        int minHits = queryGrams.size() >= 3 ? 2 : 1;
         Map<Long, Integer> scoreMap = new HashMap<>();
         for (String gram : queryGrams) {
             List<Long> ids = invertedIndex.get(gram);
@@ -60,10 +75,15 @@ public class KeywordIndex {
                 continue;
             }
             for (Long id : ids) {
-                scoreMap.merge(id, 1, Integer::sum);
+                // 标题命中的 bigram 加权（药名/疾病名在标题时检索更准，避免内容里
+                // "注意事项/有效期"等通用词抢占分数）
+                int weight = titleGramsById.getOrDefault(id, Collections.emptySet()).contains(gram)
+                        ? TITLE_WEIGHT : 1;
+                scoreMap.merge(id, weight, Integer::sum);
             }
         }
         List<Map.Entry<Long, Integer>> sorted = new ArrayList<>(scoreMap.entrySet());
+        sorted.removeIf(e -> e.getValue() < minHits);
         sorted.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
         List<VectorStore.ScoredChunk> results = new ArrayList<>(Math.min(topK, sorted.size()));
         for (Map.Entry<Long, Integer> e : sorted) {

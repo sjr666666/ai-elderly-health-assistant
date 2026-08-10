@@ -8,6 +8,7 @@ import com.example.backend.model.dto.DrugSearchResponse;
 import com.example.backend.model.entity.DrugBase;
 import com.example.backend.service.DeepSeekService;
 import com.example.backend.service.DrugService;
+import com.example.backend.service.rag.RagIngestService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -31,12 +32,18 @@ public class DrugServiceImpl implements DrugService {
     private final DrugBaseMapper drugBaseMapper;
     private final DeepSeekService deepSeekService;
     private final ObjectMapper objectMapper;
+    /** RAG 知识库：新药入库后增量向量化，自动进入用药知识库 */
+    private final RagIngestService ragIngestService;
 
     @Autowired
-    public DrugServiceImpl(DrugBaseMapper drugBaseMapper, DeepSeekService deepSeekService, ObjectMapper objectMapper) {
+    public DrugServiceImpl(DrugBaseMapper drugBaseMapper,
+                           DeepSeekService deepSeekService,
+                           ObjectMapper objectMapper,
+                           RagIngestService ragIngestService) {
         this.drugBaseMapper = drugBaseMapper;
         this.deepSeekService = deepSeekService;
         this.objectMapper = objectMapper;
+        this.ragIngestService = ragIngestService;
     }
 
     // 药品类别关键词映射
@@ -360,6 +367,12 @@ public class DrugServiceImpl implements DrugService {
             if (insertCount > 0) {
                 logger.info("✅ AI药品信息已成功保存到数据库 - drugName: {}, id: {}", 
                     drugDetail.getGenericName(), drugBase.getId());
+                // RAG 增量入库：新药知识自动向量化进知识库（失败不阻塞主流程）
+                try {
+                    ragIngestService.ingestDrug(drugBase.getId());
+                } catch (Exception ragEx) {
+                    logger.warn("⚠️ 药品增量入知识库失败（不影响主流程）- {}", ragEx.getMessage());
+                }
             } else {
                 logger.warn("❌ 保存药品到数据库失败 - drugName: {}", drugDetail.getGenericName());
             }

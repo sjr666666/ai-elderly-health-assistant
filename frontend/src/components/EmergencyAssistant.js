@@ -455,6 +455,7 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
         <div className="header-title">
           <span className="emergency-icon">🚨</span>
           <h2>AI紧急助手</h2>
+          <span className="rag-subtitle">不舒服，先处理</span>
         </div>
         {messages.length > 0 && (
           <button className="clear-btn" onClick={clearMessages} title="清空对话">

@@ -113,4 +113,14 @@ public interface DeepSeekService {
      * @return 回答文本；API Key 未配置或调用失败返回 null
      */
     String chat(String systemPrompt, String userPrompt);
+
+    /**
+     * 流式对话接口：SSE 增量回调回答内容（打字机效果，老人等待时有实时反馈）
+     * 复用 chat 的 prompt 组装，仅调用方式改为 stream=true 逐块回调
+     *
+     * @param systemPrompt 系统提示
+     * @param userPrompt   用户提示
+     * @param onDelta      内容增量回调（可能回调多次；Key 未配置/失败时不回调任何内容）
+     */
+    void chatStream(String systemPrompt, String userPrompt, java.util.function.Consumer<String> onDelta);
 }

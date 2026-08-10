@@ -7,6 +7,7 @@ import com.example.backend.model.dto.DrugDetailResponse;
 import com.example.backend.model.dto.DrugSearchResponse;
 import com.example.backend.model.entity.SysUser;
 import com.example.backend.service.DeepSeekService;
+import com.example.backend.service.rag.RagSearchService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -17,11 +18,18 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * DeepSeek AI服务实现类
@@ -42,10 +50,15 @@ public class DeepSeekServiceImpl implements DeepSeekService {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    /** RAG 纯检索服务：为药品补全/冲突检测/今日一课注入知识依据，降低幻觉 */
+    private final RagSearchService ragSearchService;
 
-    public DeepSeekServiceImpl(@Qualifier("aiRestTemplate") RestTemplate restTemplate, ObjectMapper objectMapper) {
+    public DeepSeekServiceImpl(@Qualifier("aiRestTemplate") RestTemplate restTemplate,
+                               ObjectMapper objectMapper,
+                               RagSearchService ragSearchService) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
+        this.ragSearchService = ragSearchService;
     }
 
     @Override
@@ -187,13 +200,19 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                     "  \"adverseReactions\": \"不良反应\"\n" +
                     "}\n" +
                     "重要要求：\n" +
+                    "0. 如果「用户消息」中提供了参考资料，必须优先使用参考资料中的信息填写（参考资料比模型记忆更可信）；\n" +
                     "1. genericName 必须填写查询的药品名称，不能为空\n" +
-                    "2. 对于成分、适应症、用法用量、注意事项、不良反应等字段，请根据药品知识尽力填写\n" +
+                    "2. 对于成分、适应症、用法用量、注意事项、不良反应等字段，优先从参考资料提取，资料中没有的再根据药品知识尽力填写\n" +
                     "3. 如果确实不知道某个字段的信息，可以填写\"尚不明确\"或\"请以药品说明书为准\"\n" +
                     "4. 注意事项应列出具体的用药禁忌和注意事项，不要只写一句话\n" +
                     "5. 不良反应如果未知，填写\"尚不明确\"";
 
-            String userPrompt = "请查询以下药品的详细信息：" + drugName + "。请根据你的医药知识提供尽可能详细的信息，特别是成分、适应症、用法用量、注意事项和不良反应。";
+            // RAG 检索增强：先查知识库，把命中资料注入 prompt，避免纯靠模型记忆编造
+            String context = ragSearchService.formatContext(drugName, 3);
+            String userPrompt = (context.isEmpty() ? "" : context + "\n")
+                    + "请查询以下药品的详细信息：" + drugName
+                    + "。请优先根据上述参考资料填写成分、适应症、用法用量、注意事项和不良反应，"
+                    + "参考资料中没有的字段再根据你的医药知识补充，仍不确定的填\"尚不明确\"。";
 
             Map<String, String> systemMessage = new HashMap<>();
             systemMessage.put("role", "system");
@@ -655,8 +674,11 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             // 构建系统提示词
             String systemPrompt = buildConflictSystemPrompt(request.isDetailed(), request.isIncludeAlternatives());
 
-            // 构建用户提示词
-            String userPrompt = buildConflictUserPrompt(request);
+            // RAG 检索增强：把相关药品知识注入 prompt，冲突判断基于资料而非纯模型记忆
+            String context = ragSearchService.formatContext(
+                    String.join("、", request.getDrugNames()), 3);
+            String userPrompt = (context.isEmpty() ? "" : context + "\n")
+                    + buildConflictUserPrompt(request);
 
             Map<String, String> systemMessage = new HashMap<>();
             systemMessage.put("role", "system");
@@ -2959,6 +2981,13 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             String userPrompt = "请为一位" + ageText + "的" + genderText + "慢性病患者撰写今日科普，其慢性病为：" + diseaseName + "。\n\n" +
                     "今天的科普内容要求：围绕\"" + diseaseName + "\"的一个日常管理要点展开，给出实用建议。";
 
+            // RAG 检索增强：注入该慢病的知识库资料，科普内容基于资料而非纯模型记忆
+            String context = ragSearchService.formatContext(diseaseName, 3);
+            if (!context.isEmpty()) {
+                userPrompt = context + "\n" + userPrompt
+                        + "\n\n请优先参考上述参考资料中的管理要点，用你自己的话通俗表达。";
+            }
+
             Map<String, String> systemMessage = new HashMap<>();
             systemMessage.put("role", "system");
             systemMessage.put("content", systemPrompt);
@@ -3224,6 +3253,76 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         } catch (Exception e) {
             logger.error("调用 DeepSeek chat 失败 - 错误: {}", e.getMessage());
             return null;
+        }
+    }
+
+    @Override
+    public void chatStream(String systemPrompt, String userPrompt, Consumer<String> onDelta) {
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            logger.warn("DeepSeek API Key未配置，流式生成跳过");
+            return;
+        }
+        if (systemPrompt == null || userPrompt == null || userPrompt.trim().isEmpty()) {
+            return;
+        }
+        HttpURLConnection conn = null;
+        try {
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("temperature", 0.3);
+            requestBody.put("max_tokens", 1500);
+            requestBody.put("stream", true);
+
+            Map<String, String> systemMessage = new HashMap<>();
+            systemMessage.put("role", "system");
+            systemMessage.put("content", systemPrompt);
+            Map<String, String> userMessage = new HashMap<>();
+            userMessage.put("role", "user");
+            userMessage.put("content", userPrompt);
+            requestBody.put("messages", new Object[]{systemMessage, userMessage});
+
+            byte[] body = objectMapper.writeValueAsBytes(requestBody);
+            URL url = new URL(DEEPSEEK_API_URL);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(120000);
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey.trim());
+            conn.setDoOutput(true);
+            conn.getOutputStream().write(body);
+
+            int status = conn.getResponseCode();
+            InputStream is = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (!line.startsWith("data:")) {
+                    continue;
+                }
+                String data = line.substring(5).trim();
+                if (data.isEmpty()) {
+                    continue;
+                }
+                if ("[DONE]".equals(data)) {
+                    break;
+                }
+                // 逐块提取增量内容：data: {"choices":[{"delta":{"content":"..."}}]}
+                JsonNode node = objectMapper.readTree(data);
+                JsonNode delta = node.path("choices").path(0).path("delta").path("content");
+                if (!delta.isMissingNode() && !delta.isNull()) {
+                    String text = delta.asText();
+                    if (!text.isEmpty()) {
+                        onDelta.accept(text);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("DeepSeek chat 流式调用失败 - 错误: {}", e.getMessage());
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
     }
 }
