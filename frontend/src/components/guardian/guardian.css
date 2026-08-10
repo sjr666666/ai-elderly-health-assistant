@@ -577,17 +577,48 @@
 }
 
 .g-bind-btn {
-  background: var(--primary-light);
-  color: var(--primary-dark);
+  background: var(--primary);
   color: white;
   border: none;
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 500;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   font-family: inherit;
+  box-shadow: 0 4px 14px rgba(21, 94, 117, 0.28);
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
 }
+.g-bind-btn:hover {
+  background: var(--primary-dark);
+  box-shadow: 0 6px 18px rgba(21, 94, 117, 0.35);
+}
+.g-bind-btn:active { transform: scale(0.96); }
+
+/* 空状态引导绑定按钮 */
+.g-empty-bind-btn {
+  margin-top: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 12px 30px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 4px 14px rgba(21, 94, 117, 0.28);
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.g-empty-bind-btn:hover {
+  background: var(--primary-dark);
+  box-shadow: 0 6px 18px rgba(21, 94, 117, 0.35);
+}
+.g-empty-bind-btn:active { transform: scale(0.96); }
 
 /* ============ 绑定表单 ============ */
 .g-bind-form {
