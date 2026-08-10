@@ -70,6 +70,7 @@ public class SecurityConfig {
                 // AI对话、药物冲突检测、紧急事件需要认证
                 .antMatchers("/api/ai/**").hasAnyRole("ELDER", "FAMILY")
                 .antMatchers("/api/conflict/**").hasAnyRole("ELDER", "FAMILY")
+                .antMatchers("/api/rag/**").hasAnyRole("ELDER", "FAMILY")
                 .antMatchers("/api/emergency/**").hasAnyRole("ELDER", "FAMILY")
                 .antMatchers("/api/weekly-report/**").hasAnyRole("ELDER", "FAMILY")
                 // 其他所有请求都需要认证（白名单策略）

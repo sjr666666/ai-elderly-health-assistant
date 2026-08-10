@@ -103,4 +103,14 @@ public interface DeepSeekService {
      * @return AI回答文本，失败返回null
      */
     String answerFollowUpQuestion(DrugDetailResponse drugDetail, String question, List<Map<String, String>> conversationHistory);
+
+    /**
+     * 通用对话接口：按系统提示 + 用户提示调用大模型，返回回答文本
+     * 供 RAG（检索增强生成）等通用场景复用，与现有专用方法共用同一调用链路
+     *
+     * @param systemPrompt 系统提示（角色设定/约束/引用规则）
+     * @param userPrompt   用户提示（检索到的知识 + 用户问题）
+     * @return 回答文本；API Key 未配置或调用失败返回 null
+     */
+    String chat(String systemPrompt, String userPrompt);
 }
