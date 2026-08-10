@@ -1,5 +1,6 @@
 package com.example.backend.service.rag;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.backend.mapper.DrugBaseMapper;
 import com.example.backend.mapper.KnowledgeChunkMapper;
 import com.example.backend.model.entity.DrugBase;
@@ -68,6 +69,7 @@ public class RagIngestService {
         long t0 = System.currentTimeMillis();
         List<KnowledgeChunk> chunks = new ArrayList<>();
         chunks.addAll(buildDrugChunks());
+        chunks.addAll(loadMarkdownKnowledge("knowledge/drugs", KnowledgeChunk.SOURCE_TYPE_DRUG));
         chunks.addAll(loadMarkdownKnowledge("knowledge/guides", KnowledgeChunk.SOURCE_TYPE_GUIDE));
         chunks.addAll(loadMarkdownKnowledge("knowledge/faqs", KnowledgeChunk.SOURCE_TYPE_FAQ));
 
@@ -115,39 +117,91 @@ public class RagIngestService {
             return chunks;
         }
         for (DrugBase drug : drugs) {
-            String name = drug.getGenericName();
-            if (name == null || name.isEmpty()) {
-                name = drug.getTradeName();
+            KnowledgeChunk chunk = buildDrugChunk(drug);
+            if (chunk != null) {
+                chunks.add(chunk);
             }
-            if (name == null || name.isEmpty()) {
-                continue;
-            }
-            StringBuilder content = new StringBuilder();
-            if (drug.getTradeName() != null && !drug.getTradeName().isEmpty()) {
-                content.append("商品名：").append(drug.getTradeName()).append("；");
-            }
-            if (drug.getSpecification() != null && !drug.getSpecification().isEmpty()) {
-                content.append("规格：").append(drug.getSpecification()).append("；");
-            }
-            if (drug.getCategory() != null && !drug.getCategory().isEmpty()) {
-                content.append("分类：").append(drug.getCategory()).append("；");
-            }
-            if (drug.getManufacturer() != null && !drug.getManufacturer().isEmpty()) {
-                content.append("厂家：").append(drug.getManufacturer()).append("；");
-            }
-            if (drug.getDescription() != null && !drug.getDescription().isEmpty()) {
-                content.append("说明：").append(drug.getDescription());
-            }
-            chunks.add(KnowledgeChunk.builder()
-                    .sourceType(KnowledgeChunk.SOURCE_TYPE_DRUG)
-                    .sourceId(drug.getId())
-                    .title(name)
-                    .content(content.toString())
-                    .keywords(join(drug.getGenericName(), drug.getTradeName(), drug.getCommonName()))
-                    .sourceRef("药品基础库（演示数据，具体以官方说明书为准）")
-                    .build());
         }
         return chunks;
+    }
+
+    /**
+     * 单个药品的知识切片构建（全量入库与增量入库共用）
+     */
+    private KnowledgeChunk buildDrugChunk(DrugBase drug) {
+        String name = drug.getGenericName();
+        if (name == null || name.isEmpty()) {
+            name = drug.getTradeName();
+        }
+        if (name == null || name.isEmpty()) {
+            return null;
+        }
+        StringBuilder content = new StringBuilder();
+        if (drug.getTradeName() != null && !drug.getTradeName().isEmpty()) {
+            content.append("商品名：").append(drug.getTradeName()).append("；");
+        }
+        if (drug.getSpecification() != null && !drug.getSpecification().isEmpty()) {
+            content.append("规格：").append(drug.getSpecification()).append("；");
+        }
+        if (drug.getCategory() != null && !drug.getCategory().isEmpty()) {
+            content.append("分类：").append(drug.getCategory()).append("；");
+        }
+        if (drug.getManufacturer() != null && !drug.getManufacturer().isEmpty()) {
+            content.append("厂家：").append(drug.getManufacturer()).append("；");
+        }
+        if (drug.getDescription() != null && !drug.getDescription().isEmpty()) {
+            content.append("说明：").append(drug.getDescription());
+        }
+        return KnowledgeChunk.builder()
+                .sourceType(KnowledgeChunk.SOURCE_TYPE_DRUG)
+                .sourceId(drug.getId())
+                .title(name)
+                .content(content.toString())
+                .keywords(join(drug.getGenericName(), drug.getTradeName(), drug.getCommonName()))
+                .sourceRef("药品基础库（演示数据，具体以官方说明书为准）")
+                .build();
+    }
+
+    /**
+     * 增量入库单个药品（幂等）：新药写入 drug_base 后调用，
+     * 只处理该药的知识切片，无需全量重灌
+     *
+     * @param drugId 药品ID（drug_base.id）
+     * @return 入库切片数（0 表示药品不存在）
+     */
+    public synchronized int ingestDrug(Long drugId) {
+        if (drugId == null) {
+            return 0;
+        }
+        DrugBase drug = drugBaseMapper.selectById(drugId);
+        if (drug == null) {
+            logger.warn("[RAG] 增量入库失败，药品不存在: id={}", drugId);
+            return 0;
+        }
+        KnowledgeChunk chunk = buildDrugChunk(drug);
+        if (chunk == null) {
+            return 0;
+        }
+        // 向量化
+        String text = chunk.getTitle() + " " + chunk.getContent();
+        try {
+            chunk.setEmbeddingJson(objectMapper.writeValueAsString(embeddingService.embed(text)));
+        } catch (Exception e) {
+            logger.error("[RAG] 药品 {} 向量序列化失败 - {}", drugId, e.getMessage());
+            return 0;
+        }
+        // 幂等：删除该药旧切片后插入
+        knowledgeChunkMapper.delete(new LambdaQueryWrapper<KnowledgeChunk>()
+                .eq(KnowledgeChunk::getSourceType, KnowledgeChunk.SOURCE_TYPE_DRUG)
+                .eq(KnowledgeChunk::getSourceId, drugId));
+        knowledgeChunkMapper.insert(chunk);
+
+        // 重建内存索引（切片量小，直接全量重建简单可靠）
+        List<KnowledgeChunk> all = knowledgeChunkMapper.selectList(null);
+        vectorStore.rebuild(all);
+        keywordIndex.rebuild(all);
+        logger.info("[RAG] 药品增量入库完成: {} (id={})", chunk.getTitle(), drugId);
+        return 1;
     }
 
     /**
@@ -196,7 +250,7 @@ public class RagIngestService {
     /**
      * 解析 Markdown 文件的 front-matter（--- 包裹的 YAML 头）与正文
      */
-    private MarkdownDoc parseMarkdown(String raw) {
+    MarkdownDoc parseMarkdown(String raw) {
         String title = null;
         String source = null;
         String tags = "";
@@ -233,9 +287,12 @@ public class RagIngestService {
                 body = rest;
             }
         }
-        // front-matter 缺失时尝试从第一个 # 标题提取
+        // front-matter 缺失时尝试从第一个 # 标题提取，并从正文中移除标题行（避免重复）
         if (title == null) {
             title = fallbackTitle(body);
+            if (title != null) {
+                body = body.replaceFirst("(?m)^\\s*#\\s+[^\\n]*\\n?", "").trim();
+            }
         }
         if (title == null) {
             return null;
@@ -253,7 +310,7 @@ public class RagIngestService {
         return null;
     }
 
-    private static final class MarkdownDoc {
+    static final class MarkdownDoc {
         final String title;
         final String source;
         final String tags;

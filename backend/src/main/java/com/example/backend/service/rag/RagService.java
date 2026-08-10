@@ -7,6 +7,7 @@ import com.example.backend.model.dto.RagAnswer;
 import com.example.backend.model.entity.DrugBase;
 import com.example.backend.model.entity.UserMedicineBox;
 import com.example.backend.service.DeepSeekService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,7 +15,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -36,28 +39,25 @@ public class RagService {
 
     private static final Logger logger = LoggerFactory.getLogger(RagService.class);
 
-    private final EmbeddingService embeddingService;
-    private final VectorStore vectorStore;
-    private final KeywordIndex keywordIndex;
+    private final RagSearchService ragSearchService;
     private final DeepSeekService deepSeekService;
     private final UserMedicineBoxMapper userMedicineBoxMapper;
     private final DrugBaseMapper drugBaseMapper;
+    private final ObjectMapper objectMapper;
 
     @Value("${ai.rag.top-k:3}")
     private int topK;
 
-    public RagService(EmbeddingService embeddingService,
-                      VectorStore vectorStore,
-                      KeywordIndex keywordIndex,
+    public RagService(RagSearchService ragSearchService,
                       DeepSeekService deepSeekService,
                       UserMedicineBoxMapper userMedicineBoxMapper,
-                      DrugBaseMapper drugBaseMapper) {
-        this.embeddingService = embeddingService;
-        this.vectorStore = vectorStore;
-        this.keywordIndex = keywordIndex;
+                      DrugBaseMapper drugBaseMapper,
+                      ObjectMapper objectMapper) {
+        this.ragSearchService = ragSearchService;
         this.deepSeekService = deepSeekService;
         this.userMedicineBoxMapper = userMedicineBoxMapper;
         this.drugBaseMapper = drugBaseMapper;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -83,18 +83,11 @@ public class RagService {
         List<String> userDrugs = loadUserDrugNames(userId);
 
         // ========== 1. Retrieval 检索 ==========
-        // 先走向量检索（语义匹配，能理解"这药和降压药一起吃行不行"这类自然问法）
-        float[] queryVec = embeddingService.embed(question);
-        List<VectorStore.ScoredChunk> hits = vectorStore.search(queryVec, topK);
-        String mode = RagAnswer.MODE_VECTOR;
-        List<VectorStore.ScoredChunk> scoredHits = hits;
-
-        // 向量检索没有命中（或相似度过低），降级为关键词倒排检索
-        if (hits.isEmpty()) {
-            logger.info("[RAG] 向量检索无结果，降级为关键词检索 - 问题: {}", question);
-            mode = RagAnswer.MODE_KEYWORD;
-            scoredHits = keywordIndex.search(question, topK);
-        }
+        // 向量检索优先（语义匹配，能理解"这药和降压药一起吃行不行"这类自然问法），
+        // 无结果时由 RagSearchService 自动降级为关键词倒排检索
+        RagSearchService.SearchResult searchResult = ragSearchService.search(question, topK);
+        String mode = searchResult.mode;
+        List<VectorStore.ScoredChunk> scoredHits = searchResult.hits;
         if (scoredHits.isEmpty()) {
             logger.warn("[RAG] 检索无任何结果 - 问题: {}", question);
             return RagAnswer.builder()
@@ -157,17 +150,95 @@ public class RagService {
     }
 
     /**
-     * 组装增强 prompt 并调用 LLM 生成回答
+     * 组装增强 prompt 并调用 LLM 生成回答（非流式）
      */
     private String generate(String question, List<VectorStore.ScoredChunk> hits, List<String> userDrugs) {
+        return deepSeekService.chat(buildSystemPrompt(), buildUserPrompt(question, hits, userDrugs));
+    }
+
+    /**
+     * RAG 流式问答：先发 meta（引用来源+药箱），再流式推送生成内容（打字机效果）
+     * <p>
+     * onEvent 回调 JSON 字符串事件：
+     *   {"type":"meta","sources":[...],"userDrugs":[...]}
+     *   {"type":"delta","content":"增量文本"}
+     *   {"type":"done"}
+     * LLM 不可用时（无 Key/失败）自动降级：meta 之后一次性推送本地知识直出，保证离线可用。
+     */
+    public void askStream(String question, Long userId, java.util.function.Consumer<String> onEvent) {
+        // 0. 用户上下文 + 1. 检索（同步，快）
+        List<String> userDrugs = loadUserDrugNames(userId);
+        RagSearchService.SearchResult searchResult = ragSearchService.search(question, topK);
+        List<RagAnswer.Source> sources = toSources(searchResult.hits);
+
+        // 2. meta 事件：前端先展示来源与药箱，再等正文
+        try {
+            Map<String, Object> meta = new HashMap<>();
+            meta.put("type", "meta");
+            meta.put("mode", searchResult.mode);
+            meta.put("userDrugs", userDrugs);
+            meta.put("sources", sources);
+            onEvent.accept(objectMapper.writeValueAsString(meta));
+        } catch (Exception e) {
+            logger.error("[RAG] meta 序列化失败 - {}", e.getMessage());
+        }
+
+        if (sources.isEmpty()) {
+            sendDelta(onEvent, "暂时没有找到与这个问题相关的用药资料，建议咨询医生或药师。");
+            sendDelta(onEvent, "\n\n以上信息仅供参考，具体用药请遵医嘱。");
+            onEvent.accept("{\"type\":\"done\"}");
+            return;
+        }
+
+        // 3. 流式生成（逐块回调）
+        StringBuilder received = new StringBuilder();
+        deepSeekService.chatStream(buildSystemPrompt(),
+                buildUserPrompt(question, searchResult.hits, userDrugs),
+                delta -> {
+                    received.append(delta);
+                    sendDelta(onEvent, delta);
+                });
+
+        // LLM 不可用：流式没有任何内容 → 本地知识直出（保证离线可用）
+        if (received.length() == 0) {
+            logger.warn("[RAG] 流式生成无内容，降级为本地知识直出");
+            String fallback = sources.get(0).getContent()
+                    + "\n\n以上信息仅供参考，具体用药请遵医嘱。";
+            sendDelta(onEvent, fallback);
+        }
+        onEvent.accept("{\"type\":\"done\"}");
+    }
+
+    private void sendDelta(java.util.function.Consumer<String> onEvent, String content) {
+        try {
+            Map<String, Object> delta = new HashMap<>();
+            delta.put("type", "delta");
+            delta.put("content", content);
+            onEvent.accept(objectMapper.writeValueAsString(delta));
+        } catch (Exception e) {
+            logger.error("[RAG] delta 序列化失败 - {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 构建系统提示（角色 + 引用 + 免责约束）
+     */
+    private String buildSystemPrompt() {
         StringBuilder system = new StringBuilder();
         system.append("你是「AI药管家」的用药知识助手，服务对象是老年人及其家属。请遵守以下规则：\n");
         system.append("1. 只根据「参考资料」中的内容回答，参考资料中没有的信息，明确说'资料中没有提到'，不要编造；\n");
         system.append("2. 用通俗易懂的大白话回答，多打比方，避免专业术语；\n");
         system.append("3. 引用参考资料时用[1][2]编号标注来源；\n");
-        system.append("4. 回答最后必须加上一句：以上信息仅供参考，具体用药请遵医嘱；\n");
-        system.append("5. 不做诊断、不推荐替代治疗方案，遇到紧急情况提示立即就医。");
+        system.append("4. 参考资料中与问题无关的条目（如提及完全不同的药品/疾病）不要引用，直接忽略，宁可少引；\n");
+        system.append("5. 回答最后必须加上一句：以上信息仅供参考，具体用药请遵医嘱；\n");
+        system.append("6. 不做诊断、不推荐替代治疗方案，遇到紧急情况提示立即就医。");
+        return system.toString();
+    }
 
+    /**
+     * 构建用户提示（参考资料 + 药箱上下文 + 问题）
+     */
+    private String buildUserPrompt(String question, List<VectorStore.ScoredChunk> hits, List<String> userDrugs) {
         StringBuilder user = new StringBuilder();
         user.append("参考资料：\n");
         for (int i = 0; i < hits.size(); i++) {
@@ -183,8 +254,7 @@ public class RagService {
                     .append("。如果问题与这些药有关，请优先结合它们回答，让老人感觉你了解他的用药情况。\n\n");
         }
         user.append("老人的问题：").append(question);
-
-        return deepSeekService.chat(system.toString(), user.toString());
+        return user.toString();
     }
 
     private List<RagAnswer.Source> toSources(List<VectorStore.ScoredChunk> hits) {

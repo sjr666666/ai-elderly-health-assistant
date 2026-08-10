@@ -47,8 +47,8 @@ public class RagEmbeddingService implements EmbeddingService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    /** 已配置 provider 标识，构造时决定，全程固定，避免两种向量混用 */
-    private final String provider;
+    /** 已配置 provider 标识，@PostConstruct 时决定，全程固定，避免两种向量混用 */
+    private String provider;
 
     /** 简单结果缓存（同一文本重复向量化直接命中，如重复提问场景） */
     private final Map<String, float[]> cache = new ConcurrentHashMap<>();
@@ -57,18 +57,25 @@ public class RagEmbeddingService implements EmbeddingService {
                                ObjectMapper objectMapper) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
-        this.provider = decideProvider();
     }
 
     /**
-     * 启动时根据是否配置 Key 决定向量化策略
+     * 根据是否配置 Key 决定向量化策略
      */
     private String decideProvider() {
         return StringUtils.hasText(apiKey) ? "siliconflow-bge-m3" : "local-hash-fallback";
     }
 
+    /**
+     * 启动初始化：决定向量化策略 + 打日志
+     * <p>
+     * 注意：必须在 @PostConstruct（而非构造器）里决定 provider——构造器执行时 @Value 字段
+     * 尚未注入（Spring 字段注入在构造器之后），构造器里读 apiKey 恒为 null，
+     * 会导致配了 Key 仍走 local-hash 降级。
+     */
     @PostConstruct
     public void init() {
+        this.provider = decideProvider();
         if ("local-hash-fallback".equals(provider)) {
             logger.warn("[RAG] 未配置 ai.embedding.api-key，Embedding 使用本地哈希降级方案（{}维），"
                     + "检索精度有限。配置 SiliconFlow Key 可切换为 bge-m3（{}维）。", FALLBACK_DIM, "1024");
@@ -166,7 +173,8 @@ public class RagEmbeddingService implements EmbeddingService {
 
     @Override
     public String provider() {
-        return provider;
+        // @PostConstruct 一定先于任何调用执行；兜底防御 null
+        return provider == null ? decideProvider() : provider;
     }
 
     @Override

@@ -43,7 +43,7 @@ AI紧急助手系统是一款专为老年人设计的智能健康助手，提供
 #### P0 基础体验（高优先级）
 
 - [ ] 多轮对话上下文：`DeepSeekService` 生成时回传 `AiConversationLog` 历史（当前只存日志不回传，对话失忆）
-- [ ] SSE 流式输出：DeepSeek 响应改流式，前端打字机效果（当前同步等待，5-10 秒白屏）
+- [x] SSE 流式输出：用药问问已实现（DeepSeek stream=true → SseEmitter → 前端打字机 + 失败自动回退非流式）；其余 AI 功能仍同步
 - [ ] ASR 语音输入：接入百度语音识别，老人语音问药（当前只有 TTS 播报，无语音输入）
 
 #### P1 智能化与合规
@@ -56,43 +56,45 @@ AI紧急助手系统是一款专为老年人设计的智能健康助手，提供
 
 > 目标：为现有 AI 能力补充「知识检索」环节（检索 → 增强 → 生成），让回答可溯源、降低医疗场景幻觉风险。
 
-> **知识源设计（内容与代码分离）**：药品知识从 `drug_base` 表动态抽取（新增药品自动进知识库）；慢病指南/用药 FAQ 为 Markdown 资源文件（`resources/knowledge/guides|faqs/*.md`，带 YAML front-matter），**加知识 = 加一个 .md 文件**，重启自动入库。`source_ref` 字段标注知识来源（官方原文/参考整理），回答可溯源。
+> **知识源设计（内容与代码分离）**：药品知识从 `drug_base` 表动态抽取（新增药品自动进知识库）；慢病指南/用药 FAQ 为 Markdown 资源文件（`resources/knowledge/guides|faqs/*.md`，带 YAML front-matter），**加知识 = 加一个 .md 文件**，重启自动入库。`source_ref` 字段标注知识来源（官方原文/参考整理/开源数据集），回答可溯源。
+>
+> **开源数据集采集**：`scripts/rag-dataset/collect_drug_kg.py` 从 CN-Drug-KG-800（HuggingFace，cc-by-nc-4.0）采集 817 种药品知识 → `resources/knowledge/drugs/*.md`，当前知识库规模 **936 条**（药品 911 / 指南 10 / FAQ 12，含 drug_base 动态抽取）。
 
 ### 阶段一：知识库入库管线（P1）
 
 - [x] 新增 `knowledge_chunk` 表（Flyway V5 迁移脚本）
 - [x] 整理种子知识：药品说明书（动态抽取）/ 慢病指南（10 种，Markdown）/ 用药 FAQ（12 条，Markdown）
 - [x] `RagIngestService`：扫描知识目录 → 切分 + bge-m3 向量化 + 落库（V6 加 `source_ref` 来源列）
-- [ ] 接入 Redis Streams 异步链路（药品入库自动向量化）
+- [x] 增量入库：`ingestDrug()` 幂等增量（新药入库自动向量化进知识库，同步 hook + 接口；Redis Streams 异步为备选方案）
 
 ### 阶段二：检索核心（P2）
 
 - [x] `VectorStore`：内存向量索引 + 余弦相似度 top-k 召回
 - [x] `KeywordIndex`：本地关键词倒排索引（离线降级用）
-- [ ] 检索单测：top-k 命中正确性验证
+- [x] 检索单测：14 个用例（KeywordIndex/VectorStore/Markdown 解析，命中正确性验证）
 
 ### 阶段三：RAG 问答接口（P3）
 
 - [x] `RagService`：检索 → 增强 → 生成（引用注入 DeepSeek，支持用户药箱上下文个性化）
 - [x] `POST /api/rag/ask` 接口，返回 `answer + sources[]`（含来源标注 sourceRef、药箱药品 userDrugs）
-- [ ] 前端「用药问问」问答页（老人端）
+- [x] 前端「用药问问」问答页（老人端首页 RagAskCard，复用 elderFetch 鉴权）
 
 ### 阶段四：接入现有 AI 功能（P4）
 
-- [ ] 药品信息补全改用 RAG 检索（替换「靠模型记忆填写」）
-- [ ] 冲突检测回答带引用来源
-- [ ] 今日一课生成注入检索资料
-- [ ] 原功能回归测试
+- [x] 药品信息补全改用 RAG 检索（注入知识库资料，替换「靠模型记忆填写」）
+- [x] 冲突检测回答带引用来源（检索药品知识注入 prompt）
+- [x] 今日一课生成注入检索资料（基于慢病指南生成）
+- [x] 原功能回归测试（冲突检测本地规则 / 今日一课 / ask 实测通过）
 
 ### 阶段五：离线降级与演示（P5）
 
-- [ ] 断网场景降级为本地关键词检索验证
-- [ ] 演示话术与 demo 场景设计
+- [x] 降级链路验证（LOCAL 实测通过；KEYWORD 检索经单测覆盖；embedding 断网自动降级哈希向量）
+- [x] 演示话术与 demo 场景设计（docs/RAG演示话术.md：可溯源问答 / 药箱个性化 / 降级兜底 三个场景）
 
 ### 待确认
 
 - [x] embedding 服务选型（已定：SiliconFlow bge-m3，未配 Key 自动降级内置哈希向量）
-- [ ] 前端问答入口位置
+- [x] 前端问答入口位置（已定：老人端首页「今日一课」下方）
 
 ## 快速开始
 

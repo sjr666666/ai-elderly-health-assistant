@@ -16,6 +16,7 @@ import ConfirmDrugModal from './components/ConfirmDrugModal';
 import MedicationReminderModal from './components/MedicationReminderModal';
 import DrugManagementTab from './components/DrugManagementTab';
 import DailyLessonCard from './components/DailyLessonCard';
+import RagAskCard from './components/RagAskCard';
 import GuardianApp from './components/guardian/GuardianApp';
 import ElderNotificationPanel from './components/ElderNotificationPanel';
 import WeeklyReport from './components/WeeklyReport';
@@ -3203,6 +3204,9 @@ function App() {
         onRefresh={handleDailyLessonRefresh}
         onGoProfile={() => setShowProfileEdit(true)}
               />
+
+      {/* 用药问问 - RAG 知识库问答 */}
+      <RagAskCard />
 
       <div className="dashboard-grid">
         <div className="dashboard-card" onClick={() => setActiveTab('upload')}>

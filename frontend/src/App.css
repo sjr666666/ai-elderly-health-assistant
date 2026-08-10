@@ -7320,3 +7320,302 @@ body {
   color: #C0392B;
   background: rgba(255, 235, 233, 0.92);
 }
+
+/* ===== 用药问问（RAG 问答卡片 · 老人友好版）===== */
+.rag-ask-card {
+  margin-top: 12px;
+}
+.rag-subtitle {
+  margin-left: auto;
+  font-size: 14.5px;
+  color: #ffffff;
+  background: var(--primary, #12b3a0);
+  padding: 5px 14px;
+  border-radius: 14px;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(18, 179, 160, 0.3);
+  white-space: nowrap;
+}
+.rag-ask-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.rag-ask-input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  font-size: 16px;
+  border: 1.5px solid rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  outline: none;
+}
+.rag-ask-input:focus {
+  border-color: var(--primary, #12b3a0);
+}
+.rag-ask-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 15px;
+  padding: 12px 18px;
+}
+/* 快捷问题：老人少打字 */
+.rag-quick-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.rag-quick-btn {
+  font-size: 14.5px;
+  color: #0e7a6a;
+  background: #d1f5ef;
+  border: 1.5px solid var(--primary, #12b3a0);
+  border-radius: 20px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+.rag-quick-btn:hover {
+  background: var(--primary, #12b3a0);
+  color: #ffffff;
+}
+.rag-quick-btn:active {
+  transform: scale(0.97);
+}
+.rag-quick-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* 回答区 */
+.rag-answer {
+  margin-top: 12px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.12);
+  padding-top: 12px;
+}
+.rag-answer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.rag-user-drugs {
+  font-size: 14.5px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+  line-height: 1.4;
+}
+.rag-speak-btn {
+  font-size: 14px;
+  color: #fff;
+  background: var(--primary, #12b3a0);
+  border: none;
+  border-radius: 20px;
+  padding: 7px 16px;
+  cursor: pointer;
+}
+.rag-speak-btn:hover {
+  opacity: 0.9;
+}
+/* 回答正文：大字号、条目化、深色高对比 */
+.rag-answer-body {
+  font-size: 17px;
+  line-height: 2.0;
+  color: #1a202c;
+  font-weight: 400;
+}
+.rag-answer-line {
+  margin: 8px 0;
+  word-break: break-word;
+}
+.rag-answer-line strong,
+.rag-item-text strong {
+  color: #b45309;
+  font-weight: 700;
+  background: linear-gradient(transparent 75%, rgba(253, 224, 71, 0.55) 0);
+  padding: 0 1px;
+  border-radius: 2px;
+}
+.rag-answer-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #ffffff;
+  border-left: 4px solid var(--primary, #12b3a0);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.rag-item-num {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  line-height: 26px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--primary, #12b3a0);
+  border-radius: 50%;
+  margin-top: 4px;
+}
+.rag-item-text {
+  flex: 1;
+  word-break: break-word;
+  color: #1a202c;
+  font-size: 16px;
+  line-height: 1.8;
+}
+.rag-item-text strong {
+  color: #b45309;
+  font-weight: 700;
+}
+.rag-para-gap {
+  height: 8px;
+}
+/* 引用来源：实色卡片，醒目 */
+.rag-sources {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 1.5px solid rgba(14, 122, 106, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+.rag-sources-title {
+  font-size: 14.5px;
+  color: #ffffff;
+  background: var(--primary, #12b3a0);
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.rag-source-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14.5px;
+  line-height: 1.7;
+  padding: 4px 0;
+}
+.rag-source-idx {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: #fff;
+  background: #64748b;
+  width: 22px;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  border-radius: 50%;
+  font-weight: 700;
+}
+.rag-source-title {
+  font-weight: 600;
+  color: #1a202c;
+}
+.rag-source-ref {
+  display: block;
+  font-size: 13px;
+  color: #475569;
+  margin-left: 30px;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+/* 正在回答：动态反馈，老人知道查询没失败 */
+.rag-typing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  font-size: 15px;
+  color: #64748b;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 10px;
+}
+.rag-typing-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--primary, #12b3a0);
+  animation: rag-blink 1s infinite;
+}
+@keyframes rag-blink {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+
+/* ===== 引用体系：回答里 [1] 上标 + 资料引用状态 ===== */
+/* [1] 引用上标：绿色胶囊，点击跳转对应资料 */
+.rag-cite {
+  display: inline-block;
+  min-width: 22px;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #ffffff;
+  background: var(--primary, #12b3a0);
+  border-radius: 11px;
+  padding: 0 5px;
+  margin: 0 2px;
+  cursor: pointer;
+  vertical-align: super;
+  user-select: none;
+  box-shadow: 0 1px 3px rgba(18, 179, 160, 0.35);
+  transition: background 0.15s, transform 0.15s;
+}
+.rag-cite:hover {
+  background: #0e7a6a;
+  transform: scale(1.1);
+}
+/* 引用状态：已引用 / 未采用 */
+.rag-source-item {
+  position: relative;
+  padding-right: 70px;
+}
+.rag-source-badge {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0e7a6a;
+  background: #d1f5ef;
+  padding: 2px 10px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.rag-source-badge-unused {
+  color: #94a3b8;
+  background: #f1f5f9;
+}
+.rag-source-unused {
+  opacity: 0.55;
+}
+.rag-source-cited {
+  opacity: 1;
+}
+/* 点击 [1] 后资料闪烁高亮 */
+@keyframes rag-source-flash-kf {
+  0%, 100% { background: #ffffff; }
+  50% { background: #fef3c7; }
+}
+.rag-source-flash {
+  animation: rag-source-flash-kf 0.8s ease-in-out 2;
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.4);
+}
