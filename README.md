@@ -1,5 +1,18 @@
 # AI紧急助手系统
 
+> 🏥 专为老年人设计的智能用药安全与健康管理应用 —— AI 紧急咨询、用药冲突检测、按时服药提醒、家属远程监护
+
+<p align="center">
+  <img src="https://img.shields.io/github/license/sjr666666/aaagame" alt="License: MIT" />
+  <img src="https://img.shields.io/github/stars/sjr666666/aaagame?style=social" alt="GitHub stars" />
+  <img src="https://img.shields.io/github/forks/sjr666666/aaagame?style=social" alt="GitHub forks" />
+  <img src="https://github.com/sjr666666/aaagame/actions/workflows/ci.yml/badge.svg" alt="CI" />
+  <img src="https://img.shields.io/github/languages/top/sjr666666/aaagame" alt="Top language" />
+  <img src="https://img.shields.io/github/commit-activity/m/sjr666666/aaagame" alt="Commit activity" />
+</p>
+
+**⭐ 如果这个项目对你有帮助,欢迎点个 Star,让更多人看到它!**
+
 ## 项目简介
 
 AI紧急助手系统是一款专为老年人设计的智能健康助手，提供紧急情况下的急救指导、日常健康咨询、用药管理和家属监护等功能。系统分为**老人端**和**家属端**双端设计，老人端侧重用药管理与紧急求助，家属端侧重远程监护与通知接收。
@@ -33,8 +46,8 @@ AI紧急助手系统是一款专为老年人设计的智能健康助手，提供
 ### 1. 克隆项目
 
 ```bash
-git clone <仓库地址>
-cd innovative-ideas-challenge
+git clone https://github.com/sjr666666/aaagame.git
+cd aaagame
 ```
 
 ### 2. 数据库初始化
@@ -328,7 +341,22 @@ innovative-ideas-challenge/
 
 ## 开发规范
 
-- 代码提交前请运行 `npm run lint`（前端）和 `mvn checkstyle:check`（后端）
+- 代码提交前请运行 `npm run lint`(前端)和 `mvn checkstyle:check`(后端)
 - 遵循项目的代码风格和命名规范
 - 提交信息请遵循约定式提交规范
 - 数据库变更请遵循 `.trae/rules/database-change.md` 规范
+
+## 如何贡献
+
+非常欢迎任何形式的贡献:提 Bug、建议功能、改进文档、提交代码!
+
+- 📝 想贡献代码?请先阅读 **[贡献指南](./CONTRIBUTING.md)** —— 有完整的开发环境搭建、代码规范与 PR 流程
+- 🐛 遇到问题?通过 **[Issue 模板](https://github.com/sjr666666/aaagame/issues/new/choose)** 提交(会自动生成结构化模板)
+- 💬 有想法想讨论?欢迎到 **[Discussions](https://github.com/sjr666666/aaagame/discussions)** 交流
+- 🚀 新手友好:标记了 `good first issue` 的 Issue 最适合第一次贡献
+
+> 本项目遵循 [Contributor Covenant](./CODE_OF_CONDUCT.md) 行为准则。
+
+## 开源协议
+
+本项目基于 [MIT License](./LICENSE) 开源,你可以自由使用、修改、商用本项目代码,只需保留版权声明。
