@@ -1,4 +1,4 @@
-FROM node:20.16-alpine AS build
+FROM node:26.7-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --legacy-peer-deps --no-audit --no-fund
