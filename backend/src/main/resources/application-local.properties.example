@@ -13,4 +13,8 @@ baidu.tts.apiKey=${BAIDU_TTS_API_KEY:}
 baidu.tts.secretKey=${BAIDU_TTS_SECRET_KEY:}
 
 deepseek.api-key=${DEEPSEEK_API_KEY:}
+
+# RAG 向量化服务（可选）：配了 Key 用 SiliconFlow bge-m3 真实向量，不配则用内置降级向量
+# https://cloud.siliconflow.cn 注册获取
+ai.embedding.api-key=${SILICONFLOW_API_KEY:}
 spring.redis.password=${SPRING_REDIS_PASSWORD:}

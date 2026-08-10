@@ -3182,4 +3182,48 @@ public class DeepSeekServiceImpl implements DeepSeekService {
         result.put("content", content);
         return result;
     }
+
+    @Override
+    public String chat(String systemPrompt, String userPrompt) {
+        if (apiKey == null || apiKey.isEmpty()) {
+            logger.warn("DeepSeek API Key未配置，RAG生成跳过");
+            return null;
+        }
+        if (systemPrompt == null || userPrompt == null || userPrompt.trim().isEmpty()) {
+            logger.warn("chat 入参为空，跳过调用");
+            return null;
+        }
+        try {
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("temperature", 0.3);
+            requestBody.put("max_tokens", 1500);
+
+            Map<String, String> systemMessage = new HashMap<>();
+            systemMessage.put("role", "system");
+            systemMessage.put("content", systemPrompt);
+
+            Map<String, String> userMessage = new HashMap<>();
+            userMessage.put("role", "user");
+            userMessage.put("content", userPrompt);
+
+            requestBody.put("messages", new Object[]{systemMessage, userMessage});
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Authorization", "Bearer " + apiKey);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+            ResponseEntity<String> response = restTemplate.postForEntity(DEEPSEEK_API_URL, request, String.class);
+
+            if (response.getStatusCode() == HttpStatus.OK) {
+                return parseResponse(response.getBody());
+            }
+            logger.error("DeepSeek chat 请求失败 - 状态码: {}, 响应: {}", response.getStatusCode(), response.getBody());
+            return null;
+        } catch (Exception e) {
+            logger.error("调用 DeepSeek chat 失败 - 错误: {}", e.getMessage());
+            return null;
+        }
+    }
 }
