@@ -20,7 +20,7 @@
 
     <properties>
         <java.version>17</java.version>
-        <lombok.version>1.18.30</lombok.version>
+        <lombok.version>1.18.46</lombok.version>
         <mybatis-plus.version>3.5.5</mybatis-plus.version>
         <aliyun-oss.version>3.17.1</aliyun-oss.version>
         <hutool.version>5.8.22</hutool.version>
