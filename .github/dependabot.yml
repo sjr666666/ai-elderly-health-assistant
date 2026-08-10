@@ -10,6 +10,11 @@ updates:
     open-pull-requests-limit: 10
     commit-message:
       prefix: "build"
+    ignore:
+      # 跨大版本迁移成本高，专项评估后再升（2.x→4.x 涉及 javax→jakarta 迁移）
+      - dependency-name: "org.springframework.boot:spring-boot-starter-parent"
+      # jjwt 0.13 改动 API，当前代码编译失败，暂不升级
+      - dependency-name: "io.jsonwebtoken:*"
 
   # 前端 npm 依赖
   - package-ecosystem: "npm"
@@ -19,6 +24,12 @@ updates:
     open-pull-requests-limit: 10
     commit-message:
       prefix: "build"
+    ignore:
+      # React 18→19 是大版本升级，需全页面回归后专项处理
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      # 项目规定锁定 2.x（setupProxy.js 写法与 4.x 不兼容，见 README 注意事项）
+      - dependency-name: "http-proxy-middleware"
 
   # GitHub Actions 本身
   - package-ecosystem: "github-actions"
@@ -31,9 +42,14 @@ updates:
     directory: "/backend"
     schedule:
       interval: "weekly"
+    ignore:
+      # 镜像大版本升级（如 JDK 17→25）需先跑全量测试，仅自动处理 minor/patch
+      - update-types: ["version-update:semver-major"]
 
   # 前端基础镜像(如 node)
   - package-ecosystem: "docker"
     directory: "/frontend"
     schedule:
       interval: "weekly"
+    ignore:
+      - update-types: ["version-update:semver-major"]
