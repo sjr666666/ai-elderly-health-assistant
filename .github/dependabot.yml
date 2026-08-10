@@ -1,0 +1,39 @@
+# 依赖自动更新配置
+# 每周检查依赖更新;安全漏洞(有 CVE)会自动创建紧急 PR
+version: 2
+updates:
+  # 后端 Maven 依赖
+  - package-ecosystem: "maven"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "build"
+
+  # 前端 npm 依赖
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "build"
+
+  # GitHub Actions 本身
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+
+  # 后端基础镜像(如 eclipse-temurin)
+  - package-ecosystem: "docker"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+
+  # 前端基础镜像(如 node)
+  - package-ecosystem: "docker"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
