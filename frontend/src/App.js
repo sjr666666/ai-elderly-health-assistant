@@ -5900,6 +5900,7 @@ function App() {
         />
       ) : loginMode === 'guardian' ? (
         <GuardianApp
+          user={user}
           onLogout={() => {
             setUser(null);
             setIsLoggedIn(false);
