@@ -94,7 +94,7 @@ function RagAskCard() {
    * 流式问答：先收 meta（来源/药箱）→ 打字机式接收 delta
    * 失败（无流支持/网络异常）时抛错，由 ask() 回退非流式
    */
-  const askStream = async (text) => {
+  const askStream = useCallback(async (text) => {
     const token = getToken();
     const controller = new AbortController();
     streamAbortRef.current = controller;
@@ -160,9 +160,9 @@ function RagAskCard() {
     }
     // 处理尾部残余
     if (buffer.trim()) handleChunk(buffer);
-  };
+  }, []);
 
-  const ask = async (q) => {
+  const ask = useCallback(async (q) => {
     const text = (q ?? question).trim();
     if (!text || loading) return;
     setLoading(true);
@@ -195,7 +195,7 @@ function RagAskCard() {
         answerRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     }
-  };
+  }, [question, loading, askStream]);
 
   // 语音问药：识别结果直接填入输入框并提问（百度 ASR 优先，Web Speech 降级）
   const toggleVoice = useCallback(async () => {
