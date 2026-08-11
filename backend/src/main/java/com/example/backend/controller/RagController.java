@@ -1,7 +1,10 @@
 package com.example.backend.controller;
 
 import com.example.backend.common.ResponseResult;
+import com.example.backend.common.util.SnowflakeIdGenerator;
+import com.example.backend.mapper.RagFeedbackMapper;
 import com.example.backend.model.dto.RagAnswer;
+import com.example.backend.model.entity.RagFeedback;
 import com.example.backend.service.rag.EmbeddingService;
 import com.example.backend.service.rag.KeywordIndex;
 import com.example.backend.service.rag.RagIngestService;
@@ -15,6 +18,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -34,17 +38,23 @@ public class RagController {
     private final VectorStore vectorStore;
     private final KeywordIndex keywordIndex;
     private final EmbeddingService embeddingService;
+    private final RagFeedbackMapper ragFeedbackMapper;
+    private final SnowflakeIdGenerator idGenerator;
 
     public RagController(RagService ragService,
                          RagIngestService ragIngestService,
                          VectorStore vectorStore,
                          KeywordIndex keywordIndex,
-                         EmbeddingService embeddingService) {
+                         EmbeddingService embeddingService,
+                         RagFeedbackMapper ragFeedbackMapper,
+                         SnowflakeIdGenerator idGenerator) {
         this.ragService = ragService;
         this.ragIngestService = ragIngestService;
         this.vectorStore = vectorStore;
         this.keywordIndex = keywordIndex;
         this.embeddingService = embeddingService;
+        this.ragFeedbackMapper = ragFeedbackMapper;
+        this.idGenerator = idGenerator;
     }
 
     /**
@@ -140,6 +150,57 @@ public class RagController {
         data.put("chunkCount", count);
         data.put("provider", embeddingService.provider());
         return ResponseResult.success(count > 0 ? "药品增量入库完成" : "药品不存在或无需入库", data);
+    }
+
+    /**
+     * 回答质量反馈：前端「这个回答有用吗」👍/👎 落库（评测集校准 + 质量监控）
+     * 请求体: {"question":"...","answer":"...","rating":1,"mode":"VECTOR"}
+     * rating: 1=有用，-1=没用
+     */
+    @PostMapping("/feedback")
+    public ResponseResult<Map<String, Object>> feedback(@RequestBody RagFeedbackRequest request) {
+        if (request == null || request.getQuestion() == null || request.getQuestion().trim().isEmpty()) {
+            return ResponseResult.fail("问题不能为空");
+        }
+        if (request.getRating() == null || (request.getRating() != 1 && request.getRating() != -1)) {
+            return ResponseResult.fail("评分只能是 1（有用）或 -1（没用）");
+        }
+        Long userId = getCurrentUserId();
+        if (userId == null) {
+            return ResponseResult.fail("请先登录后再反馈");
+        }
+
+        RagFeedback feedback = new RagFeedback();
+        feedback.setId(idGenerator.nextId());
+        feedback.setUserId(userId);
+        feedback.setQuestion(request.getQuestion().trim());
+        feedback.setAnswer(request.getAnswer());
+        feedback.setRating(request.getRating());
+        feedback.setMode(request.getMode());
+        feedback.setCreatedAt(LocalDateTime.now());
+        ragFeedbackMapper.insert(feedback);
+
+        logger.info("收到 RAG 回答反馈 - userId: {}, rating: {}, question: {}", userId, request.getRating(), request.getQuestion());
+        Map<String, Object> data = new HashMap<>();
+        data.put("feedbackId", feedback.getId());
+        return ResponseResult.success("反馈已记录，谢谢您的帮助", data);
+    }
+
+    /** 反馈请求体 */
+    public static class RagFeedbackRequest {
+        private String question;
+        private String answer;
+        private Integer rating;
+        private String mode;
+
+        public String getQuestion() { return question; }
+        public void setQuestion(String question) { this.question = question; }
+        public String getAnswer() { return answer; }
+        public void setAnswer(String answer) { this.answer = answer; }
+        public Integer getRating() { return rating; }
+        public void setRating(Integer rating) { this.rating = rating; }
+        public String getMode() { return mode; }
+        public void setMode(String mode) { this.mode = mode; }
     }
 
     /**

@@ -19,6 +19,8 @@ public class RagAnswer {
     public static final String MODE_VECTOR = "VECTOR";
     public static final String MODE_KEYWORD = "KEYWORD";
     public static final String MODE_LOCAL = "LOCAL";
+    /** 安全防护拦截：命中 prompt 注入 / 危险请求，未调用 LLM */
+    public static final String MODE_GUARDED = "GUARDED";
 
     private String answer;
     private String mode;

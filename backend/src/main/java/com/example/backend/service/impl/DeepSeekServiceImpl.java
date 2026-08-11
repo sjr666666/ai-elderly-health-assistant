@@ -1,5 +1,6 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.common.util.SafetyGuard;
 import com.example.backend.model.dto.DrugConflictRequest;
 import com.example.backend.model.dto.DrugConflictResponse;
 import com.example.backend.model.dto.DrugConflictResult;
@@ -3222,6 +3223,11 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             logger.warn("chat 入参为空，跳过调用");
             return null;
         }
+        // 纵深防御：prompt 注入 / 危险请求不进入 LLM（上层入口已拦截，此处兜底）
+        if (!SafetyGuard.isSafe(userPrompt)) {
+            logger.warn("SafetyGuard 拦截注入请求，跳过 LLM 调用");
+            return null;
+        }
         try {
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
@@ -3263,6 +3269,11 @@ public class DeepSeekServiceImpl implements DeepSeekService {
             return;
         }
         if (systemPrompt == null || userPrompt == null || userPrompt.trim().isEmpty()) {
+            return;
+        }
+        // 纵深防御：prompt 注入 / 危险请求不进入 LLM
+        if (!SafetyGuard.isSafe(userPrompt)) {
+            logger.warn("SafetyGuard 拦截注入请求，跳过流式调用");
             return;
         }
         HttpURLConnection conn = null;

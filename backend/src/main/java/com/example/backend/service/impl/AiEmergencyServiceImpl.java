@@ -1,6 +1,7 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.common.ResponseResult;
+import com.example.backend.common.util.SafetyGuard;
 import com.example.backend.model.entity.AiConversationLog;
 import com.example.backend.service.AiConversationLogService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -38,6 +39,8 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final AiConversationLogService conversationLogService;
+    /** Function Calling 工具执行层：查药箱/建计划/标记漏服/通知家属 */
+    private final com.example.backend.service.ai.AiToolService aiToolService;
 
     // 紧急关键词列表（排除泛化词如"快""马上"，避免日常用语误判）
     private static final Set<String> EMERGENCY_KEYWORDS = Set.of(
@@ -104,10 +107,12 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
     }
 
     public AiEmergencyServiceImpl(@Qualifier("aiRestTemplate") RestTemplate restTemplate, ObjectMapper objectMapper,
-                                  AiConversationLogService conversationLogService) {
+                                  AiConversationLogService conversationLogService,
+                                  com.example.backend.service.ai.AiToolService aiToolService) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.conversationLogService = conversationLogService;
+        this.aiToolService = aiToolService;
     }
 
     @Override
@@ -116,12 +121,26 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
             return ResponseResult.fail("请输入您的问题");
         }
 
+        // 安全防护：prompt 注入 / 危险请求直接拒绝，不调用 LLM（记日志 safetyCheckPassed=false）
+        if (!SafetyGuard.isSafe(question)) {
+            String refusal = SafetyGuard.refusalMessage();
+            String queryType = isEmergency ? AiConversationLog.QueryType.EMERGENCY.getCode()
+                    : AiConversationLog.QueryType.EXPLAIN.getCode();
+            conversationLogService.saveLog(userId, queryType, question, refusal, false);
+            logger.warn("安全防护拦截 - 用户ID: {}, 问题: {}", userId, question);
+            return ResponseResult.success(refusal);
+        }
+
         String response;
         boolean safetyPassed = true;
 
         try {
-            // 优先尝试调用AI，传递历史对话
-            response = callDeepSeekAI(question, isEmergency, history);
+            // 多轮记忆：前端未传历史（如刷新后首问）时，从 AiConversationLog 自动回读最近对话
+            List<Map<String, String>> effectiveHistory = (history == null || history.isEmpty())
+                    ? loadHistoryFromLogs(userId)
+                    : history;
+            // 优先尝试调用AI，传递历史对话（支持 Function Calling 调用系统工具）
+            response = callDeepSeekAI(userId, question, isEmergency, effectiveHistory);
 
             if (response == null || response.isEmpty()) {
                 // AI调用失败，使用离线应答
@@ -143,6 +162,52 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
     // 对话历史最大保留轮数
     private static final int MAX_HISTORY_ROUNDS = 10;
 
+    /** Function Calling 最大工具调用轮数（防止工具调用死循环） */
+    private static final int MAX_TOOL_ROUNDS = 3;
+
+    /** 对话类查询类型（紧急咨询/用药说明），排除冲突检测等非对话日志 */
+    private static final Set<String> CHAT_QUERY_TYPES = Set.of(
+            AiConversationLog.QueryType.EMERGENCY.getCode(),
+            AiConversationLog.QueryType.EXPLAIN.getCode()
+    );
+
+    /**
+     * 从 AiConversationLog 回读最近对话（服务端记忆，页面刷新后多轮上下文不丢失）
+     * 日志按 created_at DESC（最新在前），反转后得到时间正序的 role/content 消息序列
+     */
+    private List<Map<String, String>> loadHistoryFromLogs(Long userId) {
+        List<Map<String, String>> history = new ArrayList<>();
+        try {
+            List<AiConversationLog> logs = conversationLogService.getHistoryByUserId(userId, MAX_HISTORY_ROUNDS * 2);
+            if (logs == null || logs.isEmpty()) {
+                return history;
+            }
+            for (int i = logs.size() - 1; i >= 0; i--) {
+                AiConversationLog log = logs.get(i);
+                if (log == null || !CHAT_QUERY_TYPES.contains(log.getQueryType())) {
+                    continue;
+                }
+                if (log.getUserInput() != null && !log.getUserInput().isEmpty()) {
+                    history.add(buildMessage("user", log.getUserInput()));
+                }
+                if (log.getAiOutput() != null && !log.getAiOutput().isEmpty()) {
+                    history.add(buildMessage("assistant", log.getAiOutput()));
+                }
+            }
+            logger.info("从日志回读对话历史 - 用户ID: {}, 消息数: {}", userId, history.size());
+        } catch (Exception e) {
+            logger.error("回读对话历史失败 - 用户ID: {}, 错误: {}", userId, e.getMessage());
+        }
+        return history;
+    }
+
+    private Map<String, String> buildMessage(String role, String content) {
+        Map<String, String> msg = new HashMap<>();
+        msg.put("role", role);
+        msg.put("content", content);
+        return msg;
+    }
+
     /**
      * 截断对话历史，只保留最近N轮（1轮=1条user+1条assistant）
      * 如果历史超出限制，丢弃最旧的消息
@@ -158,9 +223,12 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
     }
 
     /**
-     * 调用DeepSeek AI处理紧急问题
+     * 调用DeepSeek AI处理紧急问题（支持 Function Calling 工具调用）
+     * <p>
+     * 多轮循环：LLM 返回 tool_calls → 执行系统工具（查药箱/建计划/标记漏服/通知家属）
+     * → 把工具结果回传 → 再次请求 LLM 归纳成自然语言，直到不再调用工具（最多 3 轮）
      */
-    private String callDeepSeekAI(String question, boolean isEmergency, List<Map<String, String>> history) {
+    private String callDeepSeekAI(Long userId, String question, boolean isEmergency, List<Map<String, String>> history) {
         if (apiKey == null || apiKey.isEmpty()) {
             logger.warn("DeepSeek API Key未配置");
             return null;
@@ -172,27 +240,20 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
             // 构建完整的API URL
             String fullApiUrl = apiUrl + "/chat/completions";
 
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("model", model);
-            requestBody.put("temperature", isEmergency ? 0.3 : 0.5);
-            requestBody.put("max_tokens", 500);
-
-            String systemPrompt = buildSystemPrompt(isEmergency);
-
             // 构建消息列表，包含系统提示、历史对话和当前问题
-            List<Map<String, String>> messages = new ArrayList<>();
-            
+            List<Map<String, Object>> messages = new ArrayList<>();
+
             // 1. 系统提示
-            Map<String, String> systemMessage = new HashMap<>();
+            Map<String, Object> systemMessage = new HashMap<>();
             systemMessage.put("role", "system");
-            systemMessage.put("content", systemPrompt);
+            systemMessage.put("content", buildSystemPrompt(isEmergency));
             messages.add(systemMessage);
 
             // 2. 历史对话（截断保留最近10轮）
             List<Map<String, String>> truncatedHistory = truncateHistory(history);
             if (truncatedHistory != null && !truncatedHistory.isEmpty()) {
                 for (Map<String, String> hist : truncatedHistory) {
-                    Map<String, String> histMessage = new HashMap<>();
+                    Map<String, Object> histMessage = new HashMap<>();
                     histMessage.put("role", hist.getOrDefault("role", "user"));
                     histMessage.put("content", hist.getOrDefault("content", ""));
                     messages.add(histMessage);
@@ -200,33 +261,92 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
             }
 
             // 3. 当前用户问题
-            Map<String, String> userMessage = new HashMap<>();
+            Map<String, Object> userMessage = new HashMap<>();
             userMessage.put("role", "user");
             userMessage.put("content", question);
             messages.add(userMessage);
 
-            requestBody.put("messages", messages);
+            // 4. Function Calling：注册系统工具（查药箱/建服药计划/标记漏服/通知家属）
+            List<Map<String, Object>> tools = aiToolService.getToolDefinitions();
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Authorization", "Bearer " + apiKey);
+            // 5. 多轮工具调用循环（最多 MAX_TOOL_ROUNDS 轮）
+            String content = null;
+            boolean toolCalled = false;
+            for (int round = 0; round < MAX_TOOL_ROUNDS; round++) {
+                Map<String, Object> requestBody = new HashMap<>();
+                requestBody.put("model", model);
+                requestBody.put("temperature", isEmergency ? 0.3 : 0.5);
+                requestBody.put("max_tokens", 500);
+                requestBody.put("messages", messages);
+                requestBody.put("tools", tools);
 
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                headers.set("Authorization", "Bearer " + apiKey);
 
-            logger.info("调用DeepSeek API: {}", fullApiUrl);
-            ResponseEntity<String> response = restTemplate.postForEntity(fullApiUrl, request, String.class);
+                HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
 
-            if (response.getStatusCode() == HttpStatus.OK) {
-                String responseBody = response.getBody();
-                return parseResponse(responseBody);
-            } else {
-                logger.error("DeepSeek API请求失败 - 状态码: {}, 响应: {}", 
-                        response.getStatusCode(), response.getBody());
-                return null;
+                logger.info("调用DeepSeek API: {}（第{}轮）", fullApiUrl, round + 1);
+                ResponseEntity<String> response = restTemplate.postForEntity(fullApiUrl, request, String.class);
+
+                if (response.getStatusCode() != HttpStatus.OK) {
+                    logger.error("DeepSeek API请求失败 - 状态码: {}, 响应: {}",
+                            response.getStatusCode(), response.getBody());
+                    return null;
+                }
+
+                JsonNode root = objectMapper.readTree(response.getBody());
+                JsonNode message = root.path("choices").path(0).path("message");
+                JsonNode toolCalls = message.path("tool_calls");
+
+                // 命中工具调用：执行 → 回传结果 → 下一轮
+                if (toolCalls.isArray() && !toolCalls.isEmpty()) {
+                    toolCalled = true;
+                    // 回传 assistant 消息（含 tool_calls，必须原样带回）
+                    Map<String, Object> assistantMsg = new HashMap<>();
+                    assistantMsg.put("role", "assistant");
+                    JsonNode contentNode = message.path("content");
+                    assistantMsg.put("content", contentNode.isMissingNode() || contentNode.isNull()
+                            ? null : contentNode.asText());
+                    assistantMsg.put("tool_calls", objectMapper.convertValue(toolCalls, List.class));
+                    messages.add(assistantMsg);
+
+                    for (JsonNode tc : toolCalls) {
+                        String callId = tc.path("id").asText();
+                        String toolName = tc.path("function").path("name").asText();
+                        String arguments = tc.path("function").path("arguments").asText();
+                        logger.info("AI 调用工具 - 工具: {}, 参数: {}", toolName, arguments);
+
+                        String toolResult = aiToolService.execute(userId, toolName, arguments);
+
+                        Map<String, Object> toolMsg = new HashMap<>();
+                        toolMsg.put("role", "tool");
+                        toolMsg.put("tool_call_id", callId);
+                        toolMsg.put("content", toolResult);
+                        messages.add(toolMsg);
+                    }
+                    continue;
+                }
+
+                // 正常回答：提取内容
+                JsonNode answerNode = message.path("content");
+                if (!answerNode.isMissingNode() && !answerNode.isNull()) {
+                    content = answerNode.asText().trim();
+                }
+                break;
             }
+
+            if (toolCalled && content != null) {
+                logger.info("Function Calling 完成 - 用户ID: {}, 最终回答长度: {}", userId,
+                        content != null ? content.length() : 0);
+            }
+            return content;
 
         } catch (RestClientException e) {
             logger.error("DeepSeek API调用异常 - 错误: {}", e.getMessage());
+            return null;
+        } catch (Exception e) {
+            logger.error("DeepSeek 工具调用处理异常 - 错误: {}", e.getMessage(), e);
             return null;
         }
     }
@@ -235,6 +355,14 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
      * 构建系统提示词
      */
     private String buildSystemPrompt(boolean isEmergency) {
+        String disclaimerRule = "6. 回答最后必须加上统一免责声明：" + SafetyGuard.DISCLAIMER + "\n";
+        // 工具能力说明（Function Calling）：引导 AI 主动调用系统工具完成行动类请求
+        String toolRule = "\n工具能力：你可以调用系统工具帮老人真正办成事（不是假装答应）：\n" +
+                "1. 老人问「药箱里有什么药/我都在吃什么药」 → 调用 query_medicine_box\n" +
+                "2. 老人说「帮我安排今天的吃药计划/今天的药怎么吃」 → 调用 create_medication_plan\n" +
+                "3. 老人说「今天忘了吃XX药（早上/中午/晚上/睡前）」 → 调用 mark_dose_missed（参数 drugName 传药品名；老人说了具体时段就传 timeSlot：morning/noon/evening/before_bed）\n" +
+                "4. 老人说「通知/告诉我家人」 → 调用 notify_guardian（参数 message 传要告知的内容）\n" +
+                "调用工具后，把工具返回的结果用大白话告诉老人（如「您的药箱里有3种药：…」）。\n";
         if (isEmergency) {
             return "你是一位经验丰富、善于沟通的老年护理专家。你的任务是为老年人提供紧急情况下的急救指导。\n\n" +
                     "重要原则：\n" +
@@ -243,8 +371,10 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
                     "3. 使用日常用语，不要用医学术语\n" +
                     "4. 保持语气温和，让用户感到安心\n" +
                     "5. 回答要短小精悍，每段不超过2句话\n" +
-                    "6. 适当使用表情符号增加亲切感\n\n" +
-                    "格式要求：\n" +
+                    "6. 适当使用表情符号增加亲切感\n" +
+                    disclaimerRule +
+                    toolRule +
+                    "\n格式要求：\n" +
                     "- 使用【紧急提醒】标记需要立即行动的事项\n" +
                     "- 使用emoji表情让内容更易读\n" +
                     "- 每条建议之间空一行\n" +
@@ -256,38 +386,15 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
                     "2. 回答要短，一次只说一件事\n" +
                     "3. 适当使用表情符号，让内容更亲切\n" +
                     "4. 如果涉及紧急情况，要立即提醒拨打120\n" +
-                    "5. 多用'请'、'您'等礼貌用语\n\n" +
-                    "格式要求：\n" +
+                    "5. 多用'请'、'您'等礼貌用语\n" +
+                    disclaimerRule +
+                    toolRule +
+                    "\n格式要求：\n" +
                     "- 每个要点单独成段\n" +
                     "- 重要信息用【】标注\n" +
                     "- 使用emoji增加可读性\n" +
                     "- 避免复杂句式，一句话说清楚一件事";
         }
-    }
-
-    /**
-     * 解析DeepSeek API响应
-     */
-    private String parseResponse(String responseBody) {
-        try {
-            JsonNode root = objectMapper.readTree(responseBody);
-            JsonNode choices = root.get("choices");
-
-            if (choices != null && choices.isArray() && choices.size() > 0) {
-                JsonNode firstChoice = choices.get(0);
-                JsonNode message = firstChoice.get("message");
-
-                if (message != null) {
-                    JsonNode content = message.get("content");
-                    if (content != null) {
-                        return content.asText().trim();
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.error("解析DeepSeek响应失败 - 错误: {}", e.getMessage());
-        }
-        return null;
     }
 
     @Override

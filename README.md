@@ -17,7 +17,7 @@
 
 AI紧急助手系统是一款专为老年人设计的智能健康助手，提供紧急情况下的急救指导、日常健康咨询、用药管理和家属监护等功能。系统分为**老人端**和**家属端**双端设计，老人端侧重用药管理与紧急求助，家属端侧重远程监护与通知接收。
 
-核心亮点：**RAG 用药知识库**（933 条知识：药品 / 慢病指南 / FAQ）——AI 回答基于检索资料生成，**可溯源、降幻觉**；SSE 流式输出 + 药箱个性化（AI 知道老人真实在吃什么药）+ 三级离线降级（向量 → 关键词 → 本地直出），医疗场景离线可用。
+核心亮点：**RAG 用药知识库**（936 条知识：药品 / 慢病指南 / FAQ）——AI 回答基于检索资料生成，**可溯源、降幻觉**；SSE 流式输出 + 药箱个性化（AI 知道老人真实在吃什么药）+ 三级离线降级（向量 → 关键词 → 本地直出），医疗场景离线可用。
 
 ## 技术栈
 
@@ -48,15 +48,15 @@ AI紧急助手系统是一款专为老年人设计的智能健康助手，提供
 
 #### P0 基础体验（高优先级）
 
-- [ ] 多轮对话上下文：`DeepSeekService` 生成时回传 `AiConversationLog` 历史（当前只存日志不回传，对话失忆）
+- [x] 多轮对话上下文：紧急助手历史自动回读 `AiConversationLog`（前端刷新后恢复会话；后端 history 为空时自动回读最近 10 轮，对话不失忆）
 - [x] SSE 流式输出：用药问问已实现（DeepSeek stream=true → SseEmitter → 前端打字机 + 失败自动回退非流式）；其余 AI 功能仍同步
-- [ ] ASR 语音输入：接入百度语音识别，老人语音问药（当前只有 TTS 播报，无语音输入）
+- [x] ASR 语音输入：百度短语音识别（Web Audio 采集 PCM → WAV 16k → `/api/ai/asr`），老人语音问药；未配 Key/浏览器不支持自动降级 Web Speech API
 
 #### P1 智能化与合规
 
-- [ ] Function Calling：AI 可调用系统工具（查药箱 / 建服药计划 / 标记漏服 / 通知家属）
-- [ ] 回答质量评测集（20 题检索命中率评测）+ 前端「这个回答有用吗」反馈闭环
-- [ ] 统一免责声明 + prompt 注入防护（防诱导泄露系统提示 / 给出危险剂量建议）
+- [x] Function Calling：AI 可调用系统工具（查药箱 / 建服药计划 / 标记漏服 / 通知家属），从"问答"升级为"行动"
+- [x] 回答质量评测集（20 题检索命中率评测，实测 100%）+ 前端「这个回答有用吗」反馈闭环（👍/👎 落库）
+- [x] 统一免责声明（`SafetyGuard.DISCLAIMER` 全链路兜底）+ prompt 注入防护（忽略指令/泄露提示词/危险剂量请求 → 直接拒绝不调用 LLM）
 
 ### RAG 用药知识库引入
 
@@ -138,6 +138,9 @@ cd aaagame
 | V4 | `db/migration/V4__use_decimal_inventory_quantities.sql` | 药箱数量字段升级为 DECIMAL |
 | V5 | `db/migration/V5__create_knowledge_chunk.sql` | RAG 知识切片表（title/content/embedding_json/关键词） |
 | V6 | `db/migration/V6__add_knowledge_source_ref.sql` | 知识来源标注列 `source_ref`（回答可溯源） |
+| V7 | `db/migration/V7__create_rag_feedback.sql` | RAG 回答反馈表（👍/👎 反馈闭环） |
+| V8 | `db/migration/V8__enlarge_sms_phone_column.sql` | 短信通知 phone 列扩容（AES 密文 44 字符 > varchar(20) 存量 bug 修复） |
+| V9 | `db/migration/V9__add_rag_feedback_updated_at.sql` | 反馈表补 `updated_at` 列（MyBatis-Plus 自动填充） |
 
 > **老库平滑升级**：已用旧脚本初始化过的数据库，首次启动会自动 baseline 到 V1 并执行后续增量迁移，不会重复建表。
 >
@@ -179,6 +182,11 @@ deepseek.api-key=sk-your_deepseek_api_key_here
 # 不填则检索用内置降级向量（精度受限）；填了检索才"懂语义"（如"这药和降压药一起吃行不行"）
 # 获取：https://cloud.siliconflow.cn 控制台 → API 密钥
 siliconflow.api-key=sk-your_siliconflow_api_key_here
+
+# 百度ASR（语音输入，老人语音问药，可选）
+# 不填则前端自动降级浏览器 Web Speech API（仅 Chrome）；填了跨浏览器可用
+baidu.asr.api-key=${BAIDU_ASR_API_KEY:}
+baidu.asr.secret-key=${BAIDU_ASR_SECRET_KEY:}
 ```
 
 > 阿里云OSS的 `access-key-id` 留空时，系统会自动禁用OSS功能，不影响其他功能使用。
@@ -240,6 +248,7 @@ cp .env.example .env
 | `APP_CORS_ALLOWED_ORIGINS` | 允许的前端来源,如 `http://localhost` |
 | `DEEPSEEK_API_KEY` | DeepSeek 大模型 Key（AI 回答生成，可选） |
 | `SILICONFLOW_API_KEY` | SiliconFlow bge-m3 语义检索 Key（RAG 检索精度关键，可选） |
+| `BAIDU_ASR_API_KEY` / `BAIDU_ASR_SECRET_KEY` | 百度语音识别 Key（老人语音问药，可选；**留空自动复用 TTS 的 Key**） |
 
 **第二步:启动**
 
@@ -267,6 +276,7 @@ docker compose up -d --build
 | [RAG实现讲解.md](./docs/RAG实现讲解.md) | RAG 原理 + 本项目实现逐段讲解 + 面试 Q&A（入门） |
 | [RAG实现讲解2-进阶.md](./docs/RAG实现讲解2-进阶.md) | 循环依赖解耦 / P4 接入法 / 检索质量兜底 / 引用体系 / 流式（进阶） |
 | [RAG演示话术.md](./docs/RAG演示话术.md) | 竞赛演示 3 个场景（可溯源问答 / 药箱个性化 / 降级兜底）+ 答辩备答 |
+| [FunctionCalling与回答质量评测.md](./docs/FunctionCalling与回答质量评测.md) | AI 工具调用实现 / 20 题评测集 / 👍👎 反馈闭环 / 注入防护 / 存量 bug 修复 |
 
 ## 功能截图
 
@@ -309,8 +319,10 @@ AI 紧急助手 — 红色呼叫家人一键直达,8 大紧急情况分类标签
 #### AI 紧急咨询
 - 紧急情况智能问答（自动判断问题是否紧急）
 - 多分类标签引导（用药 / 症状 / 急救等）
-- 对话历史记录与上下文记忆
+- 对话历史记录与上下文记忆（刷新页面后自动恢复，服务端日志回读）
 - AI 老年友好用药指导生成（DeepSeek）
+- **Function Calling 工具调用**：AI 听懂老人需求后真正办事——查药箱（"药箱里有什么药"）/ 建服药计划（"帮我安排今天的药"）/ 标记漏服（"早上忘吃芬必得了"）/ 通知家属（"让我女儿知道"）
+- **prompt 注入防护**：忽略指令/泄露系统提示词/索要危险剂量 → 直接拒绝并引导就医，不调用 LLM
 
 #### 药品管理
 - 药品字典查询（关键词 / 类别 / 别名）
@@ -342,16 +354,18 @@ AI 紧急助手 — 红色呼叫家人一键直达,8 大紧急情况分类标签
 - 首个联系人自动设为主要联系人
 
 #### 用药问问（RAG 用药知识问答）
-- 检索增强生成：问题 → 语义检索知识库（933 条）→ AI 基于资料回答，**可溯源**
+- 检索增强生成：问题 → 语义检索知识库（936 条）→ AI 基于资料回答，**可溯源**
 - **流式输出**：SSE 打字机效果，等待时动态反馈（"正在回答…"）
 - **引用溯源**：回答中 [1][2] 编号可点击跳转对应资料，来源标注"已引用/未采用"
 - **药箱个性化**：自动注入用户药箱真实用药（"根据您的药箱：XXX"），回答贴合本人情况
 - 老人友好：大字条目化排版、重点荧光笔高亮、🔊 语音播报、快捷提问胶囊（免打字）
 - 三级降级：向量检索 → 关键词倒排 → 本地直出，断网/无 Key 仍可用
 - 知识外置：**加知识 = 加一个 .md 文件**（`resources/knowledge/`），重启自动入库
+- **回答质量反馈闭环**：回答下方「这个回答有用吗」👍/👎 → 落库 `rag_feedback`，配合 20 题评测集持续校准（实测命中率 100%）
 
 #### 多模态与体验
 - 百度 TTS 语音播报（语速可调，老年人友好）
+- **百度 ASR 语音输入**：语音问药/语音指令（录音 → 16k WAV → 百度识别 → 文字），未配 Key 自动降级浏览器 Web Speech API
 - 老年友好界面（大字体、高对比度）
 - 离线模式支持（Service Worker）
 
@@ -397,6 +411,8 @@ innovative-ideas-challenge/
 │   │   │   ├── entity/               # 数据库实体（15个）
 │   │   │   └── vo/                   # 视图对象
 │   │   ├── service/                  # 服务接口
+│   │   │   ├── ai/                   # AI 工具调用（Function Calling）
+│   │   │   │   └── AiToolService          # 工具定义 + 执行（查药箱/建计划/标记漏服/通知家属）
 │   │   │   ├── rag/                  # RAG 检索增强生成（Embedding/向量库/倒排索引/入库/问答）
 │   │   │   │   ├── RagEmbeddingService   # 双策略向量化（bge-m3 / 本地哈希降级）
 │   │   │   │   ├── VectorStore          # 内存向量索引 + 余弦 top-k
@@ -418,6 +434,7 @@ innovative-ideas-challenge/
 │   │   ├── application.properties    # 主配置
 │   │   └── application-local.properties.example  # 本地配置模板
 │   ├── scripts/rag-dataset/          # 开源数据集采集脚本（可复现）
+│   ├── scripts/rag-eval/             # RAG 回答质量评测集（20 题命中率）
 │   ├── init_database.bat             # Windows初始化脚本
 │   ├── init_database.sh              # Linux/Mac初始化脚本
 │   └── pom.xml
@@ -483,10 +500,19 @@ innovative-ideas-challenge/
 | `/api/rag/ingest` | POST | 全量重灌知识库（换 embedding 后必须调用） |
 | `/api/rag/ingest/drug/{id}` | POST | 单药增量入库（新药自动向量化） |
 | `/api/rag/health` | GET | 知识库健康状态（切片数 / embedding provider） |
+| `/api/rag/feedback` | POST | 回答质量反馈（body: `{"question","answer","rating":1|-1,"mode"}`，👍/👎 闭环） |
+
+### AI 语音 / 工具调用 API
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/ai/asr` | POST | 百度语音识别（multipart file，wav/pcm 16k）→ 返回 `{text}` |
+| `/api/ai/asr/config` | GET | ASR 能力探测（是否已配百度 Key，无需登录） |
+| `/api/emergency/ask` | POST | 紧急助手问答（支持 Function Calling：AI 自动调用查药箱/建计划/标记漏服/通知家属） |
 
 ## 数据库表结构
 
-> 由 Flyway 管理，共 23 张表，按迁移版本组织。
+> 由 Flyway 管理，共 24 张表，按迁移版本组织。
 
 | 表名 | 说明 | 所属迁移 |
 |------|------|----------|
@@ -512,7 +538,8 @@ innovative-ideas-challenge/
 | `notification_outbox` | 通知发件箱（事务消息） | V3__production_support |
 | `async_task_record` | 异步任务记录 | V3__production_support |
 | `auth_refresh_session` | 刷新令牌会话 | V3__production_support |
-| `knowledge_chunk` | RAG 知识切片（文本/向量/来源，933 条） | V5__create_knowledge_chunk + V6 |
+| `knowledge_chunk` | RAG 知识切片（文本/向量/来源，936 条） | V5__create_knowledge_chunk + V6 |
+| `rag_feedback` | RAG 回答质量反馈（👍/👎） | V7__create_rag_feedback + V9 |
 
 ## 注意事项
 

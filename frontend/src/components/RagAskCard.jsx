@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { elderFetch, getToken } from '../utils/elderApi';
+import { createBaiduAsrRecorder, isBaiduAsrEnabled } from '../utils/asr';
 
 /**
  * 用药问问 - RAG 问答卡片（老人端）
@@ -27,8 +28,60 @@ function RagAskCard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [speaking, setSpeaking] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(null); // null=未反馈, 1=👍, -1=👎
+  const [feedbackState, setFeedbackState] = useState(''); // ''|'sending'|'ok'|'fail'
   const answerRef = useRef(null);
   const streamAbortRef = useRef(null);
+
+  // ===== 语音问药（百度 ASR 优先，Web Speech 降级） =====
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceTip, setVoiceTip] = useState('');
+  const voiceRecorderRef = useRef(null);
+  const voiceRecognitionRef = useRef(null);
+
+  useEffect(() => {
+    isBaiduAsrEnabled().then((enabled) => {
+      if (!enabled) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) setVoiceTip('当前环境不支持语音输入');
+      }
+    });
+  }, []);
+
+  const voiceCleanup = useCallback(() => {
+    if (voiceRecorderRef.current) {
+      try { voiceRecorderRef.current.cancel(); } catch (e) { /* noop */ }
+      voiceRecorderRef.current = null;
+    }
+    if (voiceRecognitionRef.current) {
+      try { voiceRecognitionRef.current.abort(); } catch (e) { /* noop */ }
+      voiceRecognitionRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => voiceCleanup(), [voiceCleanup]);
+
+  // 提交回答反馈（这个回答有用吗）
+  const submitFeedback = async (rating) => {
+    if (feedbackSent || !answer) return;
+    setFeedbackSent(rating);
+    setFeedbackState('sending');
+    try {
+      const data = await elderFetch('/api/rag/feedback', {
+        method: 'POST',
+        body: JSON.stringify({
+          question: answer.question || question,
+          answer: answer.answer,
+          rating,
+          mode: answer.mode,
+        }),
+      });
+      setFeedbackState(data.code === 200 ? 'ok' : 'fail');
+    } catch (e) {
+      setFeedbackState('fail');
+      console.warn('提交反馈失败:', e.message);
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -82,6 +135,7 @@ function RagAskCard() {
       if (payload.type === 'meta') {
         setAnswer({
           answer: '',
+          question: text,
           mode: payload.mode,
           sources: payload.sources || [],
           userDrugs: payload.userDrugs || [],
@@ -114,6 +168,8 @@ function RagAskCard() {
     setLoading(true);
     setError('');
     setAnswer(null);
+    setFeedbackSent(null);
+    setFeedbackState('');
     try {
       await askStream(text);
     } catch (e) {
@@ -140,6 +196,69 @@ function RagAskCard() {
       }
     }
   };
+
+  // 语音问药：识别结果直接填入输入框并提问（百度 ASR 优先，Web Speech 降级）
+  const toggleVoice = useCallback(async () => {
+    if (voiceListening) {
+      // 停止：百度录音直接识别，Web Speech 停止后 onresult 自动回传
+      if (voiceRecorderRef.current) {
+        const recorder = voiceRecorderRef.current;
+        voiceRecorderRef.current = null;
+        try {
+          const text = await recorder.stop();
+          if (text) {
+            setQuestion(text);
+            ask(text);
+          }
+        } catch (e) {
+          setVoiceTip(e.message || '识别失败');
+        }
+      } else if (voiceRecognitionRef.current) {
+        voiceRecognitionRef.current.stop();
+        voiceRecognitionRef.current = null;
+      }
+      setVoiceListening(false);
+      setVoiceTip('');
+      return;
+    }
+
+    setVoiceTip('');
+    const baiduEnabled = await isBaiduAsrEnabled();
+    if (baiduEnabled) {
+      try {
+        const recorder = createBaiduAsrRecorder(getToken());
+        voiceRecorderRef.current = recorder;
+        await recorder.start();
+        setVoiceListening(true);
+        return;
+      } catch (e) {
+        console.warn('百度 ASR 启动失败，降级 Web Speech:', e.message);
+      }
+    }
+    // 降级：Web Speech API
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceTip('当前环境不支持语音输入');
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'zh-CN';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.onstart = () => setVoiceListening(true);
+    recognition.onresult = (event) => {
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++) transcript += event.results[i][0].transcript;
+      if (event.results[0].isFinal && transcript) {
+        setQuestion(transcript);
+        ask(transcript);
+      }
+    };
+    recognition.onerror = () => { setVoiceListening(false); };
+    recognition.onend = () => { setVoiceListening(false); };
+    voiceRecognitionRef.current = recognition;
+    recognition.start();
+  }, [voiceListening, ask]);
 
   // 语音播报（去掉 markdown 符号后朗读）
   const toggleSpeak = useCallback(() => {
@@ -231,10 +350,23 @@ function RagAskCard() {
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && ask()}
         />
+        <button
+          className={`rag-voice-btn${voiceListening ? ' rag-voice-btn-on' : ''}`}
+          onClick={toggleVoice}
+          title={voiceListening ? '点击结束语音' : '语音提问，免打字'}
+          aria-label={voiceListening ? '结束语音提问' : '语音提问'}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <line x1="12" y1="19" x2="12" y2="22" />
+          </svg>
+        </button>
         <button className="btn btn-primary rag-ask-btn" onClick={() => ask()} disabled={loading || !question.trim()}>
           {loading ? '…' : '提问'}
         </button>
       </div>
+      {voiceTip && <div className="rag-voice-tip">{voiceTip}</div>}
 
       {/* 快捷问题：老人少打字 */}
       <div className="rag-quick-list">
@@ -291,6 +423,21 @@ function RagAskCard() {
               })}
             </div>
           )}
+          {/* 回答质量反馈闭环：这个回答有用吗 */}
+          <div className="rag-feedback">
+            {!feedbackSent ? (
+              <>
+                <span className="rag-feedback-label">这个回答有用吗？</span>
+                <button className="rag-feedback-btn" onClick={() => submitFeedback(1)} aria-label="有用">👍 有用</button>
+                <button className="rag-feedback-btn rag-feedback-btn-no" onClick={() => submitFeedback(-1)} aria-label="没用">👎 没用</button>
+              </>
+            ) : (
+              <span className="rag-feedback-done">
+                {feedbackSent === 1 ? '👍 谢谢反馈，我们会继续保持！' : '👎 谢谢反馈，我们会改进回答质量'}
+                {feedbackState === 'fail' && '（提交失败，请重试）'}
+              </span>
+            )}
+          </div>
         </div>
       )}
     </div>

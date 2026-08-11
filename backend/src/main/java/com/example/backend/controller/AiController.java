@@ -29,6 +29,40 @@ public class AiController {
     @Autowired
     private BaiduTtsConfig baiduTtsConfig;
 
+    @Autowired(required = false)
+    private com.example.backend.service.BaiduAsrService baiduAsrService;
+
+    /**
+     * 语音识别（ASR）：老人语音输入 → 文字
+     * multipart 表单上传，字段名 file；返回 {text}
+     */
+    @PostMapping("/asr")
+    public ResponseResult<Map<String, String>> speechToText(@RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        if (baiduAsrService == null) {
+            return ResponseResult.fail("语音识别服务暂不可用");
+        }
+        if (file == null || file.isEmpty()) {
+            return ResponseResult.fail("音频文件为空");
+        }
+        String text = baiduAsrService.recognize(file);
+        if (text == null || text.isEmpty()) {
+            return ResponseResult.fail("语音识别失败，请重试或使用文字输入");
+        }
+        Map<String, String> data = new java.util.HashMap<>();
+        data.put("text", text);
+        return ResponseResult.success(data);
+    }
+
+    /**
+     * ASR 能力状态：前端据此决定用百度识别还是降级浏览器 Web Speech API
+     */
+    @GetMapping("/asr/config")
+    public ResponseResult<Map<String, Object>> asrConfig() {
+        Map<String, Object> data = new java.util.HashMap<>();
+        data.put("baiduAsrEnabled", baiduAsrService != null && baiduAsrService.isConfigured());
+        return ResponseResult.success(data);
+    }
+
     /**
      * 生成老年友好版本的用药指导
      *

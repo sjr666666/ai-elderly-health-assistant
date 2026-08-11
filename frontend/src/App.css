@@ -7533,6 +7533,78 @@ body {
   margin-top: 2px;
 }
 
+/* 语音提问按钮：免打字，老人友好 */
+.rag-voice-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(14, 122, 106, 0.35);
+  background: #ffffff;
+  color: var(--primary, #12b3a0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.rag-voice-btn:hover {
+  background: rgba(18, 179, 160, 0.1);
+  transform: scale(1.05);
+}
+.rag-voice-btn-on {
+  background: var(--primary, #12b3a0);
+  color: #ffffff;
+  animation: rag-blink 1.2s infinite;
+  box-shadow: 0 0 0 4px rgba(18, 179, 160, 0.25);
+}
+.rag-voice-tip {
+  margin-top: 6px;
+  font-size: 13.5px;
+  color: #ef4444;
+  text-align: center;
+}
+
+/* 回答质量反馈闭环：这个回答有用吗 */
+.rag-feedback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(14, 122, 106, 0.25);
+}
+.rag-feedback-label {
+  font-size: 14.5px;
+  color: #475569;
+  font-weight: 600;
+}
+.rag-feedback-btn {
+  border: 1.5px solid rgba(14, 122, 106, 0.35);
+  background: #ffffff;
+  color: #1a202c;
+  font-size: 14.5px;
+  font-weight: 600;
+  padding: 6px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s, border-color 0.15s;
+}
+.rag-feedback-btn:hover {
+  background: rgba(18, 179, 160, 0.12);
+  border-color: var(--primary, #12b3a0);
+  transform: scale(1.04);
+}
+.rag-feedback-btn-no:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+}
+.rag-feedback-done {
+  font-size: 14.5px;
+  color: var(--primary, #12b3a0);
+  font-weight: 600;
+}
+
 /* 正在回答：动态反馈，老人知道查询没失败 */
 .rag-typing {
   display: flex;

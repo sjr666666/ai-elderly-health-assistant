@@ -1,6 +1,7 @@
 package com.example.backend.service.rag;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.backend.common.util.SafetyGuard;
 import com.example.backend.mapper.DrugBaseMapper;
 import com.example.backend.mapper.UserMedicineBoxMapper;
 import com.example.backend.model.dto.RagAnswer;
@@ -82,6 +83,16 @@ public class RagService {
         // ========== 0. 用户上下文：当前药箱正在服用的药 ==========
         List<String> userDrugs = loadUserDrugNames(userId);
 
+        // ========== 0.5 安全防护：prompt 注入 / 危险请求直接拒绝，不调用 LLM ==========
+        if (!SafetyGuard.isSafe(question)) {
+            return RagAnswer.builder()
+                    .answer(SafetyGuard.refusalMessage())
+                    .mode(RagAnswer.MODE_GUARDED)
+                    .sources(new ArrayList<>())
+                    .userDrugs(userDrugs)
+                    .build();
+        }
+
         // ========== 1. Retrieval 检索 ==========
         // 向量检索优先（语义匹配，能理解"这药和降压药一起吃行不行"这类自然问法），
         // 无结果时由 RagSearchService 自动降级为关键词倒排检索
@@ -105,8 +116,7 @@ public class RagService {
             // LLM 不可用（未配 Key/调用失败），降级为本地知识直出，保证离线可用
             logger.warn("[RAG] LLM 生成失败，降级为本地知识直出");
             mode = RagAnswer.MODE_LOCAL;
-            answer = sources.get(0).getContent()
-                    + "\n\n以上信息仅供参考，具体用药请遵医嘱。";
+            answer = SafetyGuard.appendDisclaimer(sources.get(0).getContent());
         }
 
         logger.info("[RAG] 问答完成 - 问题: {}, 模式: {}, 引用: {} 条, 用户药箱: {}, 耗时: {}ms",
@@ -166,6 +176,22 @@ public class RagService {
      * LLM 不可用时（无 Key/失败）自动降级：meta 之后一次性推送本地知识直出，保证离线可用。
      */
     public void askStream(String question, Long userId, java.util.function.Consumer<String> onEvent) {
+        // 0.5 安全防护：注入/危险请求直接拒绝，不检索不调用 LLM
+        if (!SafetyGuard.isSafe(question)) {
+            Map<String, Object> meta = new HashMap<>();
+            meta.put("type", "meta");
+            meta.put("mode", RagAnswer.MODE_GUARDED);
+            meta.put("userDrugs", new ArrayList<>());
+            meta.put("sources", new ArrayList<>());
+            try {
+                onEvent.accept(objectMapper.writeValueAsString(meta));
+            } catch (Exception e) {
+                logger.error("[RAG] meta 序列化失败 - {}", e.getMessage());
+            }
+            sendDelta(onEvent, SafetyGuard.refusalMessage());
+            onEvent.accept("{\"type\":\"done\"}");
+            return;
+        }
         // 0. 用户上下文 + 1. 检索（同步，快）
         List<String> userDrugs = loadUserDrugNames(userId);
         RagSearchService.SearchResult searchResult = ragSearchService.search(question, topK);
@@ -185,7 +211,7 @@ public class RagService {
 
         if (sources.isEmpty()) {
             sendDelta(onEvent, "暂时没有找到与这个问题相关的用药资料，建议咨询医生或药师。");
-            sendDelta(onEvent, "\n\n以上信息仅供参考，具体用药请遵医嘱。");
+            sendDelta(onEvent, "\n\n" + SafetyGuard.DISCLAIMER);
             onEvent.accept("{\"type\":\"done\"}");
             return;
         }
@@ -202,8 +228,7 @@ public class RagService {
         // LLM 不可用：流式没有任何内容 → 本地知识直出（保证离线可用）
         if (received.length() == 0) {
             logger.warn("[RAG] 流式生成无内容，降级为本地知识直出");
-            String fallback = sources.get(0).getContent()
-                    + "\n\n以上信息仅供参考，具体用药请遵医嘱。";
+            String fallback = SafetyGuard.appendDisclaimer(sources.get(0).getContent());
             sendDelta(onEvent, fallback);
         }
         onEvent.accept("{\"type\":\"done\"}");

@@ -111,6 +111,52 @@ const EmergencyAssistant = ({ emergencyContacts, elderId }) => {
     scrollToBottom();
   }, [messages]);
 
+  // 多轮记忆：页面刷新后从服务端恢复最近对话（AiConversationLog 回读）
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const res = await fetch('/api/emergency/history?limit=20', {
+          headers: { 'Authorization': `Bearer ${getToken()}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.code !== 200 || !Array.isArray(data.data) || data.data.length === 0) return;
+        // 后端按时间倒序返回，先反转成时间正序；仅保留对话类记录
+        const restored = [];
+        [...data.data].reverse().forEach(log => {
+          if (log.queryType !== 'emergency' && log.queryType !== 'explain') return;
+          const ts = new Date(log.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+          if (log.userInput) {
+            restored.push({
+              id: `hist-u-${log.id}`,
+              type: 'user',
+              text: log.userInput,
+              category: getCategoryByQuestion(log.userInput).id,
+              isEmergency: false,
+              timestamp: ts,
+            });
+          }
+          if (log.aiOutput) {
+            restored.push({
+              id: `hist-a-${log.id}`,
+              type: 'assistant',
+              text: log.aiOutput,
+              category: 'medical',
+              isEmergency: false,
+              timestamp: ts,
+            });
+          }
+        });
+        if (restored.length > 0) {
+          setMessages(restored);
+        }
+      } catch (e) {
+        console.warn('加载对话历史失败:', e);
+      }
+    };
+    loadHistory();
+  }, []);
+
   // 监听网络状态
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);

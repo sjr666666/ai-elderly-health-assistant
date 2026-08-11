@@ -55,6 +55,8 @@ public class SecurityConfig {
                 .antMatchers("/ws/**").permitAll()
                 // 登录和注册接口无需认证
                 .antMatchers(HttpMethod.POST, "/api/v1/user/login", "/api/v1/user/register", "/api/v1/user/refresh", "/api/v1/user/logout").permitAll()
+                // ASR 能力探测无需认证（前端据此决定识别通道，无敏感信息）
+                .antMatchers("/api/ai/asr/config").permitAll()
                 // 家属端API需要FAMILY角色认证
                 .antMatchers("/api/v1/guardian/**").hasRole("FAMILY")
                 // 老人端核心API需要认证（ELDER或FAMILY角色均可）
