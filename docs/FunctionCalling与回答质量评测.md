@@ -138,13 +138,51 @@ RagAskCard 回答下方「这个回答有用吗」
 
 "这药会毒死人吗"是老人的正当担忧，**不能误杀**；"怎么用老鼠药毒死人"是恶意，**必须拦**。区别在意图词（怎么/如何/多少）+ 动作词（毒死/自杀）的组合，而非单个词。SafetyGuard 用双词组合正则实现，单测覆盖了 6 类正当问题不误杀 + 5 类恶意请求必拦截。
 
-## 六、附带修复的存量 bug
+## 六、触发话术如何维护和拓展（单一真源）
+
+### 为什么需要专门设计
+
+初版实现里，老人触发话术散落在**两处重复**：工具 description（给模型决策用）和系统提示词 few-shot 引导（给模型触发用）。改一句话术要同步两个文件，新增工具要改两处，漏改任何一处**没有编译报错**——只会悄悄变成模型识别率下降，是最难排查的 bug 类型。
+
+### 解法：ToolSpec 单一真源
+
+触发话术收拢成唯一数据结构 `ToolSpec`（`service/ai/ToolSpec.java`）：
+
+```java
+public class ToolSpec {
+    private String name;                 // 工具名（execute 分支对应）
+    private String summary;              // 一句话说明（description 主句）
+    private List<String> triggers;       // 老人触发话术（可多条）
+    private Map<String, Object> parameters; // 参数 JSON Schema
+    private String usage;                // 参数用法说明（拼进 toolRule）
+}
+```
+
+所有工具集中维护在 `AiToolServiceImpl.TOOL_SPECS` 列表，两个消费方都从它**自动生成**，不再手写：
+
+| 消费方 | 生成逻辑 |
+|--------|----------|
+| `getToolDefinitions()` | description = `summary + "。用户说「" + triggers.join("/") + "」时调用"` |
+| `buildToolGuidance()` | 系统提示词引导 = `"老人说「" + triggers.join("/") + "」 → 调用 " + name + "（usage）"` |
+
+### 维护流程（现在的规则）
+
+- **拓展触发话术**（比如老人还会说"看看我的药"）→ 往 `triggers` 数组加一条字符串，**只改这一处**
+- **新增工具**（比如"查询今日计划"）→ 加一条 ToolSpec + 一个 execute 分支，两处
+- **防止漏改** → 单测锁死一致性（`AiToolServiceImplTest`）：
+  - 每个工具 description 必须包含它的全部 triggers
+  - buildToolGuidance 必须包含全部工具名 + 全部触发话术 + 参数用法
+  - 漏改任何一处 → 测试直接红，编译期/测试期就能发现
+
+> 面试点：这是"单一真源（Single Source of Truth）"的典型应用——同一份数据被多处消费时，消除重复定义，用测试锁一致性，而不是靠人肉同步。
+
+## 七、附带修复的存量 bug
 
 测试 Function Calling 时发现 `sendNotification` 短信通知**一直存在**的 bug：手机号 AES 加密后 Base64 密文约 44 字符，`sms_notification_log.phone` 列只有 varchar(20) → 每次插入都 `Data too long`。漏服提醒/紧急通知等所有短信路径都会触发（只是定时任务被 try-catch 吞了错误）。
 
 修复：**V8 迁移** `ALTER TABLE sms_notification_log MODIFY phone VARCHAR(128)`。这个 bug 是"功能没测到就用"的典型——AI 工具调用把隐藏路径激活了才暴露。
 
-## 七、Q&A
+## 八、Q&A
 
 **Q1：为什么不在所有 AI 功能都加 Function Calling，只在紧急助手？**
 因为工具需要"对话场景"才有意义。紧急助手是老人最常聊天的入口，RAG 用药问问是单轮知识问答（有检索就有答案）。工具调用 + 多轮上下文是配套的——单轮问答里调工具会显得莫名其妙。

@@ -356,13 +356,9 @@ public class AiEmergencyServiceImpl implements AiEmergencyService {
      */
     private String buildSystemPrompt(boolean isEmergency) {
         String disclaimerRule = "6. 回答最后必须加上统一免责声明：" + SafetyGuard.DISCLAIMER + "\n";
-        // 工具能力说明（Function Calling）：引导 AI 主动调用系统工具完成行动类请求
-        String toolRule = "\n工具能力：你可以调用系统工具帮老人真正办成事（不是假装答应）：\n" +
-                "1. 老人问「药箱里有什么药/我都在吃什么药」 → 调用 query_medicine_box\n" +
-                "2. 老人说「帮我安排今天的吃药计划/今天的药怎么吃」 → 调用 create_medication_plan\n" +
-                "3. 老人说「今天忘了吃XX药（早上/中午/晚上/睡前）」 → 调用 mark_dose_missed（参数 drugName 传药品名；老人说了具体时段就传 timeSlot：morning/noon/evening/before_bed）\n" +
-                "4. 老人说「通知/告诉我家人」 → 调用 notify_guardian（参数 message 传要告知的内容）\n" +
-                "调用工具后，把工具返回的结果用大白话告诉老人（如「您的药箱里有3种药：…」）。\n";
+        // 工具能力说明（Function Calling）：从 ToolSpec 单一真源自动生成，
+        // 触发话术在 AiToolServiceImpl.TOOL_SPECS 维护，这里不重复
+        String toolRule = aiToolService.buildToolGuidance();
         if (isEmergency) {
             return "你是一位经验丰富、善于沟通的老年护理专家。你的任务是为老年人提供紧急情况下的急救指导。\n\n" +
                     "重要原则：\n" +

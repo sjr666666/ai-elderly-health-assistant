@@ -17,8 +17,20 @@ public interface AiToolService {
      * <pre>
      * [{"type":"function","function":{"name":"...","description":"...","parameters":{...}}}]
      * </pre>
+     * description 由 ToolSpec 的 summary + triggers 自动拼接（单一真源）。
      */
     List<Map<String, Object>> getToolDefinitions();
+
+    /**
+     * 生成系统提示词里的工具引导段落（few-shot，从 ToolSpec 自动生成）
+     * <pre>
+     * 工具能力：你可以调用系统工具帮老人真正办成事：
+     * 1. 老人说「药箱里有什么药/我都在吃什么药」 → 调用 query_medicine_box
+     * ...
+     * </pre>
+     * 与 getToolDefinitions() 共用同一份 ToolSpec，话术改一处两处自动同步。
+     */
+    String buildToolGuidance();
 
     /**
      * 执行工具并返回给 LLM 的结果 JSON 字符串

@@ -17,6 +17,7 @@ import com.example.backend.service.MedicineBoxService;
 import com.example.backend.service.PlanService;
 import com.example.backend.service.SmsNotificationService;
 import com.example.backend.service.ai.AiToolService;
+import com.example.backend.service.ai.ToolSpec;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -66,28 +67,79 @@ public class AiToolServiceImpl implements AiToolService {
         this.objectMapper = objectMapper;
     }
 
-    @Override
-    public List<Map<String, Object>> getToolDefinitions() {
-        List<Map<String, Object>> tools = new ArrayList<>();
-        tools.add(tool("query_medicine_box",
-                "查询用户家庭药箱里正在服用的药品列表（药名、用量、频率、剩余数量、有效期）。用户问「药箱里有什么药/我都在吃什么药」时调用",
-                Map.of("type", "object", "properties", Map.of(), "required", List.of())));
-        tools.add(tool("create_medication_plan",
-                "根据用户家庭药箱自动生成今日用药计划（把药箱里的药安排成今天上午/中午/晚上/睡前的服药计划）。用户说「帮我安排今天的吃药计划/今天的药怎么吃」时调用",
-                Map.of("type", "object", "properties", Map.of(), "required", List.of())));
+    /**
+     * 工具规格列表（单一真源）：
+     * 加工具 = 加一条 ToolSpec + 一个 execute 分支；改触发话术 = 改 triggers 数组。
+     * description（getToolDefinitions）与系统提示词引导（buildToolGuidance）都从这里生成。
+     */
+    private static final List<ToolSpec> TOOL_SPECS = List.of(
+            new ToolSpec(
+                    "query_medicine_box",
+                    "查询用户家庭药箱里正在服用的药品列表（药名、用量、频率、剩余数量、有效期）",
+                    List.of("药箱里有什么药", "我都在吃什么药"),
+                    Map.of("type", "object", "properties", Map.of(), "required", List.of()),
+                    ""),
+            new ToolSpec(
+                    "create_medication_plan",
+                    "根据用户家庭药箱自动生成今日用药计划（把药箱里的药安排成今天上午/中午/晚上/睡前的服药计划）",
+                    List.of("帮我安排今天的吃药计划", "今天的药怎么吃"),
+                    Map.of("type", "object", "properties", Map.of(), "required", List.of()),
+                    ""),
+            new ToolSpec(
+                    "mark_dose_missed",
+                    "把用户今天某个药品的服药计划标记为「漏服」",
+                    List.of("今天忘了吃XX药", "XX药没吃"),
+                    markDoseMissedParameters(),
+                    "参数 drugName 传药品名；老人说了具体时段就传 timeSlot：morning/noon/evening/before_bed"),
+            new ToolSpec(
+                    "notify_guardian",
+                    "发短信通知用户绑定的家属",
+                    List.of("通知", "告诉我家人", "让子女知道"),
+                    notifyGuardianParameters(),
+                    "参数 message 传要告知的内容"));
+
+    /** mark_dose_missed 参数 JSON Schema */
+    private static Map<String, Object> markDoseMissedParameters() {
         Map<String, Object> drugProps = new LinkedHashMap<>();
         drugProps.put("drugName", Map.of("type", "string", "description", "药品名称，通用名/商品名/俗名均可"));
         drugProps.put("timeSlot", Map.of("type", "string", "description",
                 "可选，服药时段：morning（上午）/ noon（中午）/ evening（晚上）/ before_bed（睡前）。用户说了具体时段（如「早上忘了吃」）时必填，未说可省略"));
-        tools.add(tool("mark_dose_missed",
-                "把用户今天某个药品的服药计划标记为「漏服」。用户说「今天忘了吃XX药/XX药没吃」时调用",
-                Map.of("type", "object", "properties", drugProps, "required", List.of("drugName"))));
+        return Map.of("type", "object", "properties", drugProps, "required", List.of("drugName"));
+    }
+
+    /** notify_guardian 参数 JSON Schema */
+    private static Map<String, Object> notifyGuardianParameters() {
         Map<String, Object> msgProps = new LinkedHashMap<>();
         msgProps.put("message", Map.of("type", "string", "description", "要通知家属的内容（如「我今天头晕，有点不舒服」）"));
-        tools.add(tool("notify_guardian",
-                "发短信通知用户绑定的家属。用户说「通知/告诉我家人/让子女知道」时调用",
-                Map.of("type", "object", "properties", msgProps, "required", List.of("message"))));
+        return Map.of("type", "object", "properties", msgProps, "required", List.of("message"));
+    }
+
+    @Override
+    public List<Map<String, Object>> getToolDefinitions() {
+        List<Map<String, Object>> tools = new ArrayList<>();
+        for (ToolSpec spec : TOOL_SPECS) {
+            // description = summary + 触发话术（单一真源，改 triggers 自动同步）
+            String description = spec.getSummary() + "。用户说「" + spec.triggersText() + "」时调用";
+            tools.add(tool(spec.getName(), description, spec.getParameters()));
+        }
         return tools;
+    }
+
+    @Override
+    public String buildToolGuidance() {
+        StringBuilder guide = new StringBuilder();
+        guide.append("\n工具能力：你可以调用系统工具帮老人真正办成事（不是假装答应）：\n");
+        int i = 1;
+        for (ToolSpec spec : TOOL_SPECS) {
+            guide.append(i++).append(". 老人说「").append(spec.triggersText()).append("」 → 调用 ")
+                    .append(spec.getName());
+            if (!spec.getUsage().isEmpty()) {
+                guide.append("（").append(spec.getUsage()).append("）");
+            }
+            guide.append("\n");
+        }
+        guide.append("调用工具后，把工具返回的结果用大白话告诉老人（如「您的药箱里有3种药：…」）。\n");
+        return guide.toString();
     }
 
     private Map<String, Object> tool(String name, String description, Map<String, Object> parameters) {
