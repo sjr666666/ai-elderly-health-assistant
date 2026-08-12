@@ -256,6 +256,7 @@ cp .env.example .env
 | `DEEPSEEK_API_KEY` | DeepSeek 大模型 Key（AI 回答生成，可选） |
 | `SILICONFLOW_API_KEY` | SiliconFlow bge-m3 语义检索 Key（RAG 检索精度关键，可选） |
 | `BAIDU_ASR_API_KEY` / `BAIDU_ASR_SECRET_KEY` | 百度语音识别 Key（老人语音问药，可选；**留空自动复用 TTS 的 Key**） |
+| `SMS_PROVIDER` | 短信通道：`mock`（模拟，默认，仅记录不真发）/ 二期接入真实服务商后切换 |
 
 **第二步:启动**
 
@@ -274,7 +275,20 @@ docker compose up -d --build
 - 数据持久化在 Docker volumes(`mysql-data` / `redis-data` / `uploads-data`),删除容器不会丢数据
 - 停止服务: `docker compose down`;彻底清理(含数据): `docker compose down -v`
 - 开发模式热更新: `docker compose -f docker-compose.dev.yml up`(代码挂载 + 端口映射 3000/8080)
-- HTTPS 部署: 参考 `docker-compose.https.yml`(需配置证书)
+
+**生产 HTTPS 部署（微信内打开 H5）:**
+
+1. 购买域名并完成 **ICP 备案**（国内服务器 + 微信内置浏览器访问的硬性要求，周期约 1-3 周）
+2. 域名解析到服务器 IP，服务器安装 Docker
+3. 编辑 `deploy/Caddyfile`，把 `your-domain.com` 替换为真实域名
+4. 启动（Caddy 自动申请/续期 Let's Encrypt 证书，零运维）:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+- 需要 docker compose v2.24+（`!override` 语法）；`docker-compose.https.yml` 为手动证书备选方案
+- 生产环境内置校验：JWT 密钥 ≥32 字符、拒绝 root 库账号、拒绝 CORS `*`（启动即校验）
 
 ## 项目文档
 

@@ -1,0 +1,7 @@
+# 生产环境入口：Caddy 自动申请/续期 Let's Encrypt 证书（90 天自动续期，零运维）
+# 部署前把 your-domain.com 替换为你的备案域名
+# 启动命令见 docker-compose.prod.yml 顶部注释
+your-domain.com {
+	encode gzip
+	reverse_proxy frontend:80
+}

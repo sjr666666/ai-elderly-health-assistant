@@ -60,6 +60,8 @@ services:
       # ASR 与 TTS 共用百度智能云同一套 Key（可单独覆盖）
       BAIDU_ASR_API_KEY: ${BAIDU_ASR_API_KEY:-${BAIDU_TTS_API_KEY:-}}
       BAIDU_ASR_SECRET_KEY: ${BAIDU_ASR_SECRET_KEY:-${BAIDU_TTS_SECRET_KEY:-}}
+      # 短信通道：mock（模拟，默认）/ 二期接真实服务商后改为 aliyun 等
+      SMS_PROVIDER: ${SMS_PROVIDER:-mock}
     volumes:
       - uploads-data:/app/uploads
     networks: [internal, edge]

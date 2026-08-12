@@ -1,0 +1,39 @@
+# 生产 overlay：Caddy 自动 HTTPS（替代手动证书 docker-compose.https.yml）
+#
+# 用法：
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# 前提：
+#   1. 域名已解析到服务器 IP，并完成 ICP 备案（微信内打开硬性要求）
+#   2. deploy/Caddyfile 中 your-domain.com 已替换为真实域名
+#   3. 需要 docker compose v2.24+（使用 !override 语法移除 frontend 端口映射）
+#
+# 说明：frontend(nginx) 退居内部网络只监听 80，由 caddy 统一对外暴露 80/443
+#   并自动向 Let's Encrypt 申请/续期证书；nginx 仍负责 /api 反代与静态资源。
+
+services:
+  frontend:
+    # 端口改由 Caddy 统一暴露，避免与 Caddy 的 80 端口冲突
+    ports: !override []
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge]
+
+networks:
+  edge:
+
+volumes:
+  caddy-data:
+  caddy-config:
