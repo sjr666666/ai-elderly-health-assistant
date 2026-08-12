@@ -164,6 +164,10 @@ cp backend/src/main/resources/application-local.properties.example \
 # MySQL密码（必填）
 spring.datasource.password=你的MySQL密码
 
+# JWT签名密钥（必填！少于32字符或含 change-me/local-dev 会导致启动失败）
+# 生成方式：openssl rand -hex 32
+jwt.secret=你的JWT密钥（至少32个字符）
+
 # 阿里云OSS（可选，留空则禁用）
 aliyun.oss.access-key-id=
 aliyun.oss.access-key-secret=

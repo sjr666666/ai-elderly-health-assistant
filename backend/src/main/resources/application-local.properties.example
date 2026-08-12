@@ -1,6 +1,10 @@
 # Copy this file to application-local.properties for local development.
 spring.datasource.password=your_mysql_password_here
 
+# JWT 签名密钥（必填！少于 32 字符或含 change-me/local-dev 会启动失败）
+# 生成方式：Linux/macOS/Git Bash 执行  openssl rand -hex 32
+jwt.secret=replace-with-at-least-32-random-characters
+
 aliyun.oss.access-key-id=${ALIYUN_OSS_ACCESS_KEY_ID:}
 aliyun.oss.access-key-secret=${ALIYUN_OSS_ACCESS_KEY_SECRET:}
 
