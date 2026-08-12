@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, Suspense } from 'react';
 import html2canvas from 'html2canvas';
 import DOMPurify from 'dompurify';
 import './App.css';
@@ -17,16 +17,21 @@ import MedicationReminderModal from './components/MedicationReminderModal';
 import DrugManagementTab from './components/DrugManagementTab';
 import DailyLessonCard from './components/DailyLessonCard';
 import RagAskCard from './components/RagAskCard';
-import GuardianApp from './components/guardian/GuardianApp';
 import ElderNotificationPanel from './components/ElderNotificationPanel';
-import WeeklyReport from './components/WeeklyReport';
-import EmergencyTab from './components/EmergencyTab';
 import { useToast } from './components/Toast';
 import FloatingMicButton from './components/FloatingMicButton';
 import { clearAuth, getToken } from './utils/elderApi';
 import { formatDateTime } from './utils/timeUtils';
 import { useTTS } from './hooks/useTTS';
-import RecognitionHistoryModal from './components/RecognitionHistoryModal';
+
+// 代码分割：家属端整体应用/周报/紧急助手/历史弹窗按需加载，老人端首屏不加载家属端代码
+const GuardianApp = React.lazy(() => import('./components/guardian/GuardianApp'));
+const WeeklyReport = React.lazy(() => import('./components/WeeklyReport'));
+const EmergencyTab = React.lazy(() => import('./components/EmergencyTab'));
+const RecognitionHistoryModal = React.lazy(() => import('./components/RecognitionHistoryModal'));
+
+/** 懒加载组件 fallback：保持布局稳定，避免首屏闪烁 */
+const LazyFallback = () => <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>加载中…</div>;
 
 function App() {
   const { showToast } = useToast();
@@ -1328,11 +1333,11 @@ function App() {
 
     const connectWebSocket = () => {
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // 后端 WebSocket 地址（开发环境直接连 8080；token 通过查询参数传递，
-      // 因为浏览器 WebSocket API 无法自定义请求头，后端拦截器同时支持两种方式）
+      // 生产环境同源连接（nginx 反代 /ws 到后端）；开发环境（3000 端口）直连后端 8080
       const host = window.location.hostname;
+      const devPort = window.location.port === '3000' ? ':8080' : '';
       const token = getToken();
-      const wsUrl = `${wsProtocol}//${host}:8080/ws/notifications?token=${encodeURIComponent(token || '')}&elderId=${user.id}`;
+      const wsUrl = `${wsProtocol}//${host}${devPort}/ws/notifications?token=${encodeURIComponent(token || '')}&elderId=${user.id}`;
       try {
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
@@ -3383,15 +3388,17 @@ function App() {
 
   const renderUploadTab = () => (
     <div className="card">
-      <RecognitionHistoryModal
-        ref={recognitionHistoryModalRef}
-        authFetch={authFetch}
-        onJumpToRecognition={(drug) => {
-          setRecognizedDrugs([drug]);
-          setBatchSelectedForAdd(new Set([drug.id]));
-          setActiveTab('recognition');
-        }}
-      />
+      <Suspense fallback={<LazyFallback />}>
+        <RecognitionHistoryModal
+          ref={recognitionHistoryModalRef}
+          authFetch={authFetch}
+          onJumpToRecognition={(drug) => {
+            setRecognizedDrugs([drug]);
+            setBatchSelectedForAdd(new Set([drug.id]));
+            setActiveTab('recognition');
+          }}
+        />
+      </Suspense>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 className="card-title">
           <span className="card-title-icon">📷</span>
@@ -5331,7 +5338,9 @@ function App() {
       {/* AI周报摘要 - 仅在周视图显示 */}
       {calendarViewMode === 'week' && showWeeklyReport && (
         <div style={{ marginTop: '32px', borderTop: '2px solid #e8f4fd', paddingTop: '24px' }}>
-          <WeeklyReport compact />
+          <Suspense fallback={<LazyFallback />}>
+            <WeeklyReport compact />
+          </Suspense>
           {/* 截图按钮 - 参考冲突检测模块 */}
           <div style={{ 
             display: 'flex', 
@@ -5903,16 +5912,20 @@ function App() {
           }}
         />
       ) : loginMode === 'guardian' ? (
-        <GuardianApp
-          user={user}
-          onLogout={() => {
-            setUser(null);
-            setIsLoggedIn(false);
-            setLoginMode('elder');
-          }}
-        />
+        <Suspense fallback={<LazyFallback />}>
+          <GuardianApp
+            user={user}
+            onLogout={() => {
+              setUser(null);
+              setIsLoggedIn(false);
+              setLoginMode('elder');
+            }}
+          />
+        </Suspense>
       ) : user?.role === 'family' ? (
-        <GuardianApp user={user} onLogout={() => { setUser(null); setIsLoggedIn(false); clearAuth(); }} />
+        <Suspense fallback={<LazyFallback />}>
+          <GuardianApp user={user} onLogout={() => { setUser(null); setIsLoggedIn(false); clearAuth(); }} />
+        </Suspense>
       ) : (
         <div className="app-container">
           {renderHeader()}
@@ -5950,7 +5963,11 @@ function App() {
             {activeTab === 'conflict' && renderConflictTab()}
             {activeTab === 'calendar' && renderCalendarTab()}
             {activeTab === 'drugs' && renderDrugsTab()}
-            {activeTab === 'emergency' && <EmergencyTab emergencyContacts={emergencyContacts} elderId={user?.id} />}
+            {activeTab === 'emergency' && (
+              <Suspense fallback={<LazyFallback />}>
+                <EmergencyTab emergencyContacts={emergencyContacts} elderId={user?.id} />
+              </Suspense>
+            )}
             </div>
           </div>
 

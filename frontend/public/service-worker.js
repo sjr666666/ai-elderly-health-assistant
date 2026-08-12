@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ai-medicine-manager-v1';
+const CACHE_NAME = 'ai-medicine-manager-v2';
 const urlsToCache = [
   '/',
   '/index.html',

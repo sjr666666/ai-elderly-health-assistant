@@ -19,12 +19,17 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Per-user/IP fixed-window limiter for expensive AI endpoints. */
+/** Per-user/IP fixed-window limiter for expensive / abuse-prone endpoints. */
 @Component
 public class RateLimitInterceptor implements HandlerInterceptor {
 
     private static final Logger logger = LoggerFactory.getLogger(RateLimitInterceptor.class);
     private static final int MAX_REQUESTS_PER_MINUTE = 10;
+
+    /** 按路径前缀覆盖限额（次/分钟）；未匹配使用默认值。OCR 拍照识别允许更频繁，避免卡住真实老人用户。 */
+    private static final Map<String, Integer> PATH_LIMITS = Map.of(
+            "/api/v1/drug/recognize/", 20
+    );
 
     private final Map<String, RateLimitInfo> requestCounts = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper;
@@ -46,14 +51,15 @@ public class RateLimitInterceptor implements HandlerInterceptor {
             throws Exception {
         String userId = getAuthenticatedUserId();
         String key = userId != null ? "user:" + userId : "ip:" + getClientIp(request);
+        int limit = resolveLimit(request.getRequestURI());
         if (redisTemplate != null) {
             try {
-                String redisKey = "rate-limit:ai:" + key;
+                String redisKey = "rate-limit:" + key;
                 Long count = redisTemplate.opsForValue().increment(redisKey);
                 if (count != null && count == 1L) {
                     redisTemplate.expire(redisKey, java.time.Duration.ofMinutes(1));
                 }
-                if (count != null && count > MAX_REQUESTS_PER_MINUTE) {
+                if (count != null && count > limit) {
                     logger.warn("Rate limit exceeded: key={}, uri={}", key, request.getRequestURI());
                     sendRateLimitResponse(response);
                     return false;
@@ -73,7 +79,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
                 info.count.set(0);
                 info.lastResetTime = now;
             }
-            if (info.count.get() >= MAX_REQUESTS_PER_MINUTE) {
+            if (info.count.get() >= limit) {
                 logger.warn("Rate limit exceeded: key={}, uri={}", key, request.getRequestURI());
                 sendRateLimitResponse(response);
                 return false;
@@ -81,6 +87,15 @@ public class RateLimitInterceptor implements HandlerInterceptor {
             info.count.incrementAndGet();
         }
         return true;
+    }
+
+    private int resolveLimit(String uri) {
+        for (Map.Entry<String, Integer> entry : PATH_LIMITS.entrySet()) {
+            if (uri.startsWith(entry.getKey())) {
+                return entry.getValue();
+            }
+        }
+        return MAX_REQUESTS_PER_MINUTE;
     }
 
     private String getAuthenticatedUserId() {

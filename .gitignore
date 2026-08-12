@@ -63,6 +63,9 @@ dist/
 *.sqlite3
 db_backups/
 
+# Git bundle 备份（体积大，不应随仓库分发）
+*.bundle
+
 # Spring Boot Local Config
 backend/src/main/resources/application-local.properties
 backend/src/main/resources/application-local.yml

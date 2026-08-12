@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import { elderFetch, getToken } from '../utils/elderApi';
 import { createBaiduAsrRecorder, isBaiduAsrEnabled } from '../utils/asr';
 
@@ -306,13 +307,16 @@ function RagAskCard() {
   };
 
   // 渲染回答：识别编号条目 / 加粗 / 引用上标 / 分段
+  // 安全：先 escapeHtml 转义 AI 原始输出，再插入受控标签，最后 DOMPurify 清洗（纵深防御）
   const renderAnswer = (text) => {
     const withCite = (html) =>
       html.replace(/\[(\d+)\]/g, '<sup class="rag-cite" data-ref="$1" title="点击查看参考资料$1">[$1]</sup>');
+    const sanitize = (raw) =>
+      DOMPurify.sanitize(raw, { ADD_ATTR: ['data-ref', 'title'] });
     return text.split('\n').map((line, i) => {
       const t = line.trim();
       if (!t) return <div key={i} className="rag-para-gap" />;
-      const html = withCite(escapeHtml(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'));
+      const html = sanitize(withCite(escapeHtml(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')));
       const numMatch = t.match(/^(\d+)[.、．]\s*/);
       if (numMatch) {
         return (

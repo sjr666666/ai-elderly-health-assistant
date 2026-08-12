@@ -26,10 +26,14 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // 注册限流拦截器，只对AI相关接口生效
+        // 注册限流拦截器：AI 接口（昂贵）+ 注册/登录/刷新（防撞库）+ OCR 上传（防刷）
         registry.addInterceptor(rateLimitInterceptor)
                 .addPathPatterns("/api/emergency/**")
-                .addPathPatterns("/api/ai/**");
+                .addPathPatterns("/api/ai/**")
+                .addPathPatterns("/api/v1/user/register")
+                .addPathPatterns("/api/v1/user/login")
+                .addPathPatterns("/api/v1/user/refresh")
+                .addPathPatterns("/api/v1/drug/recognize/**");
 
         // 注册活跃时间拦截器，对老人端和家属端关键接口生效
         registry.addInterceptor(activeTimeInterceptor)

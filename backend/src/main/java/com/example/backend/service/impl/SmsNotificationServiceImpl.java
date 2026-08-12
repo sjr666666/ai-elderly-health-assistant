@@ -10,6 +10,7 @@ import com.example.backend.model.dto.SmsNotificationDTO;
 import com.example.backend.model.entity.SmsNotificationLog;
 import com.example.backend.model.enums.SmsStatus;
 import com.example.backend.service.SmsNotificationService;
+import com.example.backend.service.sms.SmsProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 短信通知服务实现
@@ -28,9 +30,14 @@ import java.util.List;
 public class SmsNotificationServiceImpl implements SmsNotificationService {
 
     private final SmsNotificationLogMapper smsNotificationLogMapper;
+    private final Map<String, SmsProvider> smsProviders;
 
     @Value("${phone.encrypt.key}")
     private String phoneEncryptKey;
+
+    /** 短信通道：mock（模拟，默认）/ 后续接入 aliyun 等真实服务商 */
+    @Value("${sms.provider:mock}")
+    private String smsProviderName;
 
     @Override
     public List<SmsNotificationDTO> getNotificationHistory(Long guardianId, Integer limit) {
@@ -65,7 +72,8 @@ public class SmsNotificationServiceImpl implements SmsNotificationService {
 
     @Override
     public void sendNotification(Long guardianId, Long elderId, String eventType, String message, String phone) {
-        log.info("发送短信通知 - guardianId: {}, elderId: {}, eventType: {}", guardianId, elderId, eventType);
+        log.info("发送短信通知 - guardianId: {}, elderId: {}, eventType: {}, channel: {}",
+                guardianId, elderId, eventType, smsProviderName);
 
         SmsNotificationLog notificationLog = new SmsNotificationLog();
         notificationLog.setGuardianId(guardianId);
@@ -79,14 +87,26 @@ public class SmsNotificationServiceImpl implements SmsNotificationService {
 
         smsNotificationLogMapper.insert(notificationLog);
 
-        log.info("短信通知已记录 - id: {}, 待发送至(脱敏): {}", notificationLog.getId(), PhoneEncryptUtil.mask(phone));
+        boolean sent = false;
+        SmsProvider provider = smsProviders.get(smsProviderName);
+        if (provider == null) {
+            log.warn("短信通道 {} 不存在，回退 mock - id: {}", smsProviderName, notificationLog.getId());
+            provider = smsProviders.get("mock");
+        }
+        try {
+            sent = provider.send(phone, message);
+        } catch (Exception e) {
+            log.error("短信发送异常 - id: {}, channel: {}, error: {}",
+                    notificationLog.getId(), provider.name(), e.getMessage());
+        }
 
-        // 模拟发送成功
-        notificationLog.setStatus(SmsStatus.SENT.getCode());
-        notificationLog.setSentAt(LocalDateTime.now());
+        notificationLog.setStatus(sent ? SmsStatus.SENT.getCode() : SmsStatus.FAILED.getCode());
+        if (sent) {
+            notificationLog.setSentAt(LocalDateTime.now());
+        }
         smsNotificationLogMapper.updateById(notificationLog);
 
-        log.info("短信通知发送成功 - id: {}", notificationLog.getId());
+        log.info("短信通知处理完成 - id: {}, status: {}", notificationLog.getId(), notificationLog.getStatus());
     }
 
     @Override

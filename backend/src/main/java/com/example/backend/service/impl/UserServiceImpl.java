@@ -1,6 +1,7 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.common.BusinessException;
+import com.example.backend.common.util.PhoneEncryptUtil;
 import com.example.backend.common.util.SnowflakeIdGenerator;
 import com.example.backend.config.JwtUtils;
 import com.example.backend.mapper.UserMapper;
@@ -88,7 +89,6 @@ public class UserServiceImpl implements UserService {
         return UserRegisterResponse.builder()
                 .userId(String.valueOf(user.getUserId()))  // 转换为 String
                 .username(user.getUsername())
-                .password(request.getPassword())
                 .build();
     }
 
@@ -158,7 +158,7 @@ public class UserServiceImpl implements UserService {
                 .isSmoking(user.getIsSmoking())
                 .isDrinking(user.getIsDrinking())
                 .role(user.getRole())
-                .phone(user.getPhone())
+                .phone(PhoneEncryptUtil.mask(user.getPhone()))
                 .build();
     }
 
