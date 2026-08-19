@@ -112,9 +112,9 @@ public class RagController {
         return emitter;
     }
 
-    /** 流式问答专用线程池（避免阻塞 HTTP 线程） */
+    /** 流式问答执行器：虚拟线程，SSE 阻塞等待 DeepSeek 时不占用平台线程，可支撑高并发 */
     private final java.util.concurrent.ExecutorService executor =
-            java.util.concurrent.Executors.newFixedThreadPool(2);
+            java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
 
     /**
      * 获取当前认证用户的ID（数据库主键）；未认证时返回 null（不阻断问答）
