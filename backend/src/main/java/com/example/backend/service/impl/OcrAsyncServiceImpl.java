@@ -14,7 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import javax.imageio.ImageIO;
@@ -66,8 +65,7 @@ public class OcrAsyncServiceImpl implements OcrAsyncService {
     }
 
     @Override
-    @Async("taskExecutor")
-    public void processOcrAsync(Long recordId) {
+    public boolean processOcrAsync(Long recordId) {
         logger.info("========== 开始异步OCR处理 ========== - recordId: {}, 线程: {}", recordId, Thread.currentThread().getName());
 
         try {
@@ -76,7 +74,7 @@ public class OcrAsyncServiceImpl implements OcrAsyncService {
 
             if (ocrRecord == null) {
                 logger.error("步骤1失败: 未找到OCR记录 - recordId: {}", recordId);
-                return;
+                return false;
             }
 
             String imageUrl = ocrRecord.getImageUrl();
@@ -119,6 +117,8 @@ public class OcrAsyncServiceImpl implements OcrAsyncService {
 
             logger.info("========== 异步OCR处理完成 ========== - recordId: {}", recordId);
 
+            return true;
+
         } catch (Exception e) {
             logger.error("========== OCR异步处理失败 ========== - recordId: {}", recordId);
             logger.error("错误类型: {}", e.getClass().getName());
@@ -140,6 +140,8 @@ public class OcrAsyncServiceImpl implements OcrAsyncService {
             } catch (Exception ex) {
                 logger.error("更新OCR状态失败 - recordId: {}, 错误: {}", recordId, ex.getMessage());
             }
+
+            return false;
         }
     }
 
