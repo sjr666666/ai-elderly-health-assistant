@@ -56,6 +56,14 @@ public class AiConversationLog extends BaseEntity {
     private Integer safetyCheckPassed;
 
     /**
+     * 判断是否通过安全检查（业务便捷方法，非 IBean property）
+     * @return true表示通过，false表示未通过
+     */
+    public boolean isSafetyPassed() {
+        return safetyCheckPassed != null && safetyCheckPassed == 1;
+    }
+
+    /**
      * 时间
      * 对话发生的时间
      */
@@ -94,21 +102,5 @@ public class AiConversationLog extends BaseEntity {
             }
             return EXPLAIN;
         }
-    }
-
-    /**
-     * 判断是否通过安全检查
-     * @return true表示通过，false表示未通过
-     */
-    public boolean isSafetyCheckPassed() {
-        return safetyCheckPassed != null && safetyCheckPassed == 1;
-    }
-
-    /**
-     * 设置是否通过安全检查
-     * @param passed true表示通过，false表示未通过
-     */
-    public void setSafetyCheckPassed(boolean passed) {
-        this.safetyCheckPassed = passed ? 1 : 0;
     }
 }

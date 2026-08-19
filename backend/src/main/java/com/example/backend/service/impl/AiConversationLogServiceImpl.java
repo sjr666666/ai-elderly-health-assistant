@@ -37,7 +37,7 @@ public class AiConversationLogServiceImpl implements AiConversationLogService {
             log.setQueryType(queryType);
             log.setUserInput(userInput);
             log.setAiOutput(aiOutput);
-            log.setSafetyCheckPassed(safetyPassed);
+            log.setSafetyCheckPassed(safetyPassed ? 1 : 0);
             log.setCreatedAt(LocalDateTime.now());
 
             conversationLogMapper.insert(log);
